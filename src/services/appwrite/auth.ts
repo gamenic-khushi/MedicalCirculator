@@ -57,7 +57,7 @@ export const authService = {
     const newUser = {
       $id: `user-${Date.now()}`,
       email,
-      name,
+      name: name ?? email,
       password,
     }
 
