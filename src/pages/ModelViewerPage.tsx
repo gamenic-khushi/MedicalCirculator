@@ -1,6 +1,6 @@
 import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Lasso, Menu, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
 import vectorIcon from '@/assets/SVG/Vector.svg'
 
@@ -16,8 +16,8 @@ import {
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
+import { useModel3D } from '@/hooks/useModel3D'
 import { databaseService } from '@/services/appwrite/database'
-import type { Model3DFile } from '@/types/model'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
@@ -64,11 +64,9 @@ function formatSnapshotDate(date: Date): string {
 }
 
 export function ModelViewerPage() {
-  const location = useLocation()
   const navigate = useNavigate()
-  const stateModel = (location.state as { model?: Model3DFile } | null)?.model
-  const validModel = stateModel && stateModel.file instanceof File ? stateModel : null
-  const [objectUrl, setObjectUrl] = useState<string | null>(null)
+  const { model, setModel } = useModel3D()
+  const validModel = model && model.file instanceof File ? model : null
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const viewerRef = useRef<HTMLDivElement>(null)
@@ -100,15 +98,6 @@ export function ModelViewerPage() {
     document.addEventListener('fullscreenchange', onFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
   }, [])
-
-  useEffect(() => {
-    if (!validModel) return
-    const url = URL.createObjectURL(validModel.file)
-    setObjectUrl(url)
-    return () => {
-      URL.revokeObjectURL(url)
-    }
-  }, [validModel])
 
   if (!validModel) {
     return <Navigate to="/3d-analysis" replace />
@@ -420,7 +409,10 @@ export function ModelViewerPage() {
         <h1 className="text-2xl font-bold text-gray-900">3D医療モデルビューア</h1>
         <button
           type="button"
-          onClick={() => navigate('/3d-analysis')}
+          onClick={() => {
+            setModel(null)
+            navigate('/3d-analysis')
+          }}
           className="flex items-center justify-center gap-2 self-start rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 sm:self-auto"
         >
           <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
@@ -468,7 +460,7 @@ export function ModelViewerPage() {
               <>
                 <ModelCanvas
                   ref={canvasRef}
-                  url={objectUrl ?? ''}
+                  url={validModel.objectUrl}
                   extension={validModel.extension}
                   color={MODEL_COLOR}
                   controlsEnabled={!isAnnotating && annotations.length === 0}
