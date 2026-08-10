@@ -8,22 +8,37 @@ import type { LearningContentFrame } from '@/types/learningContentFrame'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
+const PAGE_SIZE = 100
+
+async function fetchAllFrames(): Promise<LearningContentFrame[]> {
+  const rows: LearningContentFrameRow[] = []
+  let offset = 0
+
+  while (true) {
+    const page = await databaseService.list<LearningContentFrameRow>('learning_content_frames', [
+      Query.orderDesc('$createdAt'),
+      Query.limit(PAGE_SIZE),
+      Query.offset(offset),
+    ])
+    rows.push(...page.rows)
+    if (page.rows.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
+  }
+
+  return rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
+}
+
 export function LearningContentPage() {
   const location = useLocation()
   const stateFrame = (location.state as { newFrame?: LearningContentFrame } | null)?.newFrame
   const [frames, setFrames] = useState<LearningContentFrame[]>(stateFrame ? [stateFrame] : [])
 
   useEffect(() => {
-    databaseService
-      .list<LearningContentFrameRow>('learning_content_frames', [Query.orderDesc('$createdAt')])
-      .then(({ rows }) => {
-        const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
-        setFrames(
-          stateFrame
-            ? [stateFrame, ...loaded.filter((frame) => frame.id !== stateFrame.id)]
-            : loaded,
-        )
-      })
+    fetchAllFrames().then((loaded) => {
+      setFrames(
+        stateFrame ? [stateFrame, ...loaded.filter((frame) => frame.id !== stateFrame.id)] : loaded,
+      )
+    })
   }, [stateFrame])
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
