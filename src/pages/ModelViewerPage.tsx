@@ -645,24 +645,6 @@ export function ModelViewerPage() {
                   <div className="overflow-hidden rounded-lg bg-gray-800">
                     <img src={snapshot.image} alt="保存されたモデル画像" className="w-full" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm text-gray-700">
-                    <div>
-                      <p className="text-xs text-gray-500">上流血管のサイズ</p>
-                      <p className="font-medium text-gray-900">{snapshot.upstreamSize}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">下流血管のサイズ</p>
-                      <p className="font-medium text-gray-900">{snapshot.downstreamSize}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Pa</p>
-                      <p className="font-medium text-gray-900">{snapshot.pa}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Pd</p>
-                      <p className="font-medium text-gray-900">{snapshot.pd}</p>
-                    </div>
-                  </div>
                   <button
                     type="button"
                     onClick={() => handleSaveForTraining(snapshot)}
