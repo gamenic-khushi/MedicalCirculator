@@ -1,0 +1,54 @@
+import { Query, type Models } from 'appwrite'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+
+import { LearningContentTable } from '@/components/data/LearningContentTable'
+import { databaseService } from '@/services/appwrite/database'
+import type { LearningContentFrame } from '@/types/learningContentFrame'
+
+type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
+
+export function LearningContentPage() {
+  const location = useLocation()
+  const stateFrame = (location.state as { newFrame?: LearningContentFrame } | null)?.newFrame
+  const [frames, setFrames] = useState<LearningContentFrame[]>(stateFrame ? [stateFrame] : [])
+
+  useEffect(() => {
+    databaseService
+      .list<LearningContentFrameRow>('learning_content_frames', [Query.orderDesc('$createdAt')])
+      .then(({ rows }) => {
+        const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
+        setFrames(
+          stateFrame
+            ? [stateFrame, ...loaded.filter((frame) => frame.id !== stateFrame.id)]
+            : loaded,
+        )
+      })
+  }, [stateFrame])
+
+  async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
+    await databaseService.update<LearningContentFrameRow>('learning_content_frames', id, data)
+    setFrames((prev) => prev.map((frame) => (frame.id === id ? { ...frame, ...data } : frame)))
+  }
+
+  async function handleDelete(id: string) {
+    await databaseService.remove('learning_content_frames', id)
+    setFrames((prev) => prev.filter((frame) => frame.id !== id))
+  }
+
+  return (
+    <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <Link to="/data" className="hover:text-gray-700">
+          データ管理
+        </Link>
+        <span>/</span>
+        <span className="font-medium text-gray-900">学習内容</span>
+      </div>
+
+      <div className="mt-4">
+        <LearningContentTable frames={frames} onEdit={handleEdit} onDelete={handleDelete} />
+      </div>
+    </div>
+  )
+}

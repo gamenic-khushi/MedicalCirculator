@@ -1,0 +1,294 @@
+import {
+  forwardRef,
+  Suspense,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { Bounds, OrbitControls } from '@react-three/drei'
+import * as THREE from 'three'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+
+import { Model3D } from './Model3D'
+
+export type ViewerTool = 'rotate' | 'pan'
+
+export interface ModelCanvasHandle {
+  zoomIn: () => void
+  zoomOut: () => void
+  setTool: (tool: ViewerTool) => void
+  capture: () => string | null
+  measureVesselWidth: (xPercent: number, yPercent: number) => number | null
+  measureDistance3D: (
+    x1Percent: number,
+    y1Percent: number,
+    x2Percent: number,
+    y2Percent: number,
+  ) => number | null
+  measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
+  highlightAt: (xPercent: number, yPercent: number) => void
+  clearSelection: () => void
+}
+
+interface ModelCanvasProps {
+  url: string
+  extension: string
+  color: string
+  controlsEnabled?: boolean
+}
+
+interface ThreeState {
+  camera: THREE.Camera
+  scene: THREE.Scene
+}
+
+interface HitResult {
+  point: THREE.Vector3
+  normal: THREE.Vector3
+}
+
+const EDGE_SCAN_STEP_PERCENT = 0.4
+const EDGE_SCAN_MAX_PERCENT = 25
+const BRANCH_SCAN_ANGLE_STEPS = 16
+const BRANCH_SCAN_MAX_RADIUS_PERCENT = 20
+const BRANCH_MIN_SEPARATION_STEPS = Math.round(BRANCH_SCAN_ANGLE_STEPS / 6)
+const SNAP_SEARCH_RADII_PERCENT = [0.5, 1, 2, 3, 5]
+const SNAP_SEARCH_ANGLE_STEPS = 8
+
+function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
+  const three = useThree()
+  useEffect(() => {
+    stateRef.current = { camera: three.camera, scene: three.scene }
+  })
+  return null
+}
+
+export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(function ModelCanvas(
+  { url, extension, color, controlsEnabled = true },
+  ref,
+) {
+  const controlsRef = useRef<OrbitControlsImpl>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const threeStateRef = useRef<ThreeState | null>(null)
+  const [selectedHit, setSelectedHit] = useState<HitResult | null>(null)
+
+  function dolly(factor: number) {
+    const controls = controlsRef.current
+    if (!controls || !controls.enabled) return
+    const camera = controls.object
+    camera.position.lerp(controls.target, 1 - factor)
+    controls.update()
+  }
+
+  function getHitResult(xPercent: number, yPercent: number) {
+    const canvasElement = containerRef.current?.querySelector('canvas')
+    const camera = threeStateRef.current?.camera
+    const scene = threeStateRef.current?.scene
+    if (!camera || !scene || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
+      return null
+    }
+
+    const raycaster = new THREE.Raycaster()
+    const ndc = new THREE.Vector2()
+    ndc.set((xPercent / 100) * 2 - 1, -((yPercent / 100) * 2 - 1))
+    raycaster.setFromCamera(ndc, camera)
+    const hit = raycaster.intersectObject(scene, true)[0]
+    if (!hit) return null
+
+    const point = hit.point.clone()
+    const normal = hit.face
+      ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize()
+      : new THREE.Vector3(0, 0, 1)
+
+    return { point, normal }
+  }
+
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => dolly(0.85),
+    zoomOut: () => dolly(1.15),
+    setTool: (tool) => {
+      const controls = controlsRef.current
+      if (!controls) return
+      controls.mouseButtons.LEFT = tool === 'pan' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
+    },
+    capture: () => {
+      const canvasElement = containerRef.current?.querySelector('canvas')
+      if (!canvasElement) return null
+
+      const sourceWidth = canvasElement.width
+      const sourceHeight = canvasElement.height
+
+      const outputCanvas = document.createElement('canvas')
+      outputCanvas.width = sourceWidth
+      outputCanvas.height = sourceHeight
+      const ctx = outputCanvas.getContext('2d')
+      if (!ctx) return canvasElement.toDataURL('image/png')
+
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(0, 0, sourceWidth, sourceHeight)
+      ctx.drawImage(canvasElement, 0, 0, sourceWidth, sourceHeight)
+      return outputCanvas.toDataURL('image/png')
+    },
+    measureVesselWidth: (xPercent, yPercent) => {
+      const canvasElement = containerRef.current?.querySelector('canvas')
+      const camera = threeStateRef.current?.camera
+      const scene = threeStateRef.current?.scene
+      if (!camera || !scene || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
+        return null
+      }
+
+      const raycaster = new THREE.Raycaster()
+      const ndc = new THREE.Vector2()
+
+      function hitAt(xPct: number, yPct: number) {
+        ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
+        raycaster.setFromCamera(ndc, camera!)
+        const hits = raycaster.intersectObject(scene!, true)
+        return hits[0] ?? null
+      }
+
+      function findNearestHit(xPct: number, yPct: number) {
+        const direct = hitAt(xPct, yPct)
+        if (direct) return { hit: direct, x: xPct, y: yPct }
+
+        for (const radius of SNAP_SEARCH_RADII_PERCENT) {
+          for (let i = 0; i < SNAP_SEARCH_ANGLE_STEPS; i++) {
+            const angle = (i / SNAP_SEARCH_ANGLE_STEPS) * Math.PI * 2
+            const x = xPct + Math.cos(angle) * radius
+            const y = yPct + Math.sin(angle) * radius
+            const hit = hitAt(x, y)
+            if (hit) return { hit, x, y }
+          }
+        }
+        return null
+      }
+
+      const center = findNearestHit(xPercent, yPercent)
+      if (!center) return null
+
+      let leftEdge = center.x
+      for (
+        let d = EDGE_SCAN_STEP_PERCENT;
+        d <= EDGE_SCAN_MAX_PERCENT;
+        d += EDGE_SCAN_STEP_PERCENT
+      ) {
+        if (!hitAt(center.x - d, center.y)) break
+        leftEdge = center.x - d
+      }
+
+      let rightEdge = center.x
+      for (
+        let d = EDGE_SCAN_STEP_PERCENT;
+        d <= EDGE_SCAN_MAX_PERCENT;
+        d += EDGE_SCAN_STEP_PERCENT
+      ) {
+        if (!hitAt(center.x + d, center.y)) break
+        rightEdge = center.x + d
+      }
+
+      const widthPercent = rightEdge - leftEdge
+      const widthPx = (widthPercent / 100) * canvasElement.clientWidth
+
+      const fovRad = (camera.fov * Math.PI) / 180
+      const worldHeightAtDistance = 2 * center.hit.distance * Math.tan(fovRad / 2)
+      const worldUnitsPerPixel = worldHeightAtDistance / canvasElement.clientHeight
+
+      return widthPx * worldUnitsPerPixel
+    },
+    measureDistance3D: (x1Percent, y1Percent, x2Percent, y2Percent) => {
+      const hit1 = getHitResult(x1Percent, y1Percent)
+      const hit2 = getHitResult(x2Percent, y2Percent)
+      if (!hit1 || !hit2) return null
+      return hit1.point.distanceTo(hit2.point)
+    },
+    measureBifurcationAngle: (xPercent, yPercent) => {
+      const camera = threeStateRef.current?.camera
+      const scene = threeStateRef.current?.scene
+      if (!camera || !scene || !(camera instanceof THREE.PerspectiveCamera)) return null
+
+      const raycaster = new THREE.Raycaster()
+      const ndc = new THREE.Vector2()
+
+      function hitAt(xPct: number, yPct: number) {
+        ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
+        raycaster.setFromCamera(ndc, camera!)
+        return raycaster.intersectObject(scene!, true)[0] ?? null
+      }
+
+      const reach: number[] = []
+      for (let i = 0; i < BRANCH_SCAN_ANGLE_STEPS; i++) {
+        const angle = (i / BRANCH_SCAN_ANGLE_STEPS) * Math.PI * 2
+        let maxRadius = 0
+        for (let r = 1; r <= BRANCH_SCAN_MAX_RADIUS_PERCENT; r += 1) {
+          const x = xPercent + Math.cos(angle) * r
+          const y = yPercent + Math.sin(angle) * r
+          if (!hitAt(x, y)) break
+          maxRadius = r
+        }
+        reach.push(maxRadius)
+      }
+
+      const rankedIndices = reach
+        .map((value, index) => ({ value, index }))
+        .sort((a, b) => b.value - a.value)
+        .map((entry) => entry.index)
+
+      const firstIndex = rankedIndices[0]
+      const secondIndex = rankedIndices.slice(1).find((index) => {
+        const diff = Math.abs(index - firstIndex)
+        return Math.min(diff, BRANCH_SCAN_ANGLE_STEPS - diff) >= BRANCH_MIN_SEPARATION_STEPS
+      })
+      if (firstIndex === undefined || secondIndex === undefined) return null
+
+      const angle1 = (firstIndex / BRANCH_SCAN_ANGLE_STEPS) * 360
+      const angle2 = (secondIndex / BRANCH_SCAN_ANGLE_STEPS) * 360
+      const diff = Math.abs(angle1 - angle2)
+      return diff > 180 ? 360 - diff : diff
+    },
+    highlightAt: (xPercent, yPercent) => {
+      const hit = getHitResult(xPercent, yPercent)
+      if (hit) setSelectedHit(hit)
+    },
+    clearSelection: () => setSelectedHit(null),
+  }))
+
+  return (
+    <div ref={containerRef} className="h-full w-full">
+      <Canvas
+        camera={{ position: [4, 3, 4], fov: 45 }}
+        gl={{ alpha: true, preserveDrawingBuffer: true }}
+      >
+        <SceneAccessor stateRef={threeStateRef} />
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[5, 8, 5]} intensity={1.1} />
+        <directionalLight position={[-5, -3, -5]} intensity={0.3} />
+        <Suspense fallback={null}>
+          <Bounds fit clip margin={1.3} maxDuration={0}>
+            <Model3D url={url} extension={extension} color={color} />
+            {selectedHit && (
+              <mesh
+                position={selectedHit.point}
+                quaternion={new THREE.Quaternion().setFromUnitVectors(
+                  new THREE.Vector3(0, 0, 1),
+                  selectedHit.normal,
+                )}
+              >
+                <circleGeometry args={[0.28, 48]} />
+                <meshStandardMaterial
+                  color="limegreen"
+                  transparent
+                  opacity={0.55}
+                  side={THREE.DoubleSide}
+                />
+              </mesh>
+            )}
+          </Bounds>
+        </Suspense>
+        <OrbitControls ref={controlsRef} makeDefault enabled={controlsEnabled} />
+      </Canvas>
+    </div>
+  )
+})
