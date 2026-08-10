@@ -649,7 +649,7 @@ export function ModelViewerPage() {
                     type="button"
                     onClick={() => handleSaveForTraining(snapshot)}
                     disabled={savingSnapshotIds.has(snapshot.id)}
-                    className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {savingSnapshotIds.has(snapshot.id) ? '保存中...' : 'AIトレーニング用に保存'}
                   </button>
