@@ -13,6 +13,11 @@ export interface FfrResult {
   ffrValue: number
 }
 
+export interface CameraState {
+  position: [number, number, number]
+  target: [number, number, number]
+}
+
 export interface SavedSnapshot {
   id: string
   image: string

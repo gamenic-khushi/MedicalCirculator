@@ -49,6 +49,8 @@ export function ModelViewerPage() {
   const {
     activeTool,
     setActiveTool,
+    cameraState,
+    setCameraState,
     isAnnotating,
     setIsAnnotating,
     annotations,
@@ -457,6 +459,8 @@ export function ModelViewerPage() {
                   extension={validModel.extension}
                   color={MODEL_COLOR}
                   controlsEnabled={!isAnnotating && annotations.length === 0}
+                  initialCamera={cameraState}
+                  onCameraChange={setCameraState}
                 />
 
                 {annotations.map((annotation) => (

@@ -12,6 +12,8 @@ import { Bounds, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
+import type { CameraState } from '@/types/viewerState'
+
 import { Model3D } from './Model3D'
 
 export type ViewerTool = 'rotate' | 'pan'
@@ -38,6 +40,8 @@ interface ModelCanvasProps {
   extension: string
   color: string
   controlsEnabled?: boolean
+  initialCamera?: CameraState | null
+  onCameraChange?: (state: CameraState) => void
 }
 
 interface ThreeState {
@@ -66,8 +70,24 @@ function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | n
   return null
 }
 
+function CameraTargetRestorer({
+  target,
+  controlsRef,
+}: {
+  target: CameraState['target'] | undefined
+  controlsRef: MutableRefObject<OrbitControlsImpl | null>
+}) {
+  useEffect(() => {
+    if (!target) return
+    controlsRef.current?.target.set(...target)
+    controlsRef.current?.update()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return null
+}
+
 export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(function ModelCanvas(
-  { url, extension, color, controlsEnabled = true },
+  { url, extension, color, controlsEnabled = true, initialCamera, onCameraChange },
   ref,
 ) {
   const controlsRef = useRef<OrbitControlsImpl>(null)
@@ -75,12 +95,22 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const threeStateRef = useRef<ThreeState | null>(null)
   const [selectedHit, setSelectedHit] = useState<HitResult | null>(null)
 
+  function emitCameraChange() {
+    const controls = controlsRef.current
+    if (!controls || !onCameraChange) return
+    onCameraChange({
+      position: controls.object.position.toArray() as [number, number, number],
+      target: controls.target.toArray() as [number, number, number],
+    })
+  }
+
   function dolly(factor: number) {
     const controls = controlsRef.current
     if (!controls || !controls.enabled) return
     const camera = controls.object
     camera.position.lerp(controls.target, 1 - factor)
     controls.update()
+    emitCameraChange()
   }
 
   function getHitResult(xPercent: number, yPercent: number) {
@@ -258,7 +288,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   return (
     <div ref={containerRef} className="h-full w-full">
       <Canvas
-        camera={{ position: [4, 3, 4], fov: 45 }}
+        camera={{ position: initialCamera?.position ?? [4, 3, 4], fov: 45 }}
         gl={{ alpha: true, preserveDrawingBuffer: true }}
       >
         <SceneAccessor stateRef={threeStateRef} />
@@ -266,7 +296,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <directionalLight position={[5, 8, 5]} intensity={1.1} />
         <directionalLight position={[-5, -3, -5]} intensity={0.3} />
         <Suspense fallback={null}>
-          <Bounds fit clip margin={1.3} maxDuration={0}>
+          <Bounds fit={!initialCamera} clip margin={1.3} maxDuration={0}>
             <Model3D url={url} extension={extension} color={color} />
             {selectedHit && (
               <mesh
@@ -286,8 +316,14 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
               </mesh>
             )}
           </Bounds>
+          <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />
         </Suspense>
-        <OrbitControls ref={controlsRef} makeDefault enabled={controlsEnabled} />
+        <OrbitControls
+          ref={controlsRef}
+          makeDefault
+          enabled={controlsEnabled}
+          onEnd={emitCameraChange}
+        />
       </Canvas>
     </div>
   )

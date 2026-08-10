@@ -1,11 +1,13 @@
 import { createContext, type Dispatch, type SetStateAction } from 'react'
 
 import type { ViewerTool } from '@/components/model-viewer/ModelCanvas'
-import type { Annotation, FfrResult, SavedSnapshot } from '@/types/viewerState'
+import type { Annotation, CameraState, FfrResult, SavedSnapshot } from '@/types/viewerState'
 
 export interface ViewerStateContextValue {
   activeTool: ViewerTool
   setActiveTool: Dispatch<SetStateAction<ViewerTool>>
+  cameraState: CameraState | null
+  setCameraState: Dispatch<SetStateAction<CameraState | null>>
   isAnnotating: boolean
   setIsAnnotating: Dispatch<SetStateAction<boolean>>
   annotations: Annotation[]
