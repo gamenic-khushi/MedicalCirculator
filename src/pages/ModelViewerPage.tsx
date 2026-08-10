@@ -91,6 +91,7 @@ export function ModelViewerPage() {
   const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshot[]>([])
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isTableView, setIsTableView] = useState(false)
+  const [isModelVisible, setIsModelVisible] = useState(true)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [savingSnapshotIds, setSavingSnapshotIds] = useState<Set<string>>(new Set())
 
@@ -128,6 +129,11 @@ export function ModelViewerPage() {
     setLumenVolume('')
     setBifurcationAngle('')
     canvasRef.current?.clearSelection()
+  }
+
+  function handleRemoveModel() {
+    handleResetAnnotations()
+    setIsModelVisible(false)
   }
 
   function toggleFullscreen() {
@@ -458,21 +464,25 @@ export function ModelViewerPage() {
               isFullscreen ? 'flex-1' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
           >
-            <ModelCanvas
-              ref={canvasRef}
-              url={objectUrl ?? ''}
-              extension={validModel.extension}
-              color={MODEL_COLOR}
-              controlsEnabled={!isAnnotating && annotations.length === 0}
-            />
+            {isModelVisible && (
+              <>
+                <ModelCanvas
+                  ref={canvasRef}
+                  url={objectUrl ?? ''}
+                  extension={validModel.extension}
+                  color={MODEL_COLOR}
+                  controlsEnabled={!isAnnotating && annotations.length === 0}
+                />
 
-            {annotations.map((annotation) => (
-              <div
-                key={annotation.id}
-                style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
-              />
-            ))}
+                {annotations.map((annotation) => (
+                  <div
+                    key={annotation.id}
+                    style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
+                    className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
+                  />
+                ))}
+              </>
+            )}
 
             <div className="absolute left-4 top-4 flex flex-col gap-2">
               <button
@@ -489,9 +499,9 @@ export function ModelViewerPage() {
               </button>
               <button
                 type="button"
-                onClick={handleResetAnnotations}
+                onClick={handleRemoveModel}
                 className="rounded-full border border-gray-100 bg-white p-2 text-red-500 shadow-sm transition hover:bg-red-50"
-                title="選択した箇所を削除"
+                title="3Dモデルを削除"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
