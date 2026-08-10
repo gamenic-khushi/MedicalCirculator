@@ -37,6 +37,8 @@ export function ViewerStateProvider({ children }: { children: ReactNode }) {
     setMla('')
     setLumenVolume('')
     setBifurcationAngle('')
+    setSavedSnapshots([])
+    setIsTableView(false)
     setIsModelVisible(true)
   }
 
