@@ -21,7 +21,6 @@ export function ViewerStateProvider({ children }: { children: ReactNode }) {
   const [bifurcationAngle, setBifurcationAngle] = useState('')
   const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshot[]>([])
   const [isTableView, setIsTableView] = useState(false)
-  const [isModelVisible, setIsModelVisible] = useState(true)
 
   function resetForNewModel() {
     setActiveTool('rotate')
@@ -39,7 +38,6 @@ export function ViewerStateProvider({ children }: { children: ReactNode }) {
     setBifurcationAngle('')
     setSavedSnapshots([])
     setIsTableView(false)
-    setIsModelVisible(true)
   }
 
   return (
@@ -75,8 +73,6 @@ export function ViewerStateProvider({ children }: { children: ReactNode }) {
         setSavedSnapshots,
         isTableView,
         setIsTableView,
-        isModelVisible,
-        setIsModelVisible,
         resetForNewModel,
       }}
     >

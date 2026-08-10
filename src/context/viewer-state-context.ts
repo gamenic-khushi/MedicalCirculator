@@ -34,8 +34,6 @@ export interface ViewerStateContextValue {
   setSavedSnapshots: Dispatch<SetStateAction<SavedSnapshot[]>>
   isTableView: boolean
   setIsTableView: Dispatch<SetStateAction<boolean>>
-  isModelVisible: boolean
-  setIsModelVisible: Dispatch<SetStateAction<boolean>>
   resetForNewModel: () => void
 }
 

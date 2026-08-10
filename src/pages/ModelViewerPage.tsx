@@ -77,8 +77,6 @@ export function ModelViewerPage() {
     setSavedSnapshots,
     isTableView,
     setIsTableView,
-    isModelVisible,
-    setIsModelVisible,
     resetForNewModel,
   } = useViewerState()
 
@@ -115,8 +113,9 @@ export function ModelViewerPage() {
   }
 
   function handleRemoveModel() {
-    handleResetAnnotations()
-    setIsModelVisible(false)
+    setModel(null)
+    resetForNewModel()
+    navigate('/3d-analysis')
   }
 
   function toggleFullscreen() {
@@ -403,11 +402,7 @@ export function ModelViewerPage() {
         <h1 className="text-2xl font-bold text-gray-900">3D医療モデルビューア</h1>
         <button
           type="button"
-          onClick={() => {
-            setModel(null)
-            resetForNewModel()
-            navigate('/3d-analysis')
-          }}
+          onClick={handleRemoveModel}
           className="flex items-center justify-center gap-2 self-start rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 sm:self-auto"
         >
           <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
@@ -451,27 +446,23 @@ export function ModelViewerPage() {
               isFullscreen ? 'flex-1' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
           >
-            {isModelVisible && (
-              <>
-                <ModelCanvas
-                  ref={canvasRef}
-                  url={validModel.objectUrl}
-                  extension={validModel.extension}
-                  color={MODEL_COLOR}
-                  controlsEnabled={!isAnnotating && annotations.length === 0}
-                  initialCamera={cameraState}
-                  onCameraChange={setCameraState}
-                />
+            <ModelCanvas
+              ref={canvasRef}
+              url={validModel.objectUrl}
+              extension={validModel.extension}
+              color={MODEL_COLOR}
+              controlsEnabled={!isAnnotating && annotations.length === 0}
+              initialCamera={cameraState}
+              onCameraChange={setCameraState}
+            />
 
-                {annotations.map((annotation) => (
-                  <div
-                    key={annotation.id}
-                    style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                    className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
-                  />
-                ))}
-              </>
-            )}
+            {annotations.map((annotation) => (
+              <div
+                key={annotation.id}
+                style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
+                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
+              />
+            ))}
 
             <div className="absolute left-4 top-4 flex flex-col gap-2">
               <button
