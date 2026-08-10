@@ -17,8 +17,10 @@ import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useModel3D } from '@/hooks/useModel3D'
+import { useViewerState } from '@/hooks/useViewerState'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
+import type { Annotation, SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
@@ -26,35 +28,6 @@ const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const FFR_STENOSIS_FACTOR = 0.44
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
-
-interface Annotation {
-  id: string
-  x: number
-  y: number
-}
-
-interface FfrResult {
-  originX: number
-  originY: number
-  labelX: number
-  labelY: number
-  stenosisRate: number
-  ffrValue: number
-}
-
-interface SavedSnapshot {
-  id: string
-  image: string
-  date: string
-  upstreamSize: string
-  downstreamSize: string
-  pd: string
-  pa: string
-  stenosisRate: string
-  mla: string
-  lumenVolume: string
-  bifurcationAngle: string
-}
 
 function formatSnapshotDate(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0')
@@ -73,23 +46,42 @@ export function ModelViewerPage() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
   const savingSnapshotIdsRef = useRef<Set<string>>(new Set())
 
-  const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
+  const {
+    activeTool,
+    setActiveTool,
+    isAnnotating,
+    setIsAnnotating,
+    annotations,
+    setAnnotations,
+    ffrResult,
+    setFfrResult,
+    bloodPressure,
+    setBloodPressure,
+    calculatedPa,
+    setCalculatedPa,
+    pd,
+    setPd,
+    upstreamDiameter,
+    setUpstreamDiameter,
+    downstreamDiameter,
+    setDownstreamDiameter,
+    mla,
+    setMla,
+    lumenVolume,
+    setLumenVolume,
+    bifurcationAngle,
+    setBifurcationAngle,
+    savedSnapshots,
+    setSavedSnapshots,
+    isTableView,
+    setIsTableView,
+    isModelVisible,
+    setIsModelVisible,
+    resetForNewModel,
+  } = useViewerState()
+
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [isAnnotating, setIsAnnotating] = useState(false)
-  const [annotations, setAnnotations] = useState<Annotation[]>([])
-  const [ffrResult, setFfrResult] = useState<FfrResult | null>(null)
-  const [bloodPressure, setBloodPressure] = useState('')
-  const [calculatedPa, setCalculatedPa] = useState('')
-  const [pd, setPd] = useState('')
-  const [upstreamDiameter, setUpstreamDiameter] = useState('')
-  const [downstreamDiameter, setDownstreamDiameter] = useState('')
-  const [mla, setMla] = useState('')
-  const [lumenVolume, setLumenVolume] = useState('')
-  const [bifurcationAngle, setBifurcationAngle] = useState('')
-  const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshot[]>([])
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [isTableView, setIsTableView] = useState(false)
-  const [isModelVisible, setIsModelVisible] = useState(true)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [savingSnapshotIds, setSavingSnapshotIds] = useState<Set<string>>(new Set())
 
@@ -411,6 +403,7 @@ export function ModelViewerPage() {
           type="button"
           onClick={() => {
             setModel(null)
+            resetForNewModel()
             navigate('/3d-analysis')
           }}
           className="flex items-center justify-center gap-2 self-start rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 sm:self-auto"
