@@ -259,34 +259,6 @@ export function ModelViewerPage() {
 
     ctx.drawImage(imageElement, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
 
-    const x = originalX - cropX
-    const y = originalY - cropY
-    const radius = Math.max(24, Math.min(canvas.width, canvas.height) * 0.065)
-
-    const clampedX = Math.min(Math.max(x, 0), canvas.width)
-    const clampedY = Math.min(Math.max(y, 0), canvas.height)
-
-    ctx.save()
-    ctx.strokeStyle = 'rgba(255, 59, 48, 0.92)'
-    ctx.lineWidth = 6
-    ctx.shadowColor = 'rgba(255, 59, 48, 0.35)'
-    ctx.shadowBlur = 14
-    ctx.beginPath()
-    ctx.arc(clampedX, clampedY, radius, 0, Math.PI * 2)
-    ctx.stroke()
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.arc(clampedX, clampedY, radius - 10, 0, Math.PI * 2)
-    ctx.stroke()
-
-    ctx.fillStyle = 'rgba(255, 59, 48, 0.08)'
-    ctx.beginPath()
-    ctx.arc(clampedX, clampedY, radius - 14, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-
     return canvas.toDataURL('image/png')
   }
 
