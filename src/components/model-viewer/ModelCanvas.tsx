@@ -52,8 +52,10 @@ interface ThreeState {
 interface HitResult {
   point: THREE.Vector3
   normal: THREE.Vector3
+  radius: number
 }
 
+const FALLBACK_HIGHLIGHT_RADIUS = 0.28
 const EDGE_SCAN_STEP_PERCENT = 0.4
 const EDGE_SCAN_MAX_PERCENT = 25
 const BRANCH_SCAN_ANGLE_STEPS = 16
@@ -68,6 +70,22 @@ function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | n
     stateRef.current = { camera: three.camera, scene: three.scene }
   })
   return null
+}
+
+function SelectionHighlight({ hit }: { hit: HitResult }) {
+  const tubeRadius = hit.radius * 0.4
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    hit.normal,
+  )
+  const position = hit.point.clone().addScaledVector(hit.normal, tubeRadius * 0.6)
+
+  return (
+    <mesh position={position} quaternion={quaternion}>
+      <torusGeometry args={[hit.radius, tubeRadius, 16, 48]} />
+      <meshStandardMaterial color="limegreen" transparent opacity={0.85} side={THREE.DoubleSide} />
+    </mesh>
+  )
 }
 
 function CameraTargetRestorer({
@@ -136,6 +154,65 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return { point, normal }
   }
 
+  function computeVesselWidth(xPercent: number, yPercent: number) {
+    const canvasElement = containerRef.current?.querySelector('canvas')
+    const camera = threeStateRef.current?.camera
+    const scene = threeStateRef.current?.scene
+    if (!camera || !scene || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
+      return null
+    }
+
+    const raycaster = new THREE.Raycaster()
+    const ndc = new THREE.Vector2()
+
+    function hitAt(xPct: number, yPct: number) {
+      ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
+      raycaster.setFromCamera(ndc, camera!)
+      const hits = raycaster.intersectObject(scene!, true)
+      return hits[0] ?? null
+    }
+
+    function findNearestHit(xPct: number, yPct: number) {
+      const direct = hitAt(xPct, yPct)
+      if (direct) return { hit: direct, x: xPct, y: yPct }
+
+      for (const radius of SNAP_SEARCH_RADII_PERCENT) {
+        for (let i = 0; i < SNAP_SEARCH_ANGLE_STEPS; i++) {
+          const angle = (i / SNAP_SEARCH_ANGLE_STEPS) * Math.PI * 2
+          const x = xPct + Math.cos(angle) * radius
+          const y = yPct + Math.sin(angle) * radius
+          const hit = hitAt(x, y)
+          if (hit) return { hit, x, y }
+        }
+      }
+      return null
+    }
+
+    const center = findNearestHit(xPercent, yPercent)
+    if (!center) return null
+
+    let leftEdge = center.x
+    for (let d = EDGE_SCAN_STEP_PERCENT; d <= EDGE_SCAN_MAX_PERCENT; d += EDGE_SCAN_STEP_PERCENT) {
+      if (!hitAt(center.x - d, center.y)) break
+      leftEdge = center.x - d
+    }
+
+    let rightEdge = center.x
+    for (let d = EDGE_SCAN_STEP_PERCENT; d <= EDGE_SCAN_MAX_PERCENT; d += EDGE_SCAN_STEP_PERCENT) {
+      if (!hitAt(center.x + d, center.y)) break
+      rightEdge = center.x + d
+    }
+
+    const widthPercent = rightEdge - leftEdge
+    const widthPx = (widthPercent / 100) * canvasElement.clientWidth
+
+    const fovRad = (camera.fov * Math.PI) / 180
+    const worldHeightAtDistance = 2 * center.hit.distance * Math.tan(fovRad / 2)
+    const worldUnitsPerPixel = worldHeightAtDistance / canvasElement.clientHeight
+
+    return widthPx * worldUnitsPerPixel
+  }
+
   useImperativeHandle(ref, () => ({
     zoomIn: () => dolly(0.85),
     zoomOut: () => dolly(1.15),
@@ -162,72 +239,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       ctx.drawImage(canvasElement, 0, 0, sourceWidth, sourceHeight)
       return outputCanvas.toDataURL('image/png')
     },
-    measureVesselWidth: (xPercent, yPercent) => {
-      const canvasElement = containerRef.current?.querySelector('canvas')
-      const camera = threeStateRef.current?.camera
-      const scene = threeStateRef.current?.scene
-      if (!camera || !scene || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
-        return null
-      }
-
-      const raycaster = new THREE.Raycaster()
-      const ndc = new THREE.Vector2()
-
-      function hitAt(xPct: number, yPct: number) {
-        ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
-        raycaster.setFromCamera(ndc, camera!)
-        const hits = raycaster.intersectObject(scene!, true)
-        return hits[0] ?? null
-      }
-
-      function findNearestHit(xPct: number, yPct: number) {
-        const direct = hitAt(xPct, yPct)
-        if (direct) return { hit: direct, x: xPct, y: yPct }
-
-        for (const radius of SNAP_SEARCH_RADII_PERCENT) {
-          for (let i = 0; i < SNAP_SEARCH_ANGLE_STEPS; i++) {
-            const angle = (i / SNAP_SEARCH_ANGLE_STEPS) * Math.PI * 2
-            const x = xPct + Math.cos(angle) * radius
-            const y = yPct + Math.sin(angle) * radius
-            const hit = hitAt(x, y)
-            if (hit) return { hit, x, y }
-          }
-        }
-        return null
-      }
-
-      const center = findNearestHit(xPercent, yPercent)
-      if (!center) return null
-
-      let leftEdge = center.x
-      for (
-        let d = EDGE_SCAN_STEP_PERCENT;
-        d <= EDGE_SCAN_MAX_PERCENT;
-        d += EDGE_SCAN_STEP_PERCENT
-      ) {
-        if (!hitAt(center.x - d, center.y)) break
-        leftEdge = center.x - d
-      }
-
-      let rightEdge = center.x
-      for (
-        let d = EDGE_SCAN_STEP_PERCENT;
-        d <= EDGE_SCAN_MAX_PERCENT;
-        d += EDGE_SCAN_STEP_PERCENT
-      ) {
-        if (!hitAt(center.x + d, center.y)) break
-        rightEdge = center.x + d
-      }
-
-      const widthPercent = rightEdge - leftEdge
-      const widthPx = (widthPercent / 100) * canvasElement.clientWidth
-
-      const fovRad = (camera.fov * Math.PI) / 180
-      const worldHeightAtDistance = 2 * center.hit.distance * Math.tan(fovRad / 2)
-      const worldUnitsPerPixel = worldHeightAtDistance / canvasElement.clientHeight
-
-      return widthPx * worldUnitsPerPixel
-    },
+    measureVesselWidth: (xPercent, yPercent) => computeVesselWidth(xPercent, yPercent),
     measureDistance3D: (x1Percent, y1Percent, x2Percent, y2Percent) => {
       const hit1 = getHitResult(x1Percent, y1Percent)
       const hit2 = getHitResult(x2Percent, y2Percent)
@@ -280,7 +292,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     },
     highlightAt: (xPercent, yPercent) => {
       const hit = getHitResult(xPercent, yPercent)
-      if (hit) setSelectedHit(hit)
+      if (!hit) return
+      const width = computeVesselWidth(xPercent, yPercent)
+      const radius = width ? (width / 2) * 0.55 : FALLBACK_HIGHLIGHT_RADIUS
+      setSelectedHit({ ...hit, radius })
     },
     clearSelection: () => setSelectedHit(null),
   }))
@@ -298,23 +313,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <Suspense fallback={null}>
           <Bounds fit={!initialCamera} clip margin={1.3} maxDuration={0}>
             <Model3D url={url} extension={extension} color={color} />
-            {selectedHit && (
-              <mesh
-                position={selectedHit.point}
-                quaternion={new THREE.Quaternion().setFromUnitVectors(
-                  new THREE.Vector3(0, 0, 1),
-                  selectedHit.normal,
-                )}
-              >
-                <circleGeometry args={[0.28, 48]} />
-                <meshStandardMaterial
-                  color="limegreen"
-                  transparent
-                  opacity={0.55}
-                  side={THREE.DoubleSide}
-                />
-              </mesh>
-            )}
+            {selectedHit && <SelectionHighlight hit={selectedHit} />}
           </Bounds>
           <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />
         </Suspense>
