@@ -15,18 +15,11 @@ export function Model3D({ url, extension, color }: Model3DProps) {
   return <StlModel url={url} color={color} />
 }
 
-function ensureVertexColorAttribute(geometry: THREE.BufferGeometry) {
-  if (geometry.getAttribute('color')) return
-  const count = geometry.getAttribute('position').count
-  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3))
-}
-
 function StlModel({ url, color }: { url: string; color: string }) {
   const geometry = useLoader(STLLoader, url)
 
   const centered = useMemo(() => {
     geometry.center()
-    ensureVertexColorAttribute(geometry)
     return geometry
   }, [geometry])
 
@@ -37,7 +30,6 @@ function StlModel({ url, color }: { url: string; color: string }) {
         roughness={0.6}
         metalness={0.05}
         side={THREE.DoubleSide}
-        vertexColors
       />
     </mesh>
   )
@@ -90,13 +82,11 @@ function disableAnimations(object: THREE.Object3D) {
 function applyMaterial(object: THREE.Object3D, color: string) {
   object.traverse((child) => {
     if (child instanceof THREE.Mesh) {
-      ensureVertexColorAttribute(child.geometry)
       child.material = new THREE.MeshStandardMaterial({
         color,
         roughness: 0.6,
         metalness: 0.05,
         side: THREE.DoubleSide,
-        vertexColors: true,
       })
     }
   })
