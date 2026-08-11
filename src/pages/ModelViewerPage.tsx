@@ -193,7 +193,7 @@ export function ModelViewerPage() {
       setMla(mlaValue.toFixed(2))
       setLumenVolume(lumenVolumeValue !== null ? lumenVolumeValue.toFixed(1) : '')
       setBifurcationAngle(bifurcationAngleDeg ? bifurcationAngleDeg.toFixed(0) : '')
-      canvasRef.current?.highlightAt(target.x, target.y)
+      canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
 
       const targetXPx = (target.x / 100) * bounds.width
       const targetYPx = (target.y / 100) * bounds.height

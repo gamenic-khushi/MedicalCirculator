@@ -30,7 +30,7 @@ export interface ModelCanvasHandle {
     y2Percent: number,
   ) => number | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
-  highlightAt: (xPercent: number, yPercent: number) => void
+  highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => void
   clearSelection: () => void
 }
 
@@ -289,10 +289,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const diff = Math.abs(angle1 - angle2)
       return diff > 180 ? 360 - diff : diff
     },
-    highlightAt: (xPercent, yPercent) => {
+    highlightAt: (xPercent, yPercent, referenceWidth) => {
       const hit = getHitResult(xPercent, yPercent)
       if (!hit || !(hit.object instanceof THREE.Mesh)) return
-      const width = computeVesselWidth(xPercent, yPercent)
+      const width = referenceWidth ?? computeVesselWidth(xPercent, yPercent)
       const radius = width ? (width / 2) * 0.55 : FALLBACK_HIGHLIGHT_RADIUS
 
       if (paintedMeshRef.current && paintedMeshRef.current !== hit.object) {
