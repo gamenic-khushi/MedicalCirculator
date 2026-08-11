@@ -48,11 +48,6 @@ export function FfrResultOverlay({
       </svg>
 
       <div
-        style={{ left: `${originX}%`, top: `${originY}%` }}
-        className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500"
-      />
-
-      <div
         style={{ left: `${labelX}%`, top: `${labelY}%` }}
         className="absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap pb-2 text-xs font-medium text-gray-800"
       >

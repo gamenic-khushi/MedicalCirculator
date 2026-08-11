@@ -30,6 +30,8 @@ export interface ModelCanvasHandle {
     y2Percent: number,
   ) => number | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
+  highlightAt: (xPercent: number, yPercent: number) => void
+  clearSelection: () => void
 }
 
 interface ModelCanvasProps {
@@ -46,6 +48,9 @@ interface ThreeState {
   scene: THREE.Scene
 }
 
+const FALLBACK_HIGHLIGHT_RADIUS = 0.28
+const HIGHLIGHT_COLOR = new THREE.Color(0x86efac)
+const WHITE = new THREE.Color(1, 1, 1)
 const EDGE_SCAN_STEP_PERCENT = 0.4
 const EDGE_SCAN_MAX_PERCENT = 25
 const BRANCH_SCAN_ANGLE_STEPS = 16
@@ -85,6 +90,37 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const threeStateRef = useRef<ThreeState | null>(null)
+  const paintedMeshRef = useRef<THREE.Mesh | null>(null)
+
+  function resetMeshColors(mesh: THREE.Mesh) {
+    const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+    if (!colorAttr) return
+    ;(colorAttr.array as Float32Array).fill(1)
+    colorAttr.needsUpdate = true
+  }
+
+  function paintVesselFill(mesh: THREE.Mesh, worldPoint: THREE.Vector3, worldRadius: number) {
+    const positionAttr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+    if (!positionAttr || !colorAttr) return
+
+    const localPoint = mesh.worldToLocal(worldPoint.clone())
+    const worldScale = mesh.getWorldScale(new THREE.Vector3())
+    const avgScale = (worldScale.x + worldScale.y + worldScale.z) / 3 || 1
+    const innerRadius = (worldRadius / avgScale) * 0.9
+    const outerRadius = (worldRadius / avgScale) * 1.1
+
+    const vertex = new THREE.Vector3()
+    const blended = new THREE.Color()
+    for (let i = 0; i < positionAttr.count; i += 1) {
+      vertex.fromBufferAttribute(positionAttr, i)
+      const distance = vertex.distanceTo(localPoint)
+      const t = 1 - THREE.MathUtils.smoothstep(distance, innerRadius, outerRadius)
+      blended.copy(WHITE).lerp(HIGHLIGHT_COLOR, t)
+      colorAttr.setXYZ(i, blended.r, blended.g, blended.b)
+    }
+    colorAttr.needsUpdate = true
+  }
 
   function emitCameraChange() {
     const controls = controlsRef.current
@@ -252,6 +288,24 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const angle2 = (secondIndex / BRANCH_SCAN_ANGLE_STEPS) * 360
       const diff = Math.abs(angle1 - angle2)
       return diff > 180 ? 360 - diff : diff
+    },
+    highlightAt: (xPercent, yPercent) => {
+      const hit = getHitResult(xPercent, yPercent)
+      if (!hit || !(hit.object instanceof THREE.Mesh)) return
+      const width = computeVesselWidth(xPercent, yPercent)
+      const radius = width ? (width / 2) * 0.55 : FALLBACK_HIGHLIGHT_RADIUS
+
+      if (paintedMeshRef.current && paintedMeshRef.current !== hit.object) {
+        resetMeshColors(paintedMeshRef.current)
+      }
+      paintedMeshRef.current = hit.object
+      paintVesselFill(hit.object, hit.point, radius)
+    },
+    clearSelection: () => {
+      if (paintedMeshRef.current) {
+        resetMeshColors(paintedMeshRef.current)
+        paintedMeshRef.current = null
+      }
     },
   }))
 
