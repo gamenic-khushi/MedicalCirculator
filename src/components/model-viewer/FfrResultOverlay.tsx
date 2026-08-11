@@ -45,7 +45,7 @@ export function FfrResultOverlay({
         style={{ left: `${labelX}%`, top: `${labelY}%` }}
         className="absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap pb-2 text-xs font-medium text-gray-800"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+        <span className="h-2 w-2 rotate-45 bg-blue-500" />
         Stenosis rate {stenosisRate}%
       </div>
 
