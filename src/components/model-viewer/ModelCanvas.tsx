@@ -49,7 +49,7 @@ interface ThreeState {
 }
 
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
-const HIGHLIGHT_COLOR = new THREE.Color(0x86efac)
+const HIGHLIGHT_COLOR = new THREE.Color(0x39ff14)
 const WHITE = new THREE.Color(1, 1, 1)
 const EDGE_SCAN_STEP_PERCENT = 0.4
 const EDGE_SCAN_MAX_PERCENT = 25
