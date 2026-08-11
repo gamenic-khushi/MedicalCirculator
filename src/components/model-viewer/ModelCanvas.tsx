@@ -49,7 +49,7 @@ interface ThreeState {
 }
 
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
-const HIGHLIGHT_COLOR = new THREE.Color(0x22c55e)
+const HIGHLIGHT_COLOR = new THREE.Color(0x86efac)
 const WHITE = new THREE.Color(1, 1, 1)
 const EDGE_SCAN_STEP_PERCENT = 0.4
 const EDGE_SCAN_MAX_PERCENT = 25
@@ -107,8 +107,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const localPoint = mesh.worldToLocal(worldPoint.clone())
     const worldScale = mesh.getWorldScale(new THREE.Vector3())
     const avgScale = (worldScale.x + worldScale.y + worldScale.z) / 3 || 1
-    const innerRadius = (worldRadius / avgScale) * 0.6
-    const outerRadius = (worldRadius / avgScale) * 1.4
+    const innerRadius = (worldRadius / avgScale) * 0.9
+    const outerRadius = (worldRadius / avgScale) * 1.1
 
     const vertex = new THREE.Vector3()
     const blended = new THREE.Color()
