@@ -24,7 +24,7 @@ export function ViewerToolbar({
           onReset()
         }}
         aria-pressed={activeTool === 'rotate'}
-        title="リセットして新しい病変範囲を選択する"
+        title="リセットして新しい位置に丸を描く"
         className={`rounded-full p-2 transition ${
           activeTool === 'rotate'
             ? 'bg-indigo-50 text-indigo-600'

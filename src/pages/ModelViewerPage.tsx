@@ -20,14 +20,14 @@ import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
-import type { Annotation, SavedSnapshot } from '@/types/viewerState'
+import type { SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const FFR_STENOSIS_FACTOR = 0.44
-const LESION_SCAN_STEPS = 20
+const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
 
 function formatSnapshotDate(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0')
@@ -129,62 +129,58 @@ export function ModelViewerPage() {
 
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
     if (!isAnnotating) return
-    if (annotations.length >= 2) return
+    if (annotations.length > 0) return
     if ((event.target as HTMLElement).closest('button')) return
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    setAnnotations((prev) => [...prev, { id: crypto.randomUUID(), x, y }])
+    setAnnotations([{ id: crypto.randomUUID(), x, y }])
     canvasRef.current?.highlightAt(x, y)
-    if (annotations.length + 1 >= 2) {
-      setIsAnnotating(false)
-    }
+    setIsAnnotating(false)
   }
 
-  function findNarrowestAlongSegment(start: Annotation, end: Annotation) {
-    let narrowest: { width: number; x: number; y: number } | null = null
-    for (let step = 0; step <= LESION_SCAN_STEPS; step += 1) {
-      const t = step / LESION_SCAN_STEPS
-      const x = start.x + (end.x - start.x) * t
-      const y = start.y + (end.y - start.y) * t
-      const width = canvasRef.current?.measureVesselWidth(x, y)
-      if (width && (!narrowest || width < narrowest.width)) {
-        narrowest = { width, x, y }
-      }
+  function measureReferenceWidth(x: number, y: number, direction: 1 | -1) {
+    for (const offset of REFERENCE_POINT_OFFSETS_PERCENT) {
+      const sampleY = Math.min(Math.max(y + direction * offset, 2), 98)
+      const width = canvasRef.current?.measureVesselWidth(x, sampleY)
+      if (width) return { width, y: sampleY }
     }
-    return narrowest
+    return null
   }
 
   function handleCalculateFfr() {
-    const [start, end] = annotations
+    const target = annotations[annotations.length - 1]
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
-    if (!start || !end || !bounds || !bloodPressure.trim()) return
+    if (!target || !bounds || !bloodPressure.trim()) return
 
     setIsCalculatingFfr(true)
     setTimeout(() => {
-      const upstream = canvasRef.current?.measureVesselWidth(start.x, start.y)
-      const downstream = canvasRef.current?.measureVesselWidth(end.x, end.y)
-      const narrowestResult = findNarrowestAlongSegment(start, end)
+      const narrowest = canvasRef.current?.measureVesselWidth(target.x, target.y)
+      const upstreamResult = measureReferenceWidth(target.x, target.y, -1)
+      const downstreamResult = measureReferenceWidth(target.x, target.y, 1)
 
-      if (!upstream || !downstream || !narrowestResult) {
+      if (!narrowest || !upstreamResult || !downstreamResult) {
         setIsCalculatingFfr(false)
-        setToastMessage('血管の幅を測定できませんでした。別の開始・終了位置を指定してください。')
+        setToastMessage('血管の幅を測定できませんでした。別の場所を選択してください。')
         setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
         return
       }
 
-      const narrowest = narrowestResult.width
+      const upstream = upstreamResult.width
+      const downstream = downstreamResult.width
       const referenceDiameter = (upstream + downstream) / 2
       const rawStenosisRate = referenceDiameter > 0 ? (1 - narrowest / referenceDiameter) * 100 : 0
       const stenosisRate = Math.min(Math.max(rawStenosisRate, 0), 99)
       const ffrValue = 1 - (stenosisRate / 100) * FFR_STENOSIS_FACTOR
       const pdValue = (Number(bloodPressure) * ffrValue).toFixed(1)
 
-      const segmentLength = canvasRef.current?.measureDistance3D(start.x, start.y, end.x, end.y)
-      const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(
-        narrowestResult.x,
-        narrowestResult.y,
+      const segmentLength = canvasRef.current?.measureDistance3D(
+        target.x,
+        upstreamResult.y,
+        target.x,
+        downstreamResult.y,
       )
+      const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(target.x, target.y)
       const clampedMld = referenceDiameter * (1 - stenosisRate / 100)
       const mlaValue = Math.PI * (clampedMld / 2) ** 2
       const lumenVolumeValue = segmentLength
@@ -199,14 +195,14 @@ export function ModelViewerPage() {
       setLumenVolume(lumenVolumeValue !== null ? lumenVolumeValue.toFixed(1) : '')
       setBifurcationAngle(bifurcationAngleDeg ? bifurcationAngleDeg.toFixed(0) : '')
 
-      const targetXPx = (narrowestResult.x / 100) * bounds.width
-      const targetYPx = (narrowestResult.y / 100) * bounds.height
+      const targetXPx = (target.x / 100) * bounds.width
+      const targetYPx = (target.y / 100) * bounds.height
       const labelXPx = Math.min(Math.max(targetXPx + 130, 90), bounds.width - 90)
       const labelYPx = Math.max(targetYPx - 130, 40)
 
       setFfrResult({
-        originX: narrowestResult.x,
-        originY: narrowestResult.y,
+        originX: target.x,
+        originY: target.y,
         labelX: (labelXPx / bounds.width) * 100,
         labelY: (labelYPx / bounds.height) * 100,
         stenosisRate: Math.round(stenosisRate),
@@ -392,10 +388,10 @@ export function ModelViewerPage() {
     setSavedSnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id))
   }
 
-  const canCalculateFfr = annotations.length === 2 && bloodPressure.trim() !== ''
+  const canCalculateFfr = annotations.length > 0 && bloodPressure.trim() !== ''
   const disabledFfrReason =
-    annotations.length < 2
-      ? '先に病変の開始位置と終了位置を指定してください'
+    annotations.length === 0
+      ? '先に気になる箇所を丸で囲んでください'
       : bloodPressure.trim() === ''
         ? '先に血圧の値を入力してください'
         : undefined
@@ -460,31 +456,12 @@ export function ModelViewerPage() {
               onCameraChange={setCameraState}
             />
 
-            {annotations.length === 2 && (
-              <svg className="pointer-events-none absolute inset-0 h-full w-full">
-                <line
-                  x1={`${annotations[0].x}%`}
-                  y1={`${annotations[0].y}%`}
-                  x2={`${annotations[1].x}%`}
-                  y2={`${annotations[1].y}%`}
-                  stroke="rgb(239 68 68)"
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                />
-              </svg>
-            )}
-
-            {annotations.map((annotation, index) => (
+            {annotations.map((annotation) => (
               <div
                 key={annotation.id}
                 style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
-              >
-                <div className="h-6 w-6 rounded-full border-2 border-red-500" />
-                <span className="absolute top-full left-1/2 mt-1 -translate-x-1/2 rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-white">
-                  {index === 0 ? '開始' : '終了'}
-                </span>
-              </div>
+                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
+              />
             ))}
 
             <div className="absolute left-4 top-4 flex flex-col gap-2">
@@ -496,7 +473,7 @@ export function ModelViewerPage() {
                     ? 'border-red-200 bg-red-50 text-red-500'
                     : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
                 }`}
-                title="病変の開始位置と終了位置を指定する"
+                title="気になる箇所を丸で囲む"
               >
                 <Lasso className="h-4 w-4" />
               </button>
