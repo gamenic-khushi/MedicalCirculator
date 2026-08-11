@@ -12,6 +12,7 @@ const BAR_HEIGHT = 112
 const BAR_TOP_OFFSET = 32
 const TICK_COLUMN_WIDTH = 26
 const TICK_GAP = 6
+const ELBOW_LENGTH_PERCENT = 4
 
 export function FfrResultOverlay({
   originX,
@@ -22,15 +23,25 @@ export function FfrResultOverlay({
   ffrValue,
 }: FfrResultOverlayProps) {
   const pointerTop = (1 - ffrValue) * 100
+  const elbowDirection = labelX >= originX ? 1 : -1
+  const elbowX = labelX - elbowDirection * ELBOW_LENGTH_PERCENT
 
   return (
     <div className="pointer-events-none absolute inset-0">
       <svg className="absolute inset-0 h-full w-full overflow-visible">
         <line
-          x1={`${labelX}%`}
+          x1={`${originX}%`}
+          y1={`${originY}%`}
+          x2={`${elbowX}%`}
+          y2={`${labelY}%`}
+          stroke="#374151"
+          strokeWidth={1}
+        />
+        <line
+          x1={`${elbowX}%`}
           y1={`${labelY}%`}
-          x2={`${originX}%`}
-          y2={`${originY}%`}
+          x2={`${labelX}%`}
+          y2={`${labelY}%`}
           stroke="#374151"
           strokeWidth={1}
         />
