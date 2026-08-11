@@ -456,14 +456,6 @@ export function ModelViewerPage() {
               onCameraChange={setCameraState}
             />
 
-            {annotations.map((annotation) => (
-              <div
-                key={annotation.id}
-                style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
-              />
-            ))}
-
             <div className="absolute left-4 top-4 flex flex-col gap-2">
               <button
                 type="button"

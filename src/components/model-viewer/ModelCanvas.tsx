@@ -4,7 +4,6 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
-  useState,
   type MutableRefObject,
 } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
@@ -49,13 +48,9 @@ interface ThreeState {
   scene: THREE.Scene
 }
 
-interface HitResult {
-  point: THREE.Vector3
-  normal: THREE.Vector3
-  radius: number
-}
-
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
+const HIGHLIGHT_COLOR = new THREE.Color(0x22c55e)
+const WHITE = new THREE.Color(1, 1, 1)
 const EDGE_SCAN_STEP_PERCENT = 0.4
 const EDGE_SCAN_MAX_PERCENT = 25
 const BRANCH_SCAN_ANGLE_STEPS = 16
@@ -70,22 +65,6 @@ function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | n
     stateRef.current = { camera: three.camera, scene: three.scene }
   })
   return null
-}
-
-function SelectionHighlight({ hit }: { hit: HitResult }) {
-  const tubeRadius = hit.radius * 0.4
-  const quaternion = new THREE.Quaternion().setFromUnitVectors(
-    new THREE.Vector3(0, 0, 1),
-    hit.normal,
-  )
-  const position = hit.point.clone().addScaledVector(hit.normal, tubeRadius * 0.6)
-
-  return (
-    <mesh position={position} quaternion={quaternion}>
-      <torusGeometry args={[hit.radius, tubeRadius, 16, 48]} />
-      <meshStandardMaterial color="limegreen" transparent opacity={0.85} side={THREE.DoubleSide} />
-    </mesh>
-  )
 }
 
 function CameraTargetRestorer({
@@ -111,7 +90,37 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const threeStateRef = useRef<ThreeState | null>(null)
-  const [selectedHit, setSelectedHit] = useState<HitResult | null>(null)
+  const paintedMeshRef = useRef<THREE.Mesh | null>(null)
+
+  function resetMeshColors(mesh: THREE.Mesh) {
+    const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+    if (!colorAttr) return
+    ;(colorAttr.array as Float32Array).fill(1)
+    colorAttr.needsUpdate = true
+  }
+
+  function paintVesselFill(mesh: THREE.Mesh, worldPoint: THREE.Vector3, worldRadius: number) {
+    const positionAttr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+    if (!positionAttr || !colorAttr) return
+
+    const localPoint = mesh.worldToLocal(worldPoint.clone())
+    const worldScale = mesh.getWorldScale(new THREE.Vector3())
+    const avgScale = (worldScale.x + worldScale.y + worldScale.z) / 3 || 1
+    const innerRadius = (worldRadius / avgScale) * 0.6
+    const outerRadius = (worldRadius / avgScale) * 1.4
+
+    const vertex = new THREE.Vector3()
+    const blended = new THREE.Color()
+    for (let i = 0; i < positionAttr.count; i += 1) {
+      vertex.fromBufferAttribute(positionAttr, i)
+      const distance = vertex.distanceTo(localPoint)
+      const t = 1 - THREE.MathUtils.smoothstep(distance, innerRadius, outerRadius)
+      blended.copy(WHITE).lerp(HIGHLIGHT_COLOR, t)
+      colorAttr.setXYZ(i, blended.r, blended.g, blended.b)
+    }
+    colorAttr.needsUpdate = true
+  }
 
   function emitCameraChange() {
     const controls = controlsRef.current
@@ -151,7 +160,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize()
       : new THREE.Vector3(0, 0, 1)
 
-    return { point, normal }
+    return { point, normal, object: hit.object }
   }
 
   function computeVesselWidth(xPercent: number, yPercent: number) {
@@ -292,12 +301,22 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     },
     highlightAt: (xPercent, yPercent) => {
       const hit = getHitResult(xPercent, yPercent)
-      if (!hit) return
+      if (!hit || !(hit.object instanceof THREE.Mesh)) return
       const width = computeVesselWidth(xPercent, yPercent)
       const radius = width ? (width / 2) * 0.55 : FALLBACK_HIGHLIGHT_RADIUS
-      setSelectedHit({ ...hit, radius })
+
+      if (paintedMeshRef.current && paintedMeshRef.current !== hit.object) {
+        resetMeshColors(paintedMeshRef.current)
+      }
+      paintedMeshRef.current = hit.object
+      paintVesselFill(hit.object, hit.point, radius)
     },
-    clearSelection: () => setSelectedHit(null),
+    clearSelection: () => {
+      if (paintedMeshRef.current) {
+        resetMeshColors(paintedMeshRef.current)
+        paintedMeshRef.current = null
+      }
+    },
   }))
 
   return (
@@ -313,7 +332,6 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <Suspense fallback={null}>
           <Bounds fit={!initialCamera} clip margin={1.3} maxDuration={0}>
             <Model3D url={url} extension={extension} color={color} />
-            {selectedHit && <SelectionHighlight hit={selectedHit} />}
           </Bounds>
           <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />
         </Suspense>
