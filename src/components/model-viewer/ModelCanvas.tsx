@@ -140,60 +140,50 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     emitCameraChange()
   }
 
-  function getHitResult(xPercent: number, yPercent: number) {
-    const canvasElement = containerRef.current?.querySelector('canvas')
+  function hitAt(xPct: number, yPct: number) {
     const camera = threeStateRef.current?.camera
     const scene = threeStateRef.current?.scene
-    if (!camera || !scene || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
-      return null
-    }
+    if (!camera || !scene || !(camera instanceof THREE.PerspectiveCamera)) return null
 
     const raycaster = new THREE.Raycaster()
     const ndc = new THREE.Vector2()
-    ndc.set((xPercent / 100) * 2 - 1, -((yPercent / 100) * 2 - 1))
+    ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
     raycaster.setFromCamera(ndc, camera)
-    const hit = raycaster.intersectObject(scene, true)[0]
-    if (!hit) return null
+    return raycaster.intersectObject(scene, true)[0] ?? null
+  }
 
-    const point = hit.point.clone()
-    const normal = hit.face
-      ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize()
+  function findNearestHit(xPercent: number, yPercent: number) {
+    const direct = hitAt(xPercent, yPercent)
+    if (direct) return { hit: direct, x: xPercent, y: yPercent }
+
+    for (const radius of SNAP_SEARCH_RADII_PERCENT) {
+      for (let i = 0; i < SNAP_SEARCH_ANGLE_STEPS; i++) {
+        const angle = (i / SNAP_SEARCH_ANGLE_STEPS) * Math.PI * 2
+        const x = xPercent + Math.cos(angle) * radius
+        const y = yPercent + Math.sin(angle) * radius
+        const hit = hitAt(x, y)
+        if (hit) return { hit, x, y }
+      }
+    }
+    return null
+  }
+
+  function getHitResult(xPercent: number, yPercent: number) {
+    const found = findNearestHit(xPercent, yPercent)
+    if (!found) return null
+
+    const point = found.hit.point.clone()
+    const normal = found.hit.face
+      ? found.hit.face.normal.clone().transformDirection(found.hit.object.matrixWorld).normalize()
       : new THREE.Vector3(0, 0, 1)
 
-    return { point, normal, object: hit.object }
+    return { point, normal, object: found.hit.object }
   }
 
   function computeVesselWidth(xPercent: number, yPercent: number) {
     const canvasElement = containerRef.current?.querySelector('canvas')
     const camera = threeStateRef.current?.camera
-    const scene = threeStateRef.current?.scene
-    if (!camera || !scene || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
-      return null
-    }
-
-    const raycaster = new THREE.Raycaster()
-    const ndc = new THREE.Vector2()
-
-    function hitAt(xPct: number, yPct: number) {
-      ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
-      raycaster.setFromCamera(ndc, camera!)
-      const hits = raycaster.intersectObject(scene!, true)
-      return hits[0] ?? null
-    }
-
-    function findNearestHit(xPct: number, yPct: number) {
-      const direct = hitAt(xPct, yPct)
-      if (direct) return { hit: direct, x: xPct, y: yPct }
-
-      for (const radius of SNAP_SEARCH_RADII_PERCENT) {
-        for (let i = 0; i < SNAP_SEARCH_ANGLE_STEPS; i++) {
-          const angle = (i / SNAP_SEARCH_ANGLE_STEPS) * Math.PI * 2
-          const x = xPct + Math.cos(angle) * radius
-          const y = yPct + Math.sin(angle) * radius
-          const hit = hitAt(x, y)
-          if (hit) return { hit, x, y }
-        }
-      }
+    if (!camera || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
       return null
     }
 
