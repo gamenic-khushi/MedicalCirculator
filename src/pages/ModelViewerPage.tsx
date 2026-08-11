@@ -487,14 +487,6 @@ export function ModelViewerPage() {
               </div>
             ))}
 
-            {isAnnotating && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-                {annotations.length === 0
-                  ? '病変の開始位置をクリックしてください'
-                  : '病変の終了位置をクリックしてください'}
-              </div>
-            )}
-
             <div className="absolute left-4 top-4 flex flex-col gap-2">
               <button
                 type="button"
