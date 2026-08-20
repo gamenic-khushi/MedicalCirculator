@@ -451,14 +451,6 @@ export function ModelViewerPage() {
               >
                 <Lasso className="h-4 w-4" />
               </button>
-              <button
-                type="button"
-                onClick={handleRemoveModel}
-                className="rounded-full border border-gray-100 bg-white p-2 text-red-500 shadow-sm transition hover:bg-red-50"
-                title="3Dモデルを削除"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="absolute right-4 top-4 flex flex-col gap-2">
