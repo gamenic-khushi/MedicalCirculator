@@ -351,6 +351,45 @@ export function ModelViewerPage() {
     ])
   }
 
+  async function handleSaveCurrentToLearningData() {
+    if (!ffrResult) return
+    const image = canvasRef.current?.capture()
+    if (!image) return
+
+    const highlightedImage = await createAnnotatedSnapshot(image, {
+      x: ffrResult.originX,
+      y: ffrResult.originY,
+    })
+    const pa = bloodPressure.trim() || '80'
+    const pdValue = pd.trim() || pa
+
+    const snapshot: SavedSnapshot = {
+      id: crypto.randomUUID(),
+      image: highlightedImage,
+      date: formatSnapshotDate(new Date()),
+      upstreamSize: upstreamDiameter.trim() ? `${upstreamDiameter}mm` : '4mm',
+      downstreamSize: downstreamDiameter.trim() ? `${downstreamDiameter}mm` : '3mm',
+      pd: `${pdValue} mmHg`,
+      pa: `${pa} mmHg`,
+      stenosisRate: `${ffrResult.stenosisRate} %`,
+      mla: mla.trim() ? `${mla} mm²` : '—',
+      lumenVolume: lumenVolume.trim() ? `${lumenVolume} mm³` : '—',
+      bifurcationAngle: bifurcationAngle.trim() ? `${bifurcationAngle} °` : '—',
+    }
+
+    try {
+      await databaseService.create<LearningContentFrameRow>(
+        'learning_content_frames',
+        buildLearningContentPayload(snapshot),
+      )
+      setToastMessage('学習データに保存しました')
+    } catch (error) {
+      console.error(error)
+      setToastMessage('保存に失敗しました')
+    }
+    setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
+  }
+
   function buildLearningContentPayload(snapshot: SavedSnapshot) {
     const referenceDiameter =
       (parseFloat(snapshot.upstreamSize) + parseFloat(snapshot.downstreamSize)) / 2
@@ -432,13 +471,24 @@ export function ModelViewerPage() {
             <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
             新しいモデルをアップロード
           </button>
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-          >
-            PDFダウンロード
-          </button>
+          {ffrResult && (
+            <>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+              >
+                PDFダウンロード
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCurrentToLearningData}
+                className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+              >
+                学習データに保存
+              </button>
+            </>
+          )}
         </div>
       </div>
 
