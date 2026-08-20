@@ -118,6 +118,68 @@ export function ModelViewerPage() {
     navigate('/3d-analysis')
   }
 
+  function handleDownloadPdf() {
+    const image = canvasRef.current?.capture()
+    const reportWindow = window.open('', '_blank')
+    if (!reportWindow) return
+
+    const rows: [string, string][] = [
+      ['ファイル名', validModel?.file.name ?? '—'],
+      ['Pa', calculatedPa ? `${calculatedPa} mmHg` : '—'],
+      ['Pd', pd ? `${pd} mmHg` : '—'],
+      ['Stenosis rate', ffrResult ? `${ffrResult.stenosisRate} %` : '—'],
+      ['FFR', ffrResult ? ffrResult.ffrValue.toFixed(2) : '—'],
+      ['上流血管のサイズ', upstreamDiameter ? `${upstreamDiameter} mm` : '—'],
+      ['下流血管のサイズ', downstreamDiameter ? `${downstreamDiameter} mm` : '—'],
+      ['MLA', mla ? `${mla} mm²` : '—'],
+      ['Lumen volume', lumenVolume ? `${lumenVolume} mm³` : '—'],
+      ['Bifurcation angle', bifurcationAngle ? `${bifurcationAngle} °` : '—'],
+    ]
+
+    reportWindow.document.write(`<!DOCTYPE html>
+      <html lang="ja">
+        <head>
+          <meta charset="utf-8" />
+          <title>3D医療モデル分析レポート</title>
+          <style>
+            body { font-family: sans-serif; padding: 24px; color: #111; }
+            h1 { font-size: 18px; margin-bottom: 16px; }
+            img { max-width: 100%; border-radius: 8px; margin-bottom: 16px; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            td { padding: 6px 8px; border-bottom: 1px solid #e5e5e5; }
+            td:first-child { color: #666; width: 40%; }
+          </style>
+        </head>
+        <body>
+          <h1>3D医療モデル分析レポート</h1>
+          <div id="image-slot"></div>
+          <table id="data-table"></table>
+        </body>
+      </html>`)
+    reportWindow.document.close()
+
+    if (image) {
+      const img = reportWindow.document.createElement('img')
+      img.src = image
+      img.alt = 'モデル画像'
+      reportWindow.document.getElementById('image-slot')?.appendChild(img)
+    }
+
+    const table = reportWindow.document.getElementById('data-table')
+    for (const [label, value] of rows) {
+      const row = reportWindow.document.createElement('tr')
+      const labelCell = reportWindow.document.createElement('td')
+      labelCell.textContent = label
+      const valueCell = reportWindow.document.createElement('td')
+      valueCell.textContent = value
+      row.append(labelCell, valueCell)
+      table?.appendChild(row)
+    }
+
+    reportWindow.focus()
+    reportWindow.onload = () => reportWindow.print()
+  }
+
   function toggleFullscreen() {
     if (document.fullscreenElement) {
       void document.exitFullscreen()
@@ -359,14 +421,23 @@ export function ModelViewerPage() {
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900">3D医療モデルビューア</h1>
-        <button
-          type="button"
-          onClick={handleRemoveModel}
-          className="flex items-center justify-center gap-2 self-start rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 sm:self-auto"
-        >
-          <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
-          新しいモデルをアップロード
-        </button>
+        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handleRemoveModel}
+            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+          >
+            <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
+            新しいモデルをアップロード
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+          >
+            PDFダウンロード
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 border-b border-gray-200" />
