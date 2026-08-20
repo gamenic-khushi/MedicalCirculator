@@ -493,7 +493,7 @@ export function ModelViewerPage() {
               onClick={handleSaveSnapshot}
               className="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
             >
-              保存
+              キャプチャ
             </button>
           </div>
         </div>
