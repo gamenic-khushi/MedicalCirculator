@@ -41,11 +41,7 @@ export function ThreeDAnalysisPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <h1 className="text-2xl font-bold text-gray-900">3D 分析</h1>
-
-      <div className="mt-4 border-b border-gray-200" />
-
-      <div className="mt-6 flex max-w-md flex-col gap-3">
+      <div className="flex max-w-md flex-col gap-3">
         <label className="flex items-center gap-4 text-sm text-gray-700">
           <span className="w-16 shrink-0 font-medium">フォルダ</span>
           <select
