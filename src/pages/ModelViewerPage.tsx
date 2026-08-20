@@ -598,20 +598,17 @@ export function ModelViewerPage() {
                   key={snapshot.id}
                   className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500">{snapshot.date}</p>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSnapshot(snapshot.id)}
-                      className="rounded p-1 text-red-500 transition hover:bg-red-50"
-                      title="削除"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <p className="text-xs text-gray-500">{snapshot.date}</p>
                   <div className="overflow-hidden rounded-lg bg-gray-800">
                     <img src={snapshot.image} alt="保存されたモデル画像" className="w-full" />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSnapshot(snapshot.id)}
+                    className="w-full rounded-lg border border-red-200 py-2 text-xs font-medium whitespace-nowrap text-red-500 transition hover:bg-red-50"
+                  >
+                    削除
+                  </button>
                 </div>
               ))}
             </div>
