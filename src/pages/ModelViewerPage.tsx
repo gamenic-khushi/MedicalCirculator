@@ -572,25 +572,27 @@ export function ModelViewerPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-gray-900">画像</span>
-                <button
-                  type="button"
-                  onClick={() => setIsTableView(true)}
-                  className="text-gray-400 transition hover:text-gray-600"
-                  title="テーブル表示に切り替える"
-                >
-                  <Menu className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveAllForTraining}
+                    disabled={isSavingAll}
+                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSavingAll ? '保存中...' : 'AIトレーニング用に保存'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsTableView(true)}
+                    className="text-gray-400 transition hover:text-gray-600"
+                    title="テーブル表示に切り替える"
+                  >
+                    <Menu className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleSaveAllForTraining}
-                disabled={isSavingAll}
-                className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSavingAll ? '保存中...' : 'AIトレーニング用に保存'}
-              </button>
               {savedSnapshots.map((snapshot) => (
                 <div
                   key={snapshot.id}
