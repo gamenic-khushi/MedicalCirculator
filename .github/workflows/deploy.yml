@@ -20,7 +20,7 @@ jobs:
         run: npm ci
 
       - name: Install Appwrite CLI
-        run: npm install -g appwrite-cli
+        run: npm install -g appwrite-cli@17.4.0
 
       - name: Deploy to Appwrite
         env:
@@ -31,7 +31,6 @@ jobs:
           appwrite client \
             --endpoint "$APPWRITE_ENDPOINT" \
             --project-id "$APPWRITE_PROJECT_ID" \
-            --key "$APPWRITE_API_KEY" \
-            --debug
+            --key "$APPWRITE_API_KEY"
 
           appwrite push site --site-id medicalCirculator --force
