@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { pickModelFile } from '@/lib/filePickerMemory'
 import { useModel3D } from '@/hooks/useModel3D'
 import { createModel3DFile } from '@/types/model'
 
@@ -13,10 +14,19 @@ export function ThreeDAnalysisPage() {
     if (model) navigate('/3d-analysis/viewer', { replace: true })
   }, [model, navigate])
 
+  function loadFile(file: File) {
+    setModel(createModel3DFile(file))
+    navigate('/3d-analysis/viewer')
+  }
+
   function handleFileSelected(files: FileList | null) {
     if (!files?.length) return
-    setModel(createModel3DFile(files[0]))
-    navigate('/3d-analysis/viewer')
+    loadFile(files[0])
+  }
+
+  async function handleOpenFolder() {
+    const file = await pickModelFile(() => inputRef.current?.click())
+    if (file) loadFile(file)
   }
 
   return (
@@ -28,7 +38,7 @@ export function ThreeDAnalysisPage() {
       <div className="mt-6 flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white p-6 py-14 shadow-sm">
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={handleOpenFolder}
           className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700"
         >
           フォルダを開く
