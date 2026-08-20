@@ -1,7 +1,26 @@
+import { Query, type Models } from 'appwrite'
+
+import type { UserCategory } from '@/types/user'
+
+import { databaseService } from './database'
+
 export interface AppwriteUser {
   $id: string
   email: string
   name?: string
+  category?: UserCategory
+}
+
+async function lookupCategory(email: string): Promise<UserCategory | undefined> {
+  try {
+    const { rows } = await databaseService.list<Models.Row & { category?: UserCategory }>('users', [
+      Query.equal('email', email),
+      Query.limit(1),
+    ])
+    return rows[0]?.category
+  } catch {
+    return undefined
+  }
 }
 
 const USERS_KEY = 'testAuthUsers'
@@ -76,6 +95,7 @@ export const authService = {
       $id: found.$id,
       email: found.email,
       name: found.name,
+      category: await lookupCategory(found.email),
     }
 
     setCurrentUser(currentUser)
@@ -87,6 +107,8 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<AppwriteUser | null> {
-    return getCurrentUserFromStorage()
+    const stored = getCurrentUserFromStorage()
+    if (!stored) return null
+    return { ...stored, category: await lookupCategory(stored.email) }
   },
 }
