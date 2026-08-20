@@ -33,4 +33,4 @@ jobs:
             --project-id "$APPWRITE_PROJECT_ID" \
             --key "$APPWRITE_API_KEY"
 
-          appwrite push site --site-id medicalCirculator --force
+          appwrite push site --site-id medicalCirculator --activate=true --force
