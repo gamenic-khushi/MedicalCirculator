@@ -1,4 +1,3 @@
-import { Upload } from 'lucide-react'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -78,15 +77,18 @@ export function ThreeDAnalysisPage() {
       </div>
 
       <div
-        onClick={handleOpenFolder}
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDrop}
-        className="mt-6 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-gray-200 bg-white p-6 py-20 text-center shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/30"
+        className="mt-6 flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-100 bg-white p-6 py-14 shadow-sm"
       >
-        <Upload className="h-8 w-8 text-gray-300" />
-        <p className="text-sm text-gray-600">
-          ファイルをドラッグ＆ドロップ、またはクリックしてアップロード
-        </p>
+        <button
+          type="button"
+          onClick={handleOpenFolder}
+          className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700"
+        >
+          フォルダを開く
+        </button>
+        <p className="text-sm text-gray-600">ファイルをアップロード</p>
         <p className="text-xs text-gray-400">.fbx, .stl, .obj</p>
         <input
           ref={inputRef}
