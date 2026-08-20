@@ -420,7 +420,10 @@ export function ModelViewerPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">3D医療モデルビューア</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">3D医療モデルビューア</h1>
+          <p className="mt-1 text-sm text-gray-500">２D心弁解析 ＞ XYZ心臓病研究</p>
+        </div>
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
           <button
             type="button"
