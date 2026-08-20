@@ -516,7 +516,7 @@ export function ModelViewerPage() {
                   disabled={isSavingAll}
                   className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSavingAll ? '保存中...' : 'AIトレーニング用に保存'}
+                  {isSavingAll ? '保存中...' : '保存'}
                 </button>
               </div>
               <div>
@@ -581,7 +581,7 @@ export function ModelViewerPage() {
                     disabled={isSavingAll}
                     className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSavingAll ? '保存中...' : 'AIトレーニング用に保存'}
+                    {isSavingAll ? '保存中...' : '保存'}
                   </button>
                   <button
                     type="button"
