@@ -605,7 +605,7 @@ export function ModelViewerPage() {
                   <button
                     type="button"
                     onClick={() => handleDeleteSnapshot(snapshot.id)}
-                    className="w-full rounded-lg border border-red-200 py-2 text-xs font-medium whitespace-nowrap text-red-500 transition hover:bg-red-50"
+                    className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700"
                   >
                     削除
                   </button>
