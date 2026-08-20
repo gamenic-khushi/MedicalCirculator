@@ -44,7 +44,6 @@ export function ModelViewerPage() {
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const viewerRef = useRef<HTMLDivElement>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
-  const savingSnapshotIdsRef = useRef<Set<string>>(new Set())
 
   const {
     activeTool,
@@ -83,7 +82,7 @@ export function ModelViewerPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
-  const [savingSnapshotIds, setSavingSnapshotIds] = useState<Set<string>>(new Set())
+  const [isSavingAll, setIsSavingAll] = useState(false)
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -290,11 +289,7 @@ export function ModelViewerPage() {
     ])
   }
 
-  async function handleSaveForTraining(snapshot: SavedSnapshot) {
-    if (savingSnapshotIdsRef.current.has(snapshot.id)) return
-    savingSnapshotIdsRef.current.add(snapshot.id)
-    setSavingSnapshotIds(new Set(savingSnapshotIdsRef.current))
-
+  function buildLearningContentPayload(snapshot: SavedSnapshot) {
     const referenceDiameter =
       (parseFloat(snapshot.upstreamSize) + parseFloat(snapshot.downstreamSize)) / 2
     const stenosisRateNumber = parseFloat(snapshot.stenosisRate)
@@ -308,30 +303,42 @@ export function ModelViewerPage() {
         ? '—'
         : `${Math.abs(paNumber - pdNumber).toFixed(1)} mmHg`
 
-    try {
-      await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
-        image: snapshot.image,
-        upstreamSize: snapshot.upstreamSize,
-        downstreamSize: snapshot.downstreamSize,
-        pd: snapshot.pd,
-        pa: snapshot.pa,
-        parameter,
-        mld,
-        mla: snapshot.mla,
-        stenosisRate: snapshot.stenosisRate,
-        avgDiameter: `${referenceDiameter.toFixed(1)} mm`,
-        lumenVolume: snapshot.lumenVolume,
-        calcificationVolume: '—',
-        bifurcationAngle: snapshot.bifurcationAngle,
-      })
+    return {
+      image: snapshot.image,
+      upstreamSize: snapshot.upstreamSize,
+      downstreamSize: snapshot.downstreamSize,
+      pd: snapshot.pd,
+      pa: snapshot.pa,
+      parameter,
+      mld,
+      mla: snapshot.mla,
+      stenosisRate: snapshot.stenosisRate,
+      avgDiameter: `${referenceDiameter.toFixed(1)} mm`,
+      lumenVolume: snapshot.lumenVolume,
+      calcificationVolume: '—',
+      bifurcationAngle: snapshot.bifurcationAngle,
+    }
+  }
 
+  async function handleSaveAllForTraining() {
+    if (savedSnapshots.length === 0 || isSavingAll) return
+    setIsSavingAll(true)
+
+    try {
+      await Promise.all(
+        savedSnapshots.map((snapshot) =>
+          databaseService.create<LearningContentFrameRow>(
+            'learning_content_frames',
+            buildLearningContentPayload(snapshot),
+          ),
+        ),
+      )
       setToastMessage('AIトレーニング用に保存しました')
     } catch (error) {
       console.error(error)
       setToastMessage('保存に失敗しました')
     } finally {
-      savingSnapshotIdsRef.current.delete(snapshot.id)
-      setSavingSnapshotIds(new Set(savingSnapshotIdsRef.current))
+      setIsSavingAll(false)
     }
     setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
   }
@@ -494,7 +501,7 @@ export function ModelViewerPage() {
         {savedSnapshots.length > 0 ? (
           isTableView ? (
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-              <div className="border-b border-gray-100 p-4">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4">
                 <button
                   type="button"
                   onClick={() => setIsTableView(false)}
@@ -503,9 +510,17 @@ export function ModelViewerPage() {
                 >
                   <Menu className="h-4 w-4" />
                 </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAllForTraining}
+                  disabled={isSavingAll}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSavingAll ? '保存中...' : 'AIトレーニング用に保存'}
+                </button>
               </div>
               <div>
-                <table className="w-full min-w-[980px] text-left text-sm">
+                <table className="w-full min-w-[820px] text-left text-sm">
                   <thead>
                     <tr className="divide-x divide-gray-200 whitespace-nowrap bg-gray-50 text-xs font-medium text-gray-500">
                       <th className="w-56 px-3 py-4">画像</th>
@@ -514,7 +529,6 @@ export function ModelViewerPage() {
                       <th className="px-3 py-4 text-center">Pd</th>
                       <th className="px-3 py-4 text-center">Pa</th>
                       <th className="w-16 px-3 py-4" />
-                      <th className="w-56 px-3 py-4" />
                     </tr>
                   </thead>
                   <tbody>
@@ -550,18 +564,6 @@ export function ModelViewerPage() {
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </td>
-                        <td className="px-3 py-4">
-                          <button
-                            type="button"
-                            onClick={() => handleSaveForTraining(snapshot)}
-                            disabled={savingSnapshotIds.has(snapshot.id)}
-                            className="w-full whitespace-nowrap rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {savingSnapshotIds.has(snapshot.id)
-                              ? '保存中...'
-                              : 'AIトレーニング用に保存'}
-                          </button>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -581,23 +583,33 @@ export function ModelViewerPage() {
                   <Menu className="h-4 w-4" />
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={handleSaveAllForTraining}
+                disabled={isSavingAll}
+                className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingAll ? '保存中...' : 'AIトレーニング用に保存'}
+              </button>
               {savedSnapshots.map((snapshot) => (
                 <div
                   key={snapshot.id}
                   className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
                 >
-                  <p className="text-xs text-gray-500">{snapshot.date}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500">{snapshot.date}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSnapshot(snapshot.id)}
+                      className="rounded p-1 text-red-500 transition hover:bg-red-50"
+                      title="削除"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                   <div className="overflow-hidden rounded-lg bg-gray-800">
                     <img src={snapshot.image} alt="保存されたモデル画像" className="w-full" />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSaveForTraining(snapshot)}
-                    disabled={savingSnapshotIds.has(snapshot.id)}
-                    className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {savingSnapshotIds.has(snapshot.id) ? '保存中...' : 'AIトレーニング用に保存'}
-                  </button>
                 </div>
               ))}
             </div>
