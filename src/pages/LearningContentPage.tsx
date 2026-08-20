@@ -1,6 +1,6 @@
 import { Query, type Models } from 'appwrite'
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { databaseService } from '@/services/appwrite/database'
@@ -29,17 +29,11 @@ async function fetchAllFrames(): Promise<LearningContentFrame[]> {
 }
 
 export function LearningContentPage() {
-  const location = useLocation()
-  const stateFrame = (location.state as { newFrame?: LearningContentFrame } | null)?.newFrame
-  const [frames, setFrames] = useState<LearningContentFrame[]>(stateFrame ? [stateFrame] : [])
+  const [frames, setFrames] = useState<LearningContentFrame[]>([])
 
   useEffect(() => {
-    fetchAllFrames().then((loaded) => {
-      setFrames(
-        stateFrame ? [stateFrame, ...loaded.filter((frame) => frame.id !== stateFrame.id)] : loaded,
-      )
-    })
-  }, [stateFrame])
+    fetchAllFrames().then(setFrames)
+  }, [])
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
     await databaseService.update<LearningContentFrameRow>('learning_content_frames', id, data)

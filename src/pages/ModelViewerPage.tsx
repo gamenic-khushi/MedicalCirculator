@@ -309,44 +309,23 @@ export function ModelViewerPage() {
         : `${Math.abs(paNumber - pdNumber).toFixed(1)} mmHg`
 
     try {
-      const created = await databaseService.create<LearningContentFrameRow>(
-        'learning_content_frames',
-        {
-          image: snapshot.image,
-          upstreamSize: snapshot.upstreamSize,
-          downstreamSize: snapshot.downstreamSize,
-          pd: snapshot.pd,
-          pa: snapshot.pa,
-          parameter,
-          mld,
-          mla: snapshot.mla,
-          stenosisRate: snapshot.stenosisRate,
-          avgDiameter: `${referenceDiameter.toFixed(1)} mm`,
-          lumenVolume: snapshot.lumenVolume,
-          calcificationVolume: '—',
-          bifurcationAngle: snapshot.bifurcationAngle,
-        },
-      )
-
-      const newFrame: LearningContentFrame = {
-        id: created.$id,
-        image: created.image,
-        upstreamSize: created.upstreamSize,
-        downstreamSize: created.downstreamSize,
-        pd: created.pd,
-        pa: created.pa,
-        parameter: created.parameter,
-        mld: created.mld,
-        mla: created.mla,
-        stenosisRate: created.stenosisRate,
-        avgDiameter: created.avgDiameter,
-        lumenVolume: created.lumenVolume,
-        calcificationVolume: created.calcificationVolume,
-        bifurcationAngle: created.bifurcationAngle,
-      }
+      await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
+        image: snapshot.image,
+        upstreamSize: snapshot.upstreamSize,
+        downstreamSize: snapshot.downstreamSize,
+        pd: snapshot.pd,
+        pa: snapshot.pa,
+        parameter,
+        mld,
+        mla: snapshot.mla,
+        stenosisRate: snapshot.stenosisRate,
+        avgDiameter: `${referenceDiameter.toFixed(1)} mm`,
+        lumenVolume: snapshot.lumenVolume,
+        calcificationVolume: '—',
+        bifurcationAngle: snapshot.bifurcationAngle,
+      })
 
       setToastMessage('AIトレーニング用に保存しました')
-      navigate('/data/learning-content', { state: { newFrame } })
     } catch (error) {
       console.error(error)
       setToastMessage('保存に失敗しました')
