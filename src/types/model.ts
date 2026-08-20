@@ -5,6 +5,8 @@ export interface Model3DFile {
   fileType: string
   sizeLabel: string
   uploadDate: string
+  folder: string
+  studyName: string
 }
 
 function formatDate(date: Date): string {
@@ -13,7 +15,10 @@ function formatDate(date: Date): string {
   return `${month}/${day}/${date.getFullYear()}`
 }
 
-export function createModel3DFile(file: File): Model3DFile {
+export function createModel3DFile(
+  file: File,
+  destination: { folder: string; studyName: string },
+): Model3DFile {
   const extension = (file.name.split('.').pop() ?? '').toLowerCase()
 
   return {
@@ -23,5 +28,7 @@ export function createModel3DFile(file: File): Model3DFile {
     fileType: extension.toUpperCase(),
     sizeLabel: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
     uploadDate: formatDate(new Date()),
+    folder: destination.folder,
+    studyName: destination.studyName,
   }
 }
