@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useModel3D } from '@/hooks/useModel3D'
@@ -7,11 +7,7 @@ import { createModel3DFile } from '@/types/model'
 export function ThreeDAnalysisPage() {
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
-  const { model, setModel } = useModel3D()
-
-  useEffect(() => {
-    if (model) navigate('/3d-analysis/viewer', { replace: true })
-  }, [model, navigate])
+  const { setModel } = useModel3D()
 
   function handleFileSelected(files: FileList | null) {
     if (!files?.length) return
