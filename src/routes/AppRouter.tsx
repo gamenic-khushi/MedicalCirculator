@@ -6,12 +6,14 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { ConferencePage } from '@/pages/ConferencePage'
 import { DataManagementPage } from '@/pages/DataManagementPage'
 import { DocumentsPage } from '@/pages/DocumentsPage'
+import { FormulaSettingsPage } from '@/pages/FormulaSettingsPage'
 import { LearningContentPage } from '@/pages/LearningContentPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { LogoutPage } from '@/pages/LogoutPage'
 import { ModelViewerErrorPage } from '@/pages/ModelViewerErrorPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 import { ThreeDAnalysisPage } from '@/pages/ThreeDAnalysisPage'
 import { UserManagementPage } from '@/pages/UserManagementPage'
 
@@ -28,7 +30,30 @@ const router = createBrowserRouter([
       { path: '3d-analysis', element: <ThreeDAnalysisPage /> },
       { path: 'conference', element: <ConferencePage /> },
       { path: 'documents', element: <DocumentsPage /> },
-      { path: 'users', element: <UserManagementPage /> },
+      {
+        path: 'users',
+        element: (
+          <AdminRoute>
+            <UserManagementPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: 'settings',
+        element: (
+          <AdminRoute>
+            <SettingsPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: 'settings/formula',
+        element: (
+          <AdminRoute>
+            <FormulaSettingsPage />
+          </AdminRoute>
+        ),
+      },
       {
         path: 'data',
         element: (

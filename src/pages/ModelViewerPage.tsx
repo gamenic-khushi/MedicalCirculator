@@ -18,6 +18,7 @@ import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPan
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
+import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import type { SavedSnapshot } from '@/types/viewerState'
@@ -26,7 +27,6 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
-const FFR_STENOSIS_FACTOR = 0.44
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
 
 function formatSnapshotDate(date: Date): string {
@@ -231,7 +231,7 @@ export function ModelViewerPage() {
       const referenceDiameter = (upstream + downstream) / 2
       const rawStenosisRate = referenceDiameter > 0 ? (1 - narrowest / referenceDiameter) * 100 : 0
       const stenosisRate = Math.min(Math.max(rawStenosisRate, 0), 99)
-      const ffrValue = 1 - (stenosisRate / 100) * FFR_STENOSIS_FACTOR
+      const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
       const pdValue = (Number(bloodPressure) * ffrValue).toFixed(1)
 
       const segmentLength = canvasRef.current?.measureDistance3D(

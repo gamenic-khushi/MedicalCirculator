@@ -10,16 +10,21 @@ const NAV_ITEMS = [
   { label: '3D分析', to: '/3d-analysis', adminOnly: false },
   { label: '学会', to: '/conference', adminOnly: false },
   { label: '資料', to: '/documents', adminOnly: false },
-  { label: 'ユーザー管理', to: '/users', adminOnly: false },
   { label: 'データ管理', to: '/data', adminOnly: true },
+]
+
+const ACCOUNT_MENU_ITEMS = [
+  { label: '設定', to: '/settings', adminOnly: true },
+  { label: '計算式設定', to: '/settings/formula', adminOnly: true },
+  { label: 'ユーザー管理', to: '/users', adminOnly: true },
 ]
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user } = useAuth()
-  const visibleNavItems = NAV_ITEMS.filter(
-    (item) => !item.adminOnly || isAdminCategory(user?.category),
-  )
+  const isAdmin = isAdminCategory(user?.category)
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+  const visibleAccountItems = ACCOUNT_MENU_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <header className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-8 lg:px-14">
@@ -67,6 +72,16 @@ export function Header() {
 
           {isMenuOpen && (
             <div className="absolute right-0 top-14 z-10 w-48 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10">
+              {visibleAccountItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setIsMenuOpen(false)}
+                  className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                >
+                  {item.label}
+                </NavLink>
+              ))}
               <NavLink
                 to="/logout"
                 onClick={() => setIsMenuOpen(false)}
@@ -91,6 +106,20 @@ export function Header() {
       {isMenuOpen && (
         <nav className="flex flex-col gap-1 pb-4 lg:hidden">
           {visibleNavItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={() => setIsMenuOpen(false)}
+              className={({ isActive }) =>
+                `rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+          {visibleAccountItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

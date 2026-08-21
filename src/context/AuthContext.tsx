@@ -28,8 +28,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const updateEmail = useCallback(async (newEmail: string, password: string) => {
+    setUser(await authService.updateEmail(newEmail, password))
+  }, [])
+
+  const updatePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    await authService.updatePassword(currentPassword, newPassword)
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, login, register, logout, updateEmail, updatePassword }}
+    >
       {children}
     </AuthContext.Provider>
   )

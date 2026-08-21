@@ -110,4 +110,45 @@ export const authService = {
     if (!stored) return null
     return { ...stored, category: await lookupCategory(stored.email) }
   },
+
+  async updateEmail(newEmail: string, password: string): Promise<AppwriteUser> {
+    const stored = getCurrentUserFromStorage()
+    if (!stored) throw new Error('ログインしていません。')
+
+    const users = getStoredUsers()
+    const index = users.findIndex((user) => user.$id === stored.$id)
+    if (index === -1 || users[index].password !== password) {
+      throw new Error('パスワードが正しくありません。')
+    }
+    if (users.some((user, i) => i !== index && user.email === newEmail)) {
+      throw new Error('既に同じメールアドレスのアカウントが存在します。')
+    }
+
+    const updatedUsers = [...users]
+    updatedUsers[index] = { ...updatedUsers[index], email: newEmail }
+    saveStoredUsers(updatedUsers)
+
+    const currentUser: AppwriteUser = {
+      ...stored,
+      email: newEmail,
+      category: await lookupCategory(newEmail),
+    }
+    setCurrentUser(currentUser)
+    return currentUser
+  },
+
+  async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const stored = getCurrentUserFromStorage()
+    if (!stored) throw new Error('ログインしていません。')
+
+    const users = getStoredUsers()
+    const index = users.findIndex((user) => user.$id === stored.$id)
+    if (index === -1 || users[index].password !== currentPassword) {
+      throw new Error('現在のパスワードが正しくありません。')
+    }
+
+    const updatedUsers = [...users]
+    updatedUsers[index] = { ...updatedUsers[index], password: newPassword }
+    saveStoredUsers(updatedUsers)
+  },
 }
