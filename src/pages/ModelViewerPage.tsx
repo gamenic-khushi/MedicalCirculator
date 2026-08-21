@@ -477,25 +477,21 @@ export function ModelViewerPage() {
               新しいモデルをアップロード
             </button>
           )}
-          {ffrResult && (
-            <>
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-              >
-                PDFダウンロード
-              </button>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={handleSaveCurrentToLearningData}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-                >
-                  学習データに保存
-                </button>
-              )}
-            </>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+          >
+            PDFダウンロード
+          </button>
+          {ffrResult && isAdmin && (
+            <button
+              type="button"
+              onClick={handleSaveCurrentToLearningData}
+              className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            >
+              学習データに保存
+            </button>
           )}
         </div>
       </div>
