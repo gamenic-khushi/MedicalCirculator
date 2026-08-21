@@ -28,30 +28,8 @@ const CURRENT_USER_KEY = 'testAuthCurrentUser'
 
 const DEFAULT_TEST_USERS = [
   { $id: 'test-user', email: 'test@example.com', name: 'Test User', password: 'password' },
-  {
-    $id: 'test-hospital-admin',
-    email: 'hospital.admin@example.com',
-    name: 'Hospital Admin',
-    password: 'password',
-  },
-  {
-    $id: 'test-hospital-user',
-    email: 'hospital.user@example.com',
-    name: 'Hospital User',
-    password: 'password',
-  },
-  {
-    $id: 'test-learning-admin',
-    email: 'learning.admin@example.com',
-    name: 'Learning Admin',
-    password: 'password',
-  },
-  {
-    $id: 'test-learning-user',
-    email: 'learning.user@example.com',
-    name: 'Learning User',
-    password: 'password',
-  },
+  { $id: 'test-admin', email: 'admin@example.com', name: 'Admin', password: 'password' },
+  { $id: 'test-staff', email: 'staff@example.com', name: 'Staff', password: 'password' },
 ]
 
 function getStoredUsers() {

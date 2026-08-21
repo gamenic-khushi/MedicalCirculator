@@ -1,10 +1,7 @@
-export type UserCategory =
-  'system_admin' | 'learning_admin' | 'learning_user' | 'hospital_admin' | 'hospital_user'
-
-const ADMIN_CATEGORIES: UserCategory[] = ['system_admin', 'hospital_admin', 'learning_admin']
+export type UserCategory = 'system_admin' | 'admin' | 'user'
 
 export function isAdminCategory(category?: UserCategory): boolean {
-  return !!category && ADMIN_CATEGORIES.includes(category)
+  return category === 'system_admin' || category === 'admin'
 }
 
 export interface AppUser {

@@ -5,13 +5,7 @@ import type { UserCategory } from '@/types/user'
 
 import { CATEGORY_CONFIG, CATEGORY_PILL_CLASSES } from './userCategoryConfig'
 
-const CATEGORY_ORDER: UserCategory[] = [
-  'system_admin',
-  'learning_admin',
-  'learning_user',
-  'hospital_admin',
-  'hospital_user',
-]
+const CATEGORY_ORDER: UserCategory[] = ['system_admin', 'admin', 'user']
 
 interface CategorySelectProps {
   value: UserCategory

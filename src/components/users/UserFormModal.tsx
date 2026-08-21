@@ -28,7 +28,7 @@ export function UserFormModal({
   onClose,
   onSave,
 }: UserFormModalProps) {
-  const [category, setCategory] = useState<UserCategory>(initialUser?.category ?? 'learning_admin')
+  const [category, setCategory] = useState<UserCategory>(initialUser?.category ?? 'admin')
   const [organization, setOrganization] = useState(
     initialUser?.organization ?? organizations[0] ?? '',
   )
