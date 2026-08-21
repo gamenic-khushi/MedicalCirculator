@@ -13,7 +13,6 @@ import { LogoutPage } from '@/pages/LogoutPage'
 import { ModelViewerErrorPage } from '@/pages/ModelViewerErrorPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
-import { SettingsPage } from '@/pages/SettingsPage'
 import { ThreeDAnalysisPage } from '@/pages/ThreeDAnalysisPage'
 import { UserManagementPage } from '@/pages/UserManagementPage'
 
@@ -35,14 +34,6 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <UserManagementPage />
-          </AdminRoute>
-        ),
-      },
-      {
-        path: 'settings',
-        element: (
-          <AdminRoute>
-            <SettingsPage />
           </AdminRoute>
         ),
       },

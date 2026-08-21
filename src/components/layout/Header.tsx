@@ -16,7 +16,10 @@ const INFO_MENU_ITEMS = [
   { label: '資料', to: '/documents' },
 ]
 
-const ACCOUNT_MENU_ITEMS = [{ label: '設定', to: '/settings', adminOnly: true }]
+const SETTINGS_MENU_ITEMS = [
+  { label: '計算式設定', to: '/settings/formula' },
+  { label: 'ユーザー管理', to: '/users' },
+]
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -24,7 +27,6 @@ export function Header() {
   const { user } = useAuth()
   const isAdmin = isAdminCategory(user?.category)
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
-  const visibleAccountItems = ACCOUNT_MENU_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <header className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-8 lg:px-14">
@@ -98,16 +100,21 @@ export function Header() {
 
           {isMenuOpen && (
             <div className="absolute right-0 top-14 z-10 w-48 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10">
-              {visibleAccountItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setIsMenuOpen(false)}
-                  className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-                >
-                  {item.label}
-                </NavLink>
-              ))}
+              {isAdmin && (
+                <>
+                  <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-gray-400">設定</p>
+                  {SETTINGS_MENU_ITEMS.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setIsMenuOpen(false)}
+                      className="block rounded-2xl px-3 py-2 pl-6 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </>
+              )}
               <NavLink
                 to="/logout"
                 onClick={() => setIsMenuOpen(false)}
@@ -159,20 +166,25 @@ export function Header() {
               {item.label}
             </NavLink>
           ))}
-          {visibleAccountItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={() => setIsMenuOpen(false)}
-              className={({ isActive }) =>
-                `rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {isAdmin && (
+            <>
+              <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-white/60">設定</p>
+              {SETTINGS_MENU_ITEMS.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setIsMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `rounded-lg px-3 py-2 pl-6 text-sm font-medium transition ${
+                      isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
+                    }`
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </>
+          )}
           <NavLink
             to="/logout"
             onClick={() => setIsMenuOpen(false)}
