@@ -638,14 +638,16 @@ export function ModelViewerPage() {
                 >
                   <Menu className="h-4 w-4" />
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSaveAllForTraining}
-                  disabled={isSavingAll}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSavingAll ? '保存中...' : '学習データに保存'}
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleSaveAllForTraining}
+                    disabled={isSavingAll}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSavingAll ? '保存中...' : '学習データに保存'}
+                  </button>
+                )}
               </div>
               <div>
                 <table className="w-full min-w-[820px] text-left text-sm">
@@ -703,14 +705,16 @@ export function ModelViewerPage() {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-gray-900">画像</span>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSaveAllForTraining}
-                    disabled={isSavingAll}
-                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSavingAll ? '保存中...' : '学習データに保存'}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={handleSaveAllForTraining}
+                      disabled={isSavingAll}
+                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingAll ? '保存中...' : '学習データに保存'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setIsTableView(true)}
