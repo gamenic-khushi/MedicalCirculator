@@ -2,17 +2,20 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/hooks/useAuth'
+import { useModel3D } from '@/hooks/useModel3D'
 
 export function LogoutPage() {
   const { logout } = useAuth()
+  const { setModel } = useModel3D()
   const navigate = useNavigate()
 
   useEffect(() => {
     void (async () => {
       await logout()
+      setModel(null)
       navigate('/login', { replace: true })
     })()
-  }, [logout, navigate])
+  }, [logout, setModel, navigate])
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
