@@ -8,19 +8,19 @@ import { isAdminCategory } from '@/types/user'
 
 const NAV_ITEMS = [
   { label: '3D分析', to: '/3d-analysis', adminOnly: false },
-  { label: '学会', to: '/conference', adminOnly: false },
-  { label: '資料', to: '/documents', adminOnly: false },
   { label: 'データ管理', to: '/data', adminOnly: true },
 ]
 
-const ACCOUNT_MENU_ITEMS = [
-  { label: '設定', to: '/settings', adminOnly: true },
-  { label: '計算式設定', to: '/settings/formula', adminOnly: true },
-  { label: 'ユーザー管理', to: '/users', adminOnly: true },
+const INFO_MENU_ITEMS = [
+  { label: '学会', to: '/conference' },
+  { label: '資料', to: '/documents' },
 ]
+
+const ACCOUNT_MENU_ITEMS = [{ label: '設定', to: '/settings', adminOnly: true }]
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isInfoOpen, setIsInfoOpen] = useState(false)
   const { user } = useAuth()
   const isAdmin = isAdminCategory(user?.category)
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
@@ -45,6 +45,32 @@ export function Header() {
                 {item.label}
               </NavLink>
             ))}
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsInfoOpen((value) => !value)}
+                className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-white/90 transition hover:text-white"
+              >
+                情報
+                <ChevronDown className="h-4 w-4" />
+              </button>
+
+              {isInfoOpen && (
+                <div className="absolute left-0 top-full z-10 mt-2 w-40 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10">
+                  {INFO_MENU_ITEMS.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setIsInfoOpen(false)}
+                      className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
           </nav>
         </div>
 
@@ -106,6 +132,20 @@ export function Header() {
       {isMenuOpen && (
         <nav className="flex flex-col gap-1 pb-4 lg:hidden">
           {visibleNavItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={() => setIsMenuOpen(false)}
+              className={({ isActive }) =>
+                `rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+          {INFO_MENU_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
