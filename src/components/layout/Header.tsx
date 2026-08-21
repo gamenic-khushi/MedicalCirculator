@@ -1,5 +1,5 @@
 import { ChevronDown, Menu, User, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { Logo } from './Logo'
@@ -28,6 +28,31 @@ export function Header() {
   const isAdmin = isAdminCategory(user?.category)
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
+  const infoRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const drawerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!isInfoOpen && !isMenuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (isInfoOpen && !infoRef.current?.contains(target)) {
+        setIsInfoOpen(false)
+      }
+      if (
+        isMenuOpen &&
+        !menuRef.current?.contains(target) &&
+        !drawerRef.current?.contains(target)
+      ) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isInfoOpen, isMenuOpen])
+
   return (
     <header className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-8 lg:px-14">
       <div className="flex h-16 items-center justify-between">
@@ -49,7 +74,7 @@ export function Header() {
             ))}
 
             {isAdmin && (
-              <div className="relative">
+              <div ref={infoRef} className="relative">
                 <button
                   type="button"
                   onClick={() => setIsInfoOpen((value) => !value)}
@@ -78,7 +103,7 @@ export function Header() {
           </nav>
         </div>
 
-        <div className="relative flex items-center gap-2">
+        <div ref={menuRef} className="relative flex items-center gap-2">
           <button
             type="button"
             onClick={() => setIsMenuOpen((value) => !value)}
@@ -139,7 +164,7 @@ export function Header() {
       </div>
 
       {isMenuOpen && (
-        <nav className="flex flex-col gap-1 pb-4 lg:hidden">
+        <nav ref={drawerRef} className="flex flex-col gap-1 pb-4 lg:hidden">
           {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
