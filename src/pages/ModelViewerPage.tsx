@@ -484,11 +484,12 @@ export function ModelViewerPage() {
           >
             PDFダウンロード
           </button>
-          {ffrResult && isAdmin && (
+          {isAdmin && (
             <button
               type="button"
               onClick={handleSaveCurrentToLearningData}
-              className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+              disabled={!ffrResult}
+              className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               学習データに保存
             </button>
