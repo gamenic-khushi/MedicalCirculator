@@ -28,10 +28,12 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-md rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
         <h1 className="text-2xl font-semibold text-gray-900">ログイン</h1>
-        <p className="mt-2 text-sm text-gray-500">メールアドレスとパスワードでログインしてください。</p>
+        <p className="mt-2 text-sm text-gray-500">
+          メールアドレスとパスワードでログインしてください。
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-4">
