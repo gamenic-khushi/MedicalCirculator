@@ -48,31 +48,33 @@ export function Header() {
               </NavLink>
             ))}
 
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsInfoOpen((value) => !value)}
-                className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-white/90 transition hover:text-white"
-              >
-                情報
-                <ChevronDown className="h-4 w-4" />
-              </button>
+            {isAdmin && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsInfoOpen((value) => !value)}
+                  className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-white/90 transition hover:text-white"
+                >
+                  情報
+                  <ChevronDown className="h-4 w-4" />
+                </button>
 
-              {isInfoOpen && (
-                <div className="absolute left-0 top-full z-10 mt-2 w-40 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10">
-                  {INFO_MENU_ITEMS.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setIsInfoOpen(false)}
-                      className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-            </div>
+                {isInfoOpen && (
+                  <div className="absolute left-0 top-full z-10 mt-2 w-40 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10">
+                    {INFO_MENU_ITEMS.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setIsInfoOpen(false)}
+                        className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                      >
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
         </div>
 
@@ -152,20 +154,21 @@ export function Header() {
               {item.label}
             </NavLink>
           ))}
-          {INFO_MENU_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={() => setIsMenuOpen(false)}
-              className={({ isActive }) =>
-                `rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {isAdmin &&
+            INFO_MENU_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => setIsMenuOpen(false)}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
           {isAdmin && (
             <>
               <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-white/60">設定</p>
