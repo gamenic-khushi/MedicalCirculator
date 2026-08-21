@@ -467,7 +467,7 @@ export function ModelViewerPage() {
           {validModel.folder} ＞ {validModel.studyName}
         </h1>
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
-          {isAdmin && (
+          {(isAdmin || ffrResult) && (
             <button
               type="button"
               onClick={handleRemoveModel}
