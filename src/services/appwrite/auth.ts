@@ -26,24 +26,45 @@ async function lookupCategory(email: string): Promise<UserCategory | undefined> 
 const USERS_KEY = 'testAuthUsers'
 const CURRENT_USER_KEY = 'testAuthCurrentUser'
 
-const DEFAULT_TEST_USER = {
-  $id: 'test-user',
-  email: 'test@example.com',
-  name: 'Test User',
-  password: 'password',
-}
+const DEFAULT_TEST_USERS = [
+  { $id: 'test-user', email: 'test@example.com', name: 'Test User', password: 'password' },
+  {
+    $id: 'test-hospital-admin',
+    email: 'hospital.admin@example.com',
+    name: 'Hospital Admin',
+    password: 'password',
+  },
+  {
+    $id: 'test-hospital-user',
+    email: 'hospital.user@example.com',
+    name: 'Hospital User',
+    password: 'password',
+  },
+  {
+    $id: 'test-learning-admin',
+    email: 'learning.admin@example.com',
+    name: 'Learning Admin',
+    password: 'password',
+  },
+  {
+    $id: 'test-learning-user',
+    email: 'learning.user@example.com',
+    name: 'Learning User',
+    password: 'password',
+  },
+]
 
 function getStoredUsers() {
   try {
     const raw = localStorage.getItem(USERS_KEY)
-    if (!raw) return [DEFAULT_TEST_USER]
-    return JSON.parse(raw) as Array<typeof DEFAULT_TEST_USER>
+    if (!raw) return DEFAULT_TEST_USERS
+    return JSON.parse(raw) as Array<(typeof DEFAULT_TEST_USERS)[number]>
   } catch {
-    return [DEFAULT_TEST_USER]
+    return DEFAULT_TEST_USERS
   }
 }
 
-function saveStoredUsers(users: Array<typeof DEFAULT_TEST_USER>) {
+function saveStoredUsers(users: Array<(typeof DEFAULT_TEST_USERS)[number]>) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users))
 }
 

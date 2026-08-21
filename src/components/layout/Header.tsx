@@ -4,18 +4,22 @@ import { NavLink } from 'react-router-dom'
 
 import { Logo } from './Logo'
 import { useAuth } from '@/hooks/useAuth'
+import { isAdminCategory } from '@/types/user'
 
 const NAV_ITEMS = [
-  { label: '3D分析', to: '/3d-analysis' },
-  { label: '学会', to: '/conference' },
-  { label: '資料', to: '/documents' },
-  { label: 'ユーザー管理', to: '/users' },
-  { label: 'データ管理', to: '/data' },
+  { label: '3D分析', to: '/3d-analysis', adminOnly: false },
+  { label: '学会', to: '/conference', adminOnly: false },
+  { label: '資料', to: '/documents', adminOnly: false },
+  { label: 'ユーザー管理', to: '/users', adminOnly: false },
+  { label: 'データ管理', to: '/data', adminOnly: true },
 ]
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user } = useAuth()
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => !item.adminOnly || isAdminCategory(user?.category),
+  )
 
   return (
     <header className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-8 lg:px-14">
@@ -23,7 +27,7 @@ export function Header() {
         <div className="flex items-center gap-8 lg:gap-16">
           <Logo />
           <nav className="hidden items-center gap-2 lg:flex lg:gap-8">
-            {NAV_ITEMS.map((item) => (
+            {visibleNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -86,7 +90,7 @@ export function Header() {
 
       {isMenuOpen && (
         <nav className="flex flex-col gap-1 pb-4 lg:hidden">
-          {NAV_ITEMS.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

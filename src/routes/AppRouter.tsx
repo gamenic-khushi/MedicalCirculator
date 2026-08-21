@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 
+import { AdminRoute } from '@/components/layout/AdminRoute'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { ConferencePage } from '@/pages/ConferencePage'
@@ -28,8 +29,22 @@ const router = createBrowserRouter([
       { path: 'conference', element: <ConferencePage /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'users', element: <UserManagementPage /> },
-      { path: 'data', element: <DataManagementPage /> },
-      { path: 'data/learning-content', element: <LearningContentPage /> },
+      {
+        path: 'data',
+        element: (
+          <AdminRoute>
+            <DataManagementPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: 'data/learning-content',
+        element: (
+          <AdminRoute>
+            <LearningContentPage />
+          </AdminRoute>
+        ),
+      },
       {
         path: '3d-analysis/viewer',
         lazy: () =>
