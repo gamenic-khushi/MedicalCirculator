@@ -2,6 +2,7 @@ export interface Annotation {
   id: string
   x: number
   y: number
+  worldPoint?: [number, number, number]
 }
 
 export interface FfrResult {

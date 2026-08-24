@@ -1,5 +1,5 @@
 import type { Models } from 'appwrite'
-import { useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { Lasso, Pencil, ZoomIn, ZoomOut } from 'lucide-react'
 
@@ -19,6 +19,7 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useModel3D } from '@/hooks/useModel3D'
+import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
@@ -122,6 +123,34 @@ export function LesionAnalysisPage() {
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => {
+    const worldPoint = initialAnnotation?.worldPoint
+    const annotationId = initialAnnotation?.id
+    if (!worldPoint || !annotationId) return
+
+    const MIN_FRAMES_BEFORE_TRUST = 3
+    let frame = 0
+    let rafId: number
+    function tryProject() {
+      const projected = canvasRef.current?.projectWorldPoint(worldPoint)
+      if (projected && frame >= MIN_FRAMES_BEFORE_TRUST) {
+        setAnnotations((prev) =>
+          prev.map((annotation) =>
+            annotation.id === annotationId
+              ? { ...annotation, x: projected.x, y: projected.y }
+              : annotation,
+          ),
+        )
+        return
+      }
+      frame += 1
+      if (frame < 30) rafId = requestAnimationFrame(tryProject)
+    }
+    rafId = requestAnimationFrame(tryProject)
+    return () => cancelAnimationFrame(rafId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (!validModel) {
     return <Navigate to="/3d-analysis" replace />
   }
@@ -155,11 +184,45 @@ export function LesionAnalysisPage() {
     canvasRef.current?.clearSelection()
   }
 
-  function captureSnapshotAfterRender() {
+  async function cropToHighlightedRegion(imageDataUrl: string, point: { x: number; y: number }) {
+    const imageElement = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = imageDataUrl
+    })
+
+    const originalX = (point.x / 100) * imageElement.width
+    const originalY = (point.y / 100) * imageElement.height
+
+    const cropWidth = Math.min(imageElement.width * 0.45, imageElement.width)
+    const cropHeight = Math.min(imageElement.height * 0.45, imageElement.height)
+    const cropX = Math.min(Math.max(originalX - cropWidth / 2, 0), imageElement.width - cropWidth)
+    const cropY = Math.min(
+      Math.max(originalY - cropHeight / 2, 0),
+      imageElement.height - cropHeight,
+    )
+
+    const canvas = document.createElement('canvas')
+    canvas.width = cropWidth
+    canvas.height = cropHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return imageDataUrl
+
+    ctx.drawImage(imageElement, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
+    return canvas.toDataURL('image/png')
+  }
+
+  function captureSnapshotAfterRender(point: { x: number; y: number }) {
+    canvasRef.current?.hideHighlight()
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const snapshot = canvasRef.current?.capture()
-        if (snapshot) setSnapshotImage(snapshot)
+        canvasRef.current?.showHighlight()
+        if (!snapshot) return
+        cropToHighlightedRegion(snapshot, point)
+          .then(setSnapshotImage)
+          .catch(() => setSnapshotImage(snapshot))
       })
     })
   }
@@ -225,6 +288,7 @@ export function LesionAnalysisPage() {
         ? Math.PI * (referenceDiameter / 2) ** 2 * segmentLength
         : null
       const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(target.x, target.y)
+      const lesionPosition = canvasRef.current?.measureLesionPosition(target.x, target.y) ?? ''
 
       setParams({
         upstreamSize: upstream.toFixed(1),
@@ -248,22 +312,19 @@ export function LesionAnalysisPage() {
         minCrossSectionArea: mlaValue.toFixed(2),
         stenosisRate: String(Math.round(stenosisRate)),
         stenosisLength: segmentLength ? segmentLength.toFixed(1) : '',
-        lesionPosition: '',
+        lesionPosition,
       })
 
       canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
-      captureSnapshotAfterRender()
+      captureSnapshotAfterRender({ x: target.x, y: target.y })
 
-      const targetXPx = (target.x / 100) * bounds.width
-      const targetYPx = (target.y / 100) * bounds.height
-      const labelXPx = Math.min(Math.max(targetXPx + 130, 90), bounds.width - 90)
-      const labelYPx = Math.max(targetYPx - 130, 40)
+      const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds)
 
       setMeasurement({
         originX: target.x,
         originY: target.y,
-        labelX: (labelXPx / bounds.width) * 100,
-        labelY: (labelYPx / bounds.height) * 100,
+        labelX,
+        labelY,
         stenosisRate: Math.round(stenosisRate),
         ffrValue,
       })
@@ -282,6 +343,7 @@ export function LesionAnalysisPage() {
       ...prev,
       stenosisRate: String(Math.round(stenosisRate)),
       pd: (Number(prev.pa) * ffrValue).toFixed(1),
+      mld: data.minVesselDiameter || prev.mld,
       mla: data.minCrossSectionArea || prev.mla,
     }))
   }
@@ -293,7 +355,7 @@ export function LesionAnalysisPage() {
     if (referenceWidth > 0) {
       canvasRef.current?.highlightAt(measurement.originX, measurement.originY, referenceWidth)
     }
-    captureSnapshotAfterRender()
+    captureSnapshotAfterRender({ x: measurement.originX, y: measurement.originY })
   }
 
   function handleSaveSelectedLesion(data: SelectedLesionFormData) {
@@ -314,7 +376,7 @@ export function LesionAnalysisPage() {
   async function handleSave() {
     if (!measurement) return
     setIsSaving(true)
-    const image = canvasRef.current?.capture() ?? ''
+    const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
 
     try {
       await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
@@ -353,7 +415,7 @@ export function LesionAnalysisPage() {
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex items-center gap-2 text-sm text-gray-500">
         <Link to="/data" className="hover:text-gray-700">
-          データ管理
+          学習データ管理
         </Link>
         <span>/</span>
         <span className="font-medium text-gray-900">病変形状測定</span>
@@ -387,7 +449,7 @@ export function LesionAnalysisPage() {
                         key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
                       }`}
                     />
-                    {unit && <span className="w-6 shrink-0 text-gray-400">{unit}</span>}
+                    <span className="w-6 shrink-0 text-gray-400">{unit}</span>
                   </div>
                 </div>
               ))}
@@ -495,7 +557,7 @@ export function LesionAnalysisPage() {
         </div>
       </div>
 
-      <div className="mt-4 flex justify-center gap-3">
+      <div className="mt-4 flex justify-end gap-3">
         <button
           type="button"
           onClick={handleCalculateFfr}

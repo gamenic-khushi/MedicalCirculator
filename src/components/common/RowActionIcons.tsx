@@ -3,7 +3,7 @@ import { useState } from 'react'
 
 interface RowActionIconsProps {
   copyText: string
-  onView: () => void
+  onView?: () => void
   onEdit: () => void
   onDelete: () => void
   onDuplicate: () => void
@@ -36,14 +36,16 @@ export function RowActionIcons({
           </div>
         </div>
       )}
-      <button
-        type="button"
-        onClick={onView}
-        className="rounded p-1 text-amber-500 transition hover:bg-amber-50"
-        title="表示"
-      >
-        <Eye className="h-4 w-4" />
-      </button>
+      {onView && (
+        <button
+          type="button"
+          onClick={onView}
+          className="rounded p-1 text-amber-500 transition hover:bg-amber-50"
+          title="表示"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+      )}
       <button
         type="button"
         onClick={onEdit}
