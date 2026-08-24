@@ -1,7 +1,7 @@
-export type UserCategory = 'system_admin' | 'admin' | 'user'
+export type UserCategory = 'system_admin' | 'hospital_admin' | 'staff'
 
 export function isAdminCategory(category?: UserCategory): boolean {
-  return category === 'system_admin' || category === 'admin'
+  return category === 'system_admin' || category === 'hospital_admin'
 }
 
 export interface AppUser {
