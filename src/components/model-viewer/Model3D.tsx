@@ -16,7 +16,15 @@ export function Model3D({ url, extension, color }: Model3DProps) {
 }
 
 function ensureVertexColorAttribute(geometry: THREE.BufferGeometry) {
-  if (geometry.getAttribute('color')) return
+  const existing = geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+  if (existing) {
+    // The loaded geometry is cached and reused across mounts (e.g. across pages
+    // sharing the same model), so a highlight painted earlier can otherwise leak
+    // into a freshly mounted, unrelated viewer.
+    ;(existing.array as Float32Array).fill(1)
+    existing.needsUpdate = true
+    return
+  }
   const count = geometry.getAttribute('position').count
   geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3))
 }
