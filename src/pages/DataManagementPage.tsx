@@ -1,6 +1,7 @@
 import type { Models } from 'appwrite'
 import { Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import vectorIcon from '@/assets/SVG/Vector.svg'
 import { DataRecordTable } from '@/components/data/DataRecordTable'
@@ -18,11 +19,11 @@ function todayDisplayDate(): string {
 }
 
 export function DataManagementPage() {
+  const navigate = useNavigate()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [folders, setFolders] = useState<string[]>([])
   const [query, setQuery] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const [insertAfterId, setInsertAfterId] = useState<string | null>(null)
 
   useEffect(() => {
     databaseService.list<DataRecordRow>('data_records').then(({ rows }) => {
@@ -52,24 +53,12 @@ export function DataManagementPage() {
       ...data,
     })
     const { $id, ...rest } = row
-    setRecords((prev) => {
-      if (!insertAfterId) return [{ id: $id, ...rest }, ...prev]
-      const index = prev.findIndex((item) => item.id === insertAfterId)
-      const next = [...prev]
-      next.splice(index + 1, 0, { id: $id, ...rest })
-      return next
-    })
+    setRecords((prev) => [{ id: $id, ...rest }, ...prev])
     handleAddFolder(data.file)
   }
 
-  function handleAddAfter(record: DataRecord) {
-    setInsertAfterId(record.id)
-    setIsUploading(true)
-  }
-
-  function handleOpenUpload() {
-    setInsertAfterId(null)
-    setIsUploading(true)
+  function handleAddAfter() {
+    navigate('/data/lesion-measurement')
   }
 
   async function handleEdit(id: string, data: { file: string; category: string; owner: string }) {
@@ -105,7 +94,7 @@ export function DataManagementPage() {
           <h1 className="text-2xl font-bold text-gray-900">データ管理</h1>
           <button
             type="button"
-            onClick={handleOpenUpload}
+            onClick={() => setIsUploading(true)}
             className="flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
           >
             <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
@@ -137,13 +126,7 @@ export function DataManagementPage() {
       </div>
 
       {isUploading && (
-        <DataRecordUploadModal
-          onClose={() => {
-            setIsUploading(false)
-            setInsertAfterId(null)
-          }}
-          onSave={handleAdd}
-        />
+        <DataRecordUploadModal onClose={() => setIsUploading(false)} onSave={handleAdd} />
       )}
     </div>
   )

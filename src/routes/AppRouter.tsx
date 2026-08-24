@@ -8,6 +8,7 @@ import { DataManagementPage } from '@/pages/DataManagementPage'
 import { DocumentsPage } from '@/pages/DocumentsPage'
 import { FormulaSettingsPage } from '@/pages/FormulaSettingsPage'
 import { LearningContentPage } from '@/pages/LearningContentPage'
+import { LesionMeasurementPage } from '@/pages/LesionMeasurementPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { LogoutPage } from '@/pages/LogoutPage'
 import { ModelViewerErrorPage } from '@/pages/ModelViewerErrorPage'
@@ -58,6 +59,14 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <LearningContentPage />
+          </AdminRoute>
+        ),
+      },
+      {
+        path: 'data/lesion-measurement',
+        element: (
+          <AdminRoute>
+            <LesionMeasurementPage />
           </AdminRoute>
         ),
       },

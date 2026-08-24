@@ -13,7 +13,7 @@ interface DataRecordTableProps {
   onEdit: (id: string, data: { file: string; category: string; owner: string }) => void
   onDelete: (id: string) => void
   onDuplicate: (record: DataRecord) => void
-  onAddAfter: (record: DataRecord) => void
+  onAddAfter: () => void
 }
 
 export function DataRecordTable({
@@ -63,7 +63,7 @@ export function DataRecordTable({
                     onEdit={() => setEditing(record)}
                     onDelete={() => setPendingDeleteId(record.id)}
                     onDuplicate={() => onDuplicate(record)}
-                    onAdd={() => onAddAfter(record)}
+                    onAdd={onAddAfter}
                   />
                 </td>
               </tr>
