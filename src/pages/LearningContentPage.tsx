@@ -49,7 +49,7 @@ export function LearningContentPage() {
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex items-center gap-2 text-sm text-gray-500">
         <Link to="/data" className="hover:text-gray-700">
-          データ管理
+          学習データ管理
         </Link>
         <span>/</span>
         <span className="font-medium text-gray-900">学習内容</span>

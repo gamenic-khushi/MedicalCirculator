@@ -19,6 +19,7 @@ import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
+import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
@@ -268,16 +269,13 @@ export function ModelViewerPage() {
       setBifurcationAngle(bifurcationAngleDeg ? bifurcationAngleDeg.toFixed(0) : '')
       canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
 
-      const targetXPx = (target.x / 100) * bounds.width
-      const targetYPx = (target.y / 100) * bounds.height
-      const labelXPx = Math.min(Math.max(targetXPx + 130, 90), bounds.width - 90)
-      const labelYPx = Math.max(targetYPx - 130, 40)
+      const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds)
 
       setFfrResult({
         originX: target.x,
         originY: target.y,
-        labelX: (labelXPx / bounds.width) * 100,
-        labelY: (labelYPx / bounds.height) * 100,
+        labelX,
+        labelY,
         stenosisRate: Math.round(stenosisRate),
         ffrValue,
       })

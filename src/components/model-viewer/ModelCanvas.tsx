@@ -23,6 +23,7 @@ export interface ModelCanvasHandle {
   setTool: (tool: ViewerTool) => void
   capture: () => string | null
   measureVesselWidth: (xPercent: number, yPercent: number) => number | null
+  measureLesionPosition: (xPercent: number, yPercent: number) => string | null
   measureDistance3D: (
     x1Percent: number,
     y1Percent: number,
@@ -32,6 +33,11 @@ export interface ModelCanvasHandle {
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
   highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => void
   clearSelection: () => void
+  hideHighlight: () => void
+  showHighlight: () => void
+  getWorldPoint: (xPercent: number, yPercent: number) => [number, number, number] | null
+  projectWorldPoint: (point: [number, number, number]) => { x: number; y: number } | null
+  getCameraState: () => CameraState | null
 }
 
 interface ModelCanvasProps {
@@ -58,6 +64,9 @@ const BRANCH_SCAN_MAX_RADIUS_PERCENT = 20
 const BRANCH_MIN_SEPARATION_STEPS = Math.round(BRANCH_SCAN_ANGLE_STEPS / 6)
 const SNAP_SEARCH_RADII_PERCENT = [0.5, 1, 2, 3, 5]
 const SNAP_SEARCH_ANGLE_STEPS = 8
+const POSITION_SCAN_STEP_PERCENT = 1
+const POSITION_SCAN_MAX_STEPS = 45
+const POSITION_WIDTH_JUMP_RATIO = 1.6
 
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
@@ -91,6 +100,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const containerRef = useRef<HTMLDivElement>(null)
   const threeStateRef = useRef<ThreeState | null>(null)
   const paintedMeshRef = useRef<THREE.Mesh | null>(null)
+  const lastHighlightRef = useRef<{ point: THREE.Vector3; radius: number } | null>(null)
 
   function resetMeshColors(mesh: THREE.Mesh) {
     const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
@@ -180,6 +190,24 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return { point, normal, object: found.hit.object }
   }
 
+  function projectWorldPointToScreen(point: THREE.Vector3) {
+    const camera = threeStateRef.current?.camera
+    const canvasElement = containerRef.current?.querySelector('canvas')
+    if (!camera || !canvasElement) return null
+
+    if (camera instanceof THREE.PerspectiveCamera && canvasElement.clientHeight > 0) {
+      camera.aspect = canvasElement.clientWidth / canvasElement.clientHeight
+      camera.updateProjectionMatrix()
+    }
+    camera.updateMatrixWorld(true)
+
+    const ndc = point.clone().project(camera)
+    return {
+      x: ((ndc.x + 1) / 2) * 100,
+      y: ((1 - ndc.y) / 2) * 100,
+    }
+  }
+
   function computeVesselWidth(xPercent: number, yPercent: number) {
     const canvasElement = containerRef.current?.querySelector('canvas')
     const camera = threeStateRef.current?.camera
@@ -212,6 +240,56 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return widthPx * worldUnitsPerPixel
   }
 
+  // Walks along the vessel from (xPercent, yPercent) in screen space, following the
+  // nearest surface point step by step, and stops either where the model ends (branch
+  // tip) or where the vessel widens sharply into a larger parent vessel (a bifurcation).
+  // Returns the 3D distance travelled, used to judge how far into the branch the lesion sits.
+  function walkBranchDistance(
+    xPercent: number,
+    yPercent: number,
+    direction: 1 | -1,
+    baselineWidth: number,
+  ) {
+    let x = xPercent
+    let y = yPercent
+    let lastPoint: THREE.Vector3 | null = null
+    let distance = 0
+
+    for (let step = 0; step < POSITION_SCAN_MAX_STEPS; step++) {
+      const nextY = y + direction * POSITION_SCAN_STEP_PERCENT
+      if (nextY <= 1 || nextY >= 99) break
+
+      const found = findNearestHit(x, nextY)
+      if (!found) break
+
+      const width = computeVesselWidth(found.x, found.y)
+      if (width && width > baselineWidth * POSITION_WIDTH_JUMP_RATIO) break
+
+      const point = found.hit.point.clone()
+      if (lastPoint) distance += lastPoint.distanceTo(point)
+      lastPoint = point
+      x = found.x
+      y = found.y
+    }
+
+    return distance
+  }
+
+  function computeLesionPosition(xPercent: number, yPercent: number) {
+    const baseline = computeVesselWidth(xPercent, yPercent)
+    if (!baseline) return null
+
+    const upstreamDistance = walkBranchDistance(xPercent, yPercent, -1, baseline)
+    const downstreamDistance = walkBranchDistance(xPercent, yPercent, 1, baseline)
+    const total = upstreamDistance + downstreamDistance
+    if (total <= 0) return null
+
+    const ratio = upstreamDistance / total
+    if (ratio < 1 / 3) return '近位'
+    if (ratio > 2 / 3) return '遠位'
+    return '中間'
+  }
+
   useImperativeHandle(ref, () => ({
     zoomIn: () => dolly(0.85),
     zoomOut: () => dolly(1.15),
@@ -239,6 +317,21 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return outputCanvas.toDataURL('image/png')
     },
     measureVesselWidth: (xPercent, yPercent) => computeVesselWidth(xPercent, yPercent),
+    measureLesionPosition: (xPercent, yPercent) => computeLesionPosition(xPercent, yPercent),
+    getWorldPoint: (xPercent, yPercent) => {
+      const hit = getHitResult(xPercent, yPercent)
+      return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
+    },
+    projectWorldPoint: (point) => projectWorldPointToScreen(new THREE.Vector3(...point)),
+    getCameraState: () => {
+      const camera = threeStateRef.current?.camera
+      const controls = controlsRef.current
+      if (!camera || !controls) return null
+      return {
+        position: camera.position.toArray() as [number, number, number],
+        target: controls.target.toArray() as [number, number, number],
+      }
+    },
     measureDistance3D: (x1Percent, y1Percent, x2Percent, y2Percent) => {
       const hit1 = getHitResult(x1Percent, y1Percent)
       const hit2 = getHitResult(x2Percent, y2Percent)
@@ -299,12 +392,26 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         resetMeshColors(paintedMeshRef.current)
       }
       paintedMeshRef.current = hit.object
+      lastHighlightRef.current = { point: hit.point.clone(), radius }
       paintVesselFill(hit.object, hit.point, radius)
     },
     clearSelection: () => {
       if (paintedMeshRef.current) {
         resetMeshColors(paintedMeshRef.current)
         paintedMeshRef.current = null
+      }
+      lastHighlightRef.current = null
+    },
+    hideHighlight: () => {
+      if (paintedMeshRef.current) resetMeshColors(paintedMeshRef.current)
+    },
+    showHighlight: () => {
+      if (paintedMeshRef.current && lastHighlightRef.current) {
+        paintVesselFill(
+          paintedMeshRef.current,
+          lastHighlightRef.current.point,
+          lastHighlightRef.current.radius,
+        )
       }
     },
   }))

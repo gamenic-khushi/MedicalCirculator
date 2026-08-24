@@ -46,8 +46,14 @@ export function LesionMeasurementPage() {
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    setAnnotations([{ id: crypto.randomUUID(), x, y }])
+    const worldPoint = canvasRef.current?.getWorldPoint(x, y) ?? undefined
+    setAnnotations([{ id: crypto.randomUUID(), x, y, worldPoint }])
     setIsAnnotating(false)
+
+    if (!cameraState) {
+      const currentCamera = canvasRef.current?.getCameraState()
+      if (currentCamera) setCameraState(currentCamera)
+    }
   }
 
   function handleResetAnnotation() {
@@ -66,7 +72,7 @@ export function LesionMeasurementPage() {
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex items-center gap-2 text-sm text-gray-500">
         <Link to="/data" className="hover:text-gray-700">
-          データ管理
+          学習データ管理
         </Link>
         <span>/</span>
         <span className="font-medium text-gray-900">病変形状測定</span>
@@ -155,7 +161,7 @@ export function LesionMeasurementPage() {
         </div>
       </div>
 
-      <div className="mt-4 flex justify-center">
+      <div className="mt-4 flex justify-end">
         <button
           type="button"
           onClick={handleProceed}
