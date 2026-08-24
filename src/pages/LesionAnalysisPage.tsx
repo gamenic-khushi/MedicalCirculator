@@ -71,34 +71,19 @@ const SELECTED_LESION_FIELDS: {
   { key: 'lesionPosition', label: '病変位置', unit: '' },
 ]
 
-function StenosisShapeDiagram({ stenosisRate }: { stenosisRate: number }) {
-  const clamped = Math.min(Math.max(stenosisRate, 0), 99)
-  const neckHalfHeight = 18 * (1 - clamped / 100)
-  const path = `M0,4 C50,4 70,${18 - neckHalfHeight} 110,${18 - neckHalfHeight} C150,${18 - neckHalfHeight} 170,4 220,4 L220,32 C170,32 150,${18 + neckHalfHeight} 110,${18 + neckHalfHeight} C70,${18 + neckHalfHeight} 50,32 0,32 Z`
-
+function LesionSnapshotPanel({ image }: { image: string | null }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
       <p className="text-sm font-semibold text-gray-900">
         生成される3D狭窄形状（中心線に沿った断面）
       </p>
-      <svg viewBox="0 0 220 36" className="mt-3 w-full">
-        <path d={path} fill="#dbeafe" stroke="#60a5fa" strokeWidth={1} />
-        <line
-          x1={0}
-          y1={18}
-          x2={220}
-          y2={18}
-          stroke="#93c5fd"
-          strokeWidth={1}
-          strokeDasharray="4 3"
-        />
-      </svg>
-      <div className="mt-2 flex justify-between text-[11px] text-gray-500">
-        <span>近位側</span>
-        <span>狭窄中心</span>
-        <span>遠位側</span>
-      </div>
-      <p className="mt-2 text-[11px] text-gray-400">入力値に基づき滑らかにつながる形状を生成</p>
+      {image ? (
+        <img src={image} alt="選択病変のスナップショット" className="mt-3 w-full rounded-lg" />
+      ) : (
+        <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400">
+          FFRを計算すると表示されます
+        </div>
+      )}
     </div>
   )
 }
@@ -128,6 +113,7 @@ export function LesionAnalysisPage() {
   const [params, setParams] = useState<Record<ParamKey, string>>(EMPTY_PARAMS)
   const [selectedLesion, setSelectedLesion] =
     useState<SelectedLesionFormData>(EMPTY_SELECTED_LESION)
+  const [snapshotImage, setSnapshotImage] = useState<string | null>(null)
   const [isMeasuring, setIsMeasuring] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
@@ -156,6 +142,7 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
     setSelectedLesion(EMPTY_SELECTED_LESION)
+    setSnapshotImage(null)
     canvasRef.current?.clearSelection()
   }
 
@@ -164,7 +151,17 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
     setSelectedLesion(EMPTY_SELECTED_LESION)
+    setSnapshotImage(null)
     canvasRef.current?.clearSelection()
+  }
+
+  function captureSnapshotAfterRender() {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const snapshot = canvasRef.current?.capture()
+        if (snapshot) setSnapshotImage(snapshot)
+      })
+    })
   }
 
   function handleUpdateBloodPressure() {
@@ -255,6 +252,7 @@ export function LesionAnalysisPage() {
       })
 
       canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
+      captureSnapshotAfterRender()
 
       const targetXPx = (target.x / 100) * bounds.width
       const targetYPx = (target.y / 100) * bounds.height
@@ -288,8 +286,19 @@ export function LesionAnalysisPage() {
     }))
   }
 
+  function repaintHighlightFromSelectedLesion(data: SelectedLesionFormData) {
+    if (!measurement) return
+    const referenceWidth =
+      (Number(data.lesionProximalDiameter) + Number(data.lesionDistalDiameter)) / 2
+    if (referenceWidth > 0) {
+      canvasRef.current?.highlightAt(measurement.originX, measurement.originY, referenceWidth)
+    }
+    captureSnapshotAfterRender()
+  }
+
   function handleSaveSelectedLesion(data: SelectedLesionFormData) {
     applySelectedLesion(data)
+    repaintHighlightFromSelectedLesion(data)
   }
 
   function handleSelectedLesionFieldChange(key: keyof SelectedLesionFormData, value: string) {
@@ -298,6 +307,7 @@ export function LesionAnalysisPage() {
 
   function handleUpdateSelectedLesion() {
     applySelectedLesion(selectedLesion)
+    repaintHighlightFromSelectedLesion(selectedLesion)
     showToast('選択病変を更新しました')
   }
 
@@ -392,7 +402,7 @@ export function LesionAnalysisPage() {
           </div>
         </div>
 
-        <StenosisShapeDiagram stenosisRate={Number(selectedLesion.stenosisRate) || 0} />
+        <LesionSnapshotPanel image={snapshotImage} />
 
         <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div
