@@ -1,4 +1,4 @@
-import { Clipboard, Copy, Eye, Link2, Pencil, Trash2 } from 'lucide-react'
+import { Clipboard, Copy, Eye, Link2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 interface RowActionIconsProps {
@@ -7,6 +7,7 @@ interface RowActionIconsProps {
   onEdit: () => void
   onDelete: () => void
   onDuplicate: () => void
+  onAdd?: () => void
 }
 
 export function RowActionIcons({
@@ -15,6 +16,7 @@ export function RowActionIcons({
   onEdit,
   onDelete,
   onDuplicate,
+  onAdd,
 }: RowActionIconsProps) {
   const [copied, setCopied] = useState(false)
 
@@ -74,6 +76,16 @@ export function RowActionIcons({
       >
         <Link2 className="h-4 w-4" />
       </button>
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="rounded p-1 text-red-500 transition hover:bg-red-50"
+          title="追加"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
 }
