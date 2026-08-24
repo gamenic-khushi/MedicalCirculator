@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { Lasso, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Lasso, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
@@ -19,7 +19,7 @@ const MODEL_COLOR = '#d8dce3'
 
 export function LesionMeasurementPage() {
   const navigate = useNavigate()
-  const { model, setModel } = useModel3D()
+  const { model } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
@@ -35,11 +35,6 @@ export function LesionMeasurementPage() {
   function handleToolChange(tool: ViewerTool) {
     setActiveTool(tool)
     canvasRef.current?.setTool(tool)
-  }
-
-  function handleRemoveModel() {
-    setModel(null)
-    navigate('/data')
   }
 
   function handleProceed() {
@@ -91,14 +86,6 @@ export function LesionMeasurementPage() {
                 className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
               >
                 <Lasso className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={handleRemoveModel}
-                className="rounded-full border border-gray-100 bg-white p-2 text-red-500 shadow-sm transition hover:bg-red-50"
-                title="モデルを削除してデータ管理に戻る"
-              >
-                <X className="h-4 w-4" />
               </button>
             </div>
 
