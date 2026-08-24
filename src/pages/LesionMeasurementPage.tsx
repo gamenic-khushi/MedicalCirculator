@@ -25,6 +25,7 @@ export function LesionMeasurementPage() {
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [cameraState, setCameraState] = useState<CameraState | null>(null)
   const [bloodPressure, setBloodPressure] = useState('')
+  const [isAnnotating, setIsAnnotating] = useState(false)
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
 
@@ -83,7 +84,12 @@ export function LesionMeasurementPage() {
             <div className="absolute left-4 top-4 flex flex-col gap-2">
               <button
                 type="button"
-                className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                onClick={() => setIsAnnotating((value) => !value)}
+                className={`rounded-full border p-2 shadow-sm transition ${
+                  isAnnotating
+                    ? 'border-red-200 bg-red-50 text-red-500'
+                    : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
+                }`}
               >
                 <Lasso className="h-4 w-4" />
               </button>
