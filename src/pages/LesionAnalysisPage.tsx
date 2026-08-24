@@ -124,9 +124,10 @@ export function LesionAnalysisPage() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const worldPoint = initialAnnotation?.worldPoint
     const annotationId = initialAnnotation?.id
-    if (!worldPoint || !annotationId) return
+    const rawWorldPoint = initialAnnotation?.worldPoint
+    if (!rawWorldPoint || !annotationId) return
+    const worldPoint: [number, number, number] = rawWorldPoint
 
     const MIN_FRAMES_BEFORE_TRUST = 3
     let frame = 0
