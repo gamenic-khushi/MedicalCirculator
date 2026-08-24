@@ -58,7 +58,7 @@ export function LesionMeasurementPage() {
 
   function handleProceed() {
     navigate('/data/lesion-measurement/analysis', {
-      state: { bloodPressure, annotation: annotations[0] ?? null },
+      state: { bloodPressure, annotation: annotations[0] ?? null, cameraState },
     })
   }
 

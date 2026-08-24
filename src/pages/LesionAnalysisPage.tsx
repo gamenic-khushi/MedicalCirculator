@@ -101,12 +101,15 @@ export function LesionAnalysisPage() {
   const navigationState = location.state as {
     bloodPressure?: string
     annotation?: Annotation | null
+    cameraState?: CameraState | null
   } | null
   const initialBloodPressure = navigationState?.bloodPressure
   const initialAnnotation = navigationState?.annotation
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
-  const [cameraState, setCameraState] = useState<CameraState | null>(null)
+  const [cameraState, setCameraState] = useState<CameraState | null>(
+    navigationState?.cameraState ?? null,
+  )
   const [isAnnotating, setIsAnnotating] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>(
     initialAnnotation ? [initialAnnotation] : [],
