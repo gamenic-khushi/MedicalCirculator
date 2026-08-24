@@ -98,12 +98,19 @@ export function LesionAnalysisPage() {
   const { model } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
   const location = useLocation()
-  const initialBloodPressure = (location.state as { bloodPressure?: string } | null)?.bloodPressure
+  const navigationState = location.state as {
+    bloodPressure?: string
+    annotation?: Annotation | null
+  } | null
+  const initialBloodPressure = navigationState?.bloodPressure
+  const initialAnnotation = navigationState?.annotation
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [cameraState, setCameraState] = useState<CameraState | null>(null)
   const [isAnnotating, setIsAnnotating] = useState(false)
-  const [annotations, setAnnotations] = useState<Annotation[]>([])
+  const [annotations, setAnnotations] = useState<Annotation[]>(
+    initialAnnotation ? [initialAnnotation] : [],
+  )
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
   const [bloodPressure, setBloodPressure] = useState(initialBloodPressure ?? '')
   const [params, setParams] = useState<Record<ParamKey, string>>(EMPTY_PARAMS)
