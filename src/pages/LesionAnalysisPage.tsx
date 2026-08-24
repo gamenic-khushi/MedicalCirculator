@@ -273,7 +273,7 @@ export function LesionAnalysisPage() {
     }, 0)
   }
 
-  function handleSaveSelectedLesion(data: SelectedLesionFormData) {
+  function applySelectedLesion(data: SelectedLesionFormData) {
     if (!measurement) return
     const stenosisRate = Math.min(Math.max(Number(data.stenosisRate) || 0, 0), 99)
     const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
@@ -286,6 +286,19 @@ export function LesionAnalysisPage() {
       pd: (Number(prev.pa) * ffrValue).toFixed(1),
       mla: data.minCrossSectionArea || prev.mla,
     }))
+  }
+
+  function handleSaveSelectedLesion(data: SelectedLesionFormData) {
+    applySelectedLesion(data)
+  }
+
+  function handleSelectedLesionFieldChange(key: keyof SelectedLesionFormData, value: string) {
+    setSelectedLesion((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function handleUpdateSelectedLesion() {
+    applySelectedLesion(selectedLesion)
+    showToast('選択病変を更新しました')
   }
 
   async function handleSave() {
@@ -355,20 +368,31 @@ export function LesionAnalysisPage() {
               {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
                 <div key={key} className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-gray-500">{label}</span>
-                  <span
-                    className={`font-semibold ${
-                      key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
-                    }`}
-                  >
-                    {selectedLesion[key] ? `${selectedLesion[key]}${unit}` : '—'}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={selectedLesion[key]}
+                      onChange={(event) => handleSelectedLesionFieldChange(key, event.target.value)}
+                      className={`w-16 rounded border border-gray-200 px-1.5 py-1 text-right outline-none focus:border-indigo-400 ${
+                        key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
+                      }`}
+                    />
+                    {unit && <span className="w-6 shrink-0 text-gray-400">{unit}</span>}
+                  </div>
                 </div>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={handleUpdateSelectedLesion}
+              className="mt-3 w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            >
+              更新
+            </button>
           </div>
         </div>
 
-        <StenosisShapeDiagram stenosisRate={Number(params.stenosisRate) || 0} />
+        <StenosisShapeDiagram stenosisRate={Number(selectedLesion.stenosisRate) || 0} />
 
         <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div
