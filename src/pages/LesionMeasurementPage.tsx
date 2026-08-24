@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Lasso, X, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
@@ -86,6 +86,12 @@ export function LesionMeasurementPage() {
             />
 
             <div className="absolute left-4 top-4 flex flex-col gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+              >
+                <Lasso className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={handleRemoveModel}
