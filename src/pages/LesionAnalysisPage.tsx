@@ -71,21 +71,6 @@ const SELECTED_LESION_FIELDS: {
   { key: 'lesionPosition', label: '病変位置', unit: '' },
 ]
 
-const PARAM_FIELDS: { key: ParamKey; label: string; unit: string }[] = [
-  { key: 'upstreamSize', label: '上流血管のサイズ', unit: 'mm' },
-  { key: 'downstreamSize', label: '下流血管のサイズ', unit: 'mm' },
-  { key: 'pa', label: 'Pa', unit: 'mmHg' },
-  { key: 'pd', label: 'Pd', unit: 'mmHg' },
-  { key: 'parameter', label: 'QOLパラメータ', unit: 'mmHg' },
-  { key: 'mld', label: '最小血管径(MLD)', unit: 'mm' },
-  { key: 'mla', label: '最大血管断面積(MLA)', unit: 'mm²' },
-  { key: 'stenosisRate', label: '狭窄率', unit: '%' },
-  { key: 'avgDiameter', label: '平均血流速度', unit: 'mm' },
-  { key: 'lumenVolume', label: '血管の柔軟性', unit: 'mm³' },
-  { key: 'calcificationVolume', label: '石灰化度', unit: '' },
-  { key: 'bifurcationAngle', label: '分岐度', unit: '°' },
-]
-
 function StenosisShapeDiagram({ stenosisRate }: { stenosisRate: number }) {
   const clamped = Math.min(Math.max(stenosisRate, 0), 99)
   const neckHalfHeight = 18 * (1 - clamped / 100)
@@ -184,14 +169,6 @@ export function LesionAnalysisPage() {
 
   function handleUpdateBloodPressure() {
     showToast('血圧が更新されました')
-  }
-
-  function handleUpdateParams() {
-    showToast('計測結果が更新されました')
-  }
-
-  function handleParamChange(key: ParamKey, value: string) {
-    setParams((prev) => ({ ...prev, [key]: value }))
   }
 
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
@@ -367,34 +344,6 @@ export function LesionAnalysisPage() {
               onChange={handleBloodPressureChange}
               onUpdate={handleUpdateBloodPressure}
             />
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <p className="text-sm font-semibold text-gray-900">計測結果</p>
-            <div className="mt-3 flex flex-col gap-2">
-              {PARAM_FIELDS.map(({ key, label, unit }) => (
-                <div key={key} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-gray-500">{label}</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={params[key]}
-                      onChange={(event) => handleParamChange(key, event.target.value)}
-                      className="w-14 rounded border border-gray-200 px-1.5 py-1 text-right text-gray-900 outline-none focus:border-indigo-400"
-                    />
-                    {unit && <span className="w-8 shrink-0 text-gray-400">{unit}</span>}
-                    <span className="h-4 w-7 shrink-0 rounded-full bg-indigo-100" />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={handleUpdateParams}
-              className="mt-3 w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
-            >
-              更新
-            </button>
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
