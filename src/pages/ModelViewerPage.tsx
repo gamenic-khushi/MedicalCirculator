@@ -94,6 +94,14 @@ export function ModelViewerPage() {
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
   }, [])
 
+  useEffect(() => {
+    const previousTitle = document.title
+    document.title = '3D医療モデルビューア'
+    return () => {
+      document.title = previousTitle
+    }
+  }, [])
+
   if (!validModel) {
     return <Navigate to="/3d-analysis" replace />
   }
