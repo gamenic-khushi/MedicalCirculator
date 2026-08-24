@@ -1,10 +1,9 @@
 import type { Models } from 'appwrite'
 import { useRef, useState, type MouseEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { Lasso, Pencil, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Toast } from '@/components/common/Toast'
-import { FileDropzone } from '@/components/common/FileDropzone'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
 import { FfrResultOverlay } from '@/components/model-viewer/FfrResultOverlay'
@@ -19,10 +18,10 @@ import {
   type SelectedLesionFormData,
 } from '@/components/model-viewer/SelectedLesionModal'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
+import { useModel3D } from '@/hooks/useModel3D'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
-import { createModel3DFile, type Model3DFile } from '@/types/model'
 import type { Annotation, CameraState, FfrResult } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
@@ -30,8 +29,6 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
-const DEFAULT_FOLDER = '２D心弁解析'
-const DEFAULT_STUDY_NAME = 'XYZ心臓病研究'
 
 type ParamKey = keyof Omit<LearningContentFrame, 'id' | 'image'>
 
@@ -98,7 +95,8 @@ function StenosisShapeDiagram({ stenosisRate }: { stenosisRate: number }) {
 }
 
 export function LesionMeasurementPage() {
-  const [model, setModel] = useState<Model3DFile | null>(null)
+  const { model } = useModel3D()
+  const validModel = model && model.file instanceof File ? model : null
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [cameraState, setCameraState] = useState<CameraState | null>(null)
   const [isAnnotating, setIsAnnotating] = useState(false)
@@ -114,15 +112,13 @@ export function LesionMeasurementPage() {
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
 
+  if (!validModel) {
+    return <Navigate to="/3d-analysis" replace />
+  }
+
   function showToast(message: string) {
     setToastMessage(message)
     setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
-  }
-
-  function handleFilesSelected(files: FileList) {
-    const file = files[0]
-    if (!file) return
-    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
   }
 
   function handleToolChange(tool: ViewerTool) {
@@ -311,171 +307,157 @@ export function LesionMeasurementPage() {
         <span className="font-medium text-gray-900">病変形状測定</span>
       </div>
 
-      {!model ? (
-        <div className="mt-6 max-w-md">
-          <FileDropzone
-            buttonLabel="ファイルを選択"
-            description="ファイルをアップロード"
-            hint=".fbx, .stl, .obj"
-            accept=".fbx,.stl,.obj"
-            onFilesSelected={handleFilesSelected}
-          />
-        </div>
-      ) : (
-        <>
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[220px_260px_1fr]">
-            <div className="flex flex-1 flex-col gap-4">
-              <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-                <BloodPressureCard
-                  value={bloodPressure}
-                  onChange={handleBloodPressureChange}
-                  onUpdate={handleUpdateBloodPressure}
-                />
-              </div>
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[220px_260px_1fr]">
+        <div className="flex flex-1 flex-col gap-4">
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <BloodPressureCard
+              value={bloodPressure}
+              onChange={handleBloodPressureChange}
+              onUpdate={handleUpdateBloodPressure}
+            />
+          </div>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="text-sm font-semibold text-gray-900">計測結果</p>
-                <div className="mt-3 flex flex-col gap-2">
-                  {PARAM_FIELDS.map(({ key, label, unit }) => (
-                    <div key={key} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-gray-500">{label}</span>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          value={params[key]}
-                          onChange={(event) => handleParamChange(key, event.target.value)}
-                          className="w-14 rounded border border-gray-200 px-1.5 py-1 text-right text-gray-900 outline-none focus:border-indigo-400"
-                        />
-                        {unit && <span className="w-8 shrink-0 text-gray-400">{unit}</span>}
-                        <span className="h-4 w-7 shrink-0 rounded-full bg-indigo-100" />
-                      </div>
-                    </div>
-                  ))}
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold text-gray-900">計測結果</p>
+            <div className="mt-3 flex flex-col gap-2">
+              {PARAM_FIELDS.map(({ key, label, unit }) => (
+                <div key={key} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-gray-500">{label}</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={params[key]}
+                      onChange={(event) => handleParamChange(key, event.target.value)}
+                      className="w-14 rounded border border-gray-200 px-1.5 py-1 text-right text-gray-900 outline-none focus:border-indigo-400"
+                    />
+                    {unit && <span className="w-8 shrink-0 text-gray-400">{unit}</span>}
+                    <span className="h-4 w-7 shrink-0 rounded-full bg-indigo-100" />
+                  </div>
                 </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleUpdateParams}
+              className="mt-3 w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            >
+              更新
+            </button>
+          </div>
+        </div>
+
+        <StenosisShapeDiagram stenosisRate={Number(params.stenosisRate) || 0} />
+
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div
+            ref={canvasAreaRef}
+            onClick={handleViewerClick}
+            style={{
+              backgroundColor: '#737373',
+              backgroundImage:
+                'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
+            }}
+            className={`relative h-[360px] overflow-hidden sm:h-[420px] lg:h-[480px] ${
+              isAnnotating ? 'cursor-crosshair' : ''
+            }`}
+          >
+            <ModelCanvas
+              ref={canvasRef}
+              url={validModel.objectUrl}
+              extension={validModel.extension}
+              color={MODEL_COLOR}
+              controlsEnabled={!isAnnotating && annotations.length === 0}
+              initialCamera={cameraState}
+              onCameraChange={setCameraState}
+            />
+
+            {!measurement &&
+              annotations.map((annotation) => (
+                <div
+                  key={annotation.id}
+                  style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
+                  className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
+                />
+              ))}
+
+            <div className="absolute left-4 top-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAnnotating((value) => !value)}
+                className={`rounded-full border p-2 shadow-sm transition ${
+                  isAnnotating
+                    ? 'border-red-200 bg-red-50 text-red-500'
+                    : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+                title="気になる箇所を丸で囲む"
+              >
+                <Lasso className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="absolute right-4 top-4 flex flex-col gap-2">
+              {measurement && (
                 <button
                   type="button"
-                  onClick={handleUpdateParams}
-                  className="mt-3 w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+                  onClick={() => setIsEditingLesion(true)}
+                  className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                  title="選択病変を修正"
                 >
-                  更新
+                  <Pencil className="h-4 w-4" />
                 </button>
-              </div>
-            </div>
-
-            <StenosisShapeDiagram stenosisRate={Number(params.stenosisRate) || 0} />
-
-            <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-              <div
-                ref={canvasAreaRef}
-                onClick={handleViewerClick}
-                style={{
-                  backgroundColor: '#737373',
-                  backgroundImage:
-                    'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
-                }}
-                className={`relative h-[360px] overflow-hidden sm:h-[420px] lg:h-[480px] ${
-                  isAnnotating ? 'cursor-crosshair' : ''
-                }`}
+              )}
+              <button
+                type="button"
+                onClick={() => canvasRef.current?.zoomIn()}
+                className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
               >
-                <ModelCanvas
-                  ref={canvasRef}
-                  url={model.objectUrl}
-                  extension={model.extension}
-                  color={MODEL_COLOR}
-                  controlsEnabled={!isAnnotating && annotations.length === 0}
-                  initialCamera={cameraState}
-                  onCameraChange={setCameraState}
-                />
-
-                {!measurement &&
-                  annotations.map((annotation) => (
-                    <div
-                      key={annotation.id}
-                      style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                      className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
-                    />
-                  ))}
-
-                <div className="absolute left-4 top-4 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAnnotating((value) => !value)}
-                    className={`rounded-full border p-2 shadow-sm transition ${
-                      isAnnotating
-                        ? 'border-red-200 bg-red-50 text-red-500'
-                        : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                    title="気になる箇所を丸で囲む"
-                  >
-                    <Lasso className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="absolute right-4 top-4 flex flex-col gap-2">
-                  {measurement && (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingLesion(true)}
-                      className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                      title="選択病変を修正"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => canvasRef.current?.zoomIn()}
-                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => canvasRef.current?.zoomOut()}
-                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {measurement && <FfrResultOverlay {...measurement} />}
-
-                <PressurePointsPanel
-                  pa={measurement ? params.pa : ''}
-                  pd={measurement ? params.pd : ''}
-                />
-                <AnatomyGuideThumbnail />
-                <ViewerToolbar
-                  activeTool={activeTool}
-                  onToolChange={handleToolChange}
-                  onToggleFullscreen={() => {}}
-                  onReset={handleResetAnnotations}
-                />
-              </div>
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => canvasRef.current?.zoomOut()}
+                className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </button>
             </div>
-          </div>
 
-          <div className="mt-4 flex justify-center gap-3">
-            <button
-              type="button"
-              onClick={handleCalculateFfr}
-              disabled={!canCalculate || isMeasuring}
-              title={disabledReason}
-              className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isMeasuring ? '計算中...' : 'FFRを計算'}
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!measurement || isSaving}
-              className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSaving ? '保存中...' : '保存'}
-            </button>
+            {measurement && <FfrResultOverlay {...measurement} />}
+
+            <PressurePointsPanel
+              pa={measurement ? params.pa : ''}
+              pd={measurement ? params.pd : ''}
+            />
+            <AnatomyGuideThumbnail />
+            <ViewerToolbar
+              activeTool={activeTool}
+              onToolChange={handleToolChange}
+              onToggleFullscreen={() => {}}
+              onReset={handleResetAnnotations}
+            />
           </div>
-        </>
-      )}
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-center gap-3">
+        <button
+          type="button"
+          onClick={handleCalculateFfr}
+          disabled={!canCalculate || isMeasuring}
+          title={disabledReason}
+          className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isMeasuring ? '計算中...' : 'FFRを計算'}
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!measurement || isSaving}
+          className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isSaving ? '保存中...' : '保存'}
+        </button>
+      </div>
 
       {isEditingLesion && measurement && (
         <SelectedLesionModal
