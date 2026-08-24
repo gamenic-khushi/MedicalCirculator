@@ -47,6 +47,30 @@ const EMPTY_PARAMS: Record<ParamKey, string> = {
   bifurcationAngle: '',
 }
 
+const EMPTY_SELECTED_LESION: SelectedLesionFormData = {
+  lesionProximalDiameter: '',
+  minVesselDiameter: '',
+  lesionDistalDiameter: '',
+  minCrossSectionArea: '',
+  stenosisRate: '',
+  stenosisLength: '',
+  lesionPosition: '',
+}
+
+const SELECTED_LESION_FIELDS: {
+  key: keyof SelectedLesionFormData
+  label: string
+  unit: string
+}[] = [
+  { key: 'lesionProximalDiameter', label: '病変近位径', unit: 'mm' },
+  { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm' },
+  { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
+  { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²' },
+  { key: 'stenosisRate', label: '狭窄率', unit: '%' },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
+  { key: 'lesionPosition', label: '病変位置', unit: '' },
+]
+
 const PARAM_FIELDS: { key: ParamKey; label: string; unit: string }[] = [
   { key: 'upstreamSize', label: '上流血管のサイズ', unit: 'mm' },
   { key: 'downstreamSize', label: '下流血管のサイズ', unit: 'mm' },
@@ -117,6 +141,8 @@ export function LesionAnalysisPage() {
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
   const [bloodPressure, setBloodPressure] = useState(initialBloodPressure ?? '')
   const [params, setParams] = useState<Record<ParamKey, string>>(EMPTY_PARAMS)
+  const [selectedLesion, setSelectedLesion] =
+    useState<SelectedLesionFormData>(EMPTY_SELECTED_LESION)
   const [isMeasuring, setIsMeasuring] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
@@ -144,6 +170,7 @@ export function LesionAnalysisPage() {
     setAnnotations([])
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
+    setSelectedLesion(EMPTY_SELECTED_LESION)
     canvasRef.current?.clearSelection()
   }
 
@@ -151,6 +178,7 @@ export function LesionAnalysisPage() {
     setBloodPressure(value)
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
+    setSelectedLesion(EMPTY_SELECTED_LESION)
     canvasRef.current?.clearSelection()
   }
 
@@ -239,6 +267,16 @@ export function LesionAnalysisPage() {
         bifurcationAngle: bifurcationAngleDeg ? bifurcationAngleDeg.toFixed(0) : '',
       })
 
+      setSelectedLesion({
+        lesionProximalDiameter: upstream.toFixed(2),
+        minVesselDiameter: mldValue.toFixed(2),
+        lesionDistalDiameter: downstream.toFixed(2),
+        minCrossSectionArea: mlaValue.toFixed(2),
+        stenosisRate: String(Math.round(stenosisRate)),
+        stenosisLength: segmentLength ? segmentLength.toFixed(1) : '',
+        lesionPosition: '',
+      })
+
       canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
 
       const targetXPx = (target.x / 100) * bounds.width
@@ -263,6 +301,7 @@ export function LesionAnalysisPage() {
     const stenosisRate = Math.min(Math.max(Number(data.stenosisRate) || 0, 0), 99)
     const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
 
+    setSelectedLesion(data)
     setMeasurement({ ...measurement, stenosisRate: Math.round(stenosisRate), ffrValue })
     setParams((prev) => ({
       ...prev,
@@ -356,6 +395,27 @@ export function LesionAnalysisPage() {
             >
               更新
             </button>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-900">選択病変</p>
+              <p className="text-[11px] text-gray-400">自動計測値（修正前）</p>
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
+                <div key={key} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-gray-500">{label}</span>
+                  <span
+                    className={`font-semibold ${
+                      key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
+                    }`}
+                  >
+                    {selectedLesion[key] ? `${selectedLesion[key]}${unit}` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -474,15 +534,7 @@ export function LesionAnalysisPage() {
 
       {isEditingLesion && measurement && (
         <SelectedLesionModal
-          initialValues={{
-            lesionProximalDiameter: params.upstreamSize,
-            minVesselDiameter: params.mld,
-            lesionDistalDiameter: params.downstreamSize,
-            minCrossSectionArea: params.mla,
-            stenosisRate: String(measurement.stenosisRate),
-            stenosisLength: '',
-            lesionPosition: '',
-          }}
+          initialValues={selectedLesion}
           onClose={() => setIsEditingLesion(false)}
           onSave={handleSaveSelectedLesion}
         />
