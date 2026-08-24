@@ -1,12 +1,16 @@
 import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Lasso, Menu, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
+import { Lasso, Menu, Pencil, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
 import vectorIcon from '@/assets/SVG/Vector.svg'
 
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
+import {
+  EditMeasurementsModal,
+  type MeasurementFormData,
+} from '@/components/model-viewer/EditMeasurementsModal'
 import { FfrResultOverlay } from '@/components/model-viewer/FfrResultOverlay'
 import {
   ModelCanvas,
@@ -87,6 +91,7 @@ export function ModelViewerPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isSavingAll, setIsSavingAll] = useState(false)
+  const [isEditingMeasurements, setIsEditingMeasurements] = useState(false)
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -275,6 +280,21 @@ export function ModelViewerPage() {
       })
       setIsCalculatingFfr(false)
     }, 0)
+  }
+
+  function handleSaveMeasurements(data: MeasurementFormData) {
+    if (!ffrResult) return
+
+    const stenosisRate = Math.min(Math.max(Number(data.stenosisRate) || 0, 0), 99)
+    const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
+
+    setFfrResult({ ...ffrResult, stenosisRate: Math.round(stenosisRate), ffrValue })
+    setPd((Number(calculatedPa) * ffrValue).toFixed(1))
+    setUpstreamDiameter(data.upstreamDiameter)
+    setDownstreamDiameter(data.downstreamDiameter)
+    setMla(data.mla)
+    setLumenVolume(data.lumenVolume)
+    setBifurcationAngle(data.bifurcationAngle)
   }
 
   function handleUpdateBloodPressure() {
@@ -568,6 +588,16 @@ export function ModelViewerPage() {
             </div>
 
             <div className="absolute right-4 top-4 flex flex-col gap-2">
+              {ffrResult && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingMeasurements(true)}
+                  className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                  title="計測値を修正"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => canvasRef.current?.zoomIn()}
@@ -583,6 +613,21 @@ export function ModelViewerPage() {
                 <ZoomOut className="h-4 w-4" />
               </button>
             </div>
+
+            {isEditingMeasurements && ffrResult && (
+              <EditMeasurementsModal
+                initialValues={{
+                  stenosisRate: String(ffrResult.stenosisRate),
+                  upstreamDiameter,
+                  downstreamDiameter,
+                  mla,
+                  lumenVolume,
+                  bifurcationAngle,
+                }}
+                onClose={() => setIsEditingMeasurements(false)}
+                onSave={handleSaveMeasurements}
+              />
+            )}
 
             {ffrResult && <FfrResultOverlay {...ffrResult} />}
 
