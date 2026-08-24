@@ -170,10 +170,6 @@ export function LesionMeasurementPage() {
         </div>
       ) : (
         <>
-          <h1 className="mt-4 text-2xl font-bold text-gray-900">
-            {model.folder} ＞ {model.studyName}
-          </h1>
-
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
             <div className="flex flex-1 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm">
               <BloodPressureCard
