@@ -614,7 +614,7 @@ export function ModelViewerPage() {
               }`}
               title={disabledFfrReason}
             >
-              {ffrResult ? 'FFRを再計算する' : 'FFRを計算する'}
+              {ffrResult ? 'FFRを再計算' : 'FFRを計算'}
             </button>
             <button
               type="button"
