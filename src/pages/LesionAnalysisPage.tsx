@@ -265,6 +265,12 @@ export function LesionAnalysisPage() {
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
     if (!target || !bounds || !bloodPressure.trim()) return
 
+    if (measurement) {
+      applySelectedLesion(selectedLesion)
+      repaintHighlightFromSelectedLesion(selectedLesion)
+      return
+    }
+
     setIsMeasuring(true)
     setTimeout(() => {
       const narrowest = canvasRef.current?.measureVesselWidth(target.x, target.y)
