@@ -56,6 +56,14 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: 'data/3d-analysis',
+        element: (
+          <AdminRoute>
+            <ThreeDAnalysisPage viewerPath="/data/lesion-measurement" />
+          </AdminRoute>
+        ),
+      },
+      {
         path: 'data/learning-content',
         element: (
           <AdminRoute>

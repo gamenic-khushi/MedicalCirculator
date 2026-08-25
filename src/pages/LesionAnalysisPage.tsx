@@ -30,6 +30,8 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
+const CROP_FALLBACK_FRACTION = 0.1
+const CROP_OUTPUT_MIN_SIZE = 480
 
 type ParamKey = keyof Omit<LearningContentFrame, 'id' | 'image'>
 
@@ -124,9 +126,10 @@ export function LesionAnalysisPage() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const worldPoint = initialAnnotation?.worldPoint
     const annotationId = initialAnnotation?.id
-    if (!worldPoint || !annotationId) return
+    const rawWorldPoint = initialAnnotation?.worldPoint
+    if (!rawWorldPoint || !annotationId) return
+    const worldPoint: [number, number, number] = rawWorldPoint
 
     const MIN_FRAMES_BEFORE_TRUST = 3
     let frame = 0
@@ -152,7 +155,7 @@ export function LesionAnalysisPage() {
   }, [])
 
   if (!validModel) {
-    return <Navigate to="/3d-analysis" replace />
+    return <Navigate to="/data/3d-analysis" replace />
   }
 
   function showToast(message: string) {
@@ -195,21 +198,27 @@ export function LesionAnalysisPage() {
     const originalX = (point.x / 100) * imageElement.width
     const originalY = (point.y / 100) * imageElement.height
 
-    const cropWidth = Math.min(imageElement.width * 0.45, imageElement.width)
-    const cropHeight = Math.min(imageElement.height * 0.45, imageElement.height)
+    const cropWidth = Math.min(imageElement.width * CROP_FALLBACK_FRACTION, imageElement.width)
+    const cropHeight = Math.min(imageElement.height * CROP_FALLBACK_FRACTION, imageElement.height)
     const cropX = Math.min(Math.max(originalX - cropWidth / 2, 0), imageElement.width - cropWidth)
     const cropY = Math.min(
       Math.max(originalY - cropHeight / 2, 0),
       imageElement.height - cropHeight,
     )
 
+    const upscale = Math.max(1, CROP_OUTPUT_MIN_SIZE / Math.max(cropWidth, cropHeight))
+    const outputWidth = cropWidth * upscale
+    const outputHeight = cropHeight * upscale
+
     const canvas = document.createElement('canvas')
-    canvas.width = cropWidth
-    canvas.height = cropHeight
+    canvas.width = outputWidth
+    canvas.height = outputHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return imageDataUrl
 
-    ctx.drawImage(imageElement, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(imageElement, cropX, cropY, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight)
     return canvas.toDataURL('image/png')
   }
 
@@ -255,6 +264,12 @@ export function LesionAnalysisPage() {
     const target = annotations[annotations.length - 1]
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
     if (!target || !bounds || !bloodPressure.trim()) return
+
+    if (measurement) {
+      applySelectedLesion(selectedLesion)
+      repaintHighlightFromSelectedLesion(selectedLesion)
+      return
+    }
 
     setIsMeasuring(true)
     setTimeout(() => {

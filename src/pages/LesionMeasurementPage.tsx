@@ -31,7 +31,7 @@ export function LesionMeasurementPage() {
   const canvasRef = useRef<ModelCanvasHandle>(null)
 
   if (!validModel) {
-    return <Navigate to="/3d-analysis" replace />
+    return <Navigate to="/data/3d-analysis" replace />
   }
 
   function handleToolChange(tool: ViewerTool) {

@@ -71,7 +71,7 @@ export function DataManagementPage() {
           <h1 className="text-2xl font-bold text-gray-900">学習データ管理</h1>
           <button
             type="button"
-            onClick={() => navigate('/3d-analysis')}
+            onClick={() => navigate('/data/3d-analysis')}
             className="flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
           >
             <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
