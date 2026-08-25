@@ -6,6 +6,7 @@ import vectorIcon from '@/assets/SVG/Vector.svg'
 
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
+import { AnnotationRing } from '@/components/model-viewer/AnnotationRing'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
 import { FfrResultOverlay } from '@/components/model-viewer/FfrResultOverlay'
 import {
@@ -31,6 +32,7 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
+const DEFAULT_RING_RADIUS_PX = 12
 
 function formatSnapshotDate(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0')
@@ -87,6 +89,7 @@ export function ModelViewerPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
+  const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -121,6 +124,7 @@ export function ModelViewerPage() {
     setMla('')
     setLumenVolume('')
     setBifurcationAngle('')
+    setRingRadius(DEFAULT_RING_RADIUS_PX)
     canvasRef.current?.clearSelection()
   }
 
@@ -527,10 +531,13 @@ export function ModelViewerPage() {
 
             {!ffrResult &&
               annotations.map((annotation) => (
-                <div
+                <AnnotationRing
                   key={annotation.id}
-                  style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                  className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
+                  x={annotation.x}
+                  y={annotation.y}
+                  radius={ringRadius}
+                  onRadiusChange={setRingRadius}
+                  containerRef={canvasAreaRef}
                 />
               ))}
 

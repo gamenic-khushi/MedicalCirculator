@@ -1,8 +1,9 @@
-import { useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Lasso, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
+import { AnnotationRing } from '@/components/model-viewer/AnnotationRing'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
 import {
   ModelCanvas,
@@ -17,8 +18,6 @@ import type { Annotation, CameraState } from '@/types/viewerState'
 
 const MODEL_COLOR = '#d8dce3'
 const DEFAULT_RING_RADIUS_PX = 12
-const MIN_RING_RADIUS_PX = 8
-const MAX_RING_RADIUS_PX = 100
 
 export function LesionMeasurementPage() {
   const navigate = useNavigate()
@@ -66,29 +65,6 @@ export function LesionMeasurementPage() {
     setAnnotations([])
     setRingRadius(DEFAULT_RING_RADIUS_PX)
     canvasRef.current?.clearSelection()
-  }
-
-  function handleRingResizeStart(event: ReactPointerEvent<HTMLDivElement>, annotation: Annotation) {
-    event.preventDefault()
-    event.stopPropagation()
-    const container = canvasAreaRef.current
-    if (!container) return
-    const bounds = container.getBoundingClientRect()
-    const centerX = bounds.left + (annotation.x / 100) * bounds.width
-    const centerY = bounds.top + (annotation.y / 100) * bounds.height
-
-    function handlePointerMove(moveEvent: PointerEvent) {
-      const dx = moveEvent.clientX - centerX
-      const dy = moveEvent.clientY - centerY
-      const radius = Math.sqrt(dx * dx + dy * dy)
-      setRingRadius(Math.min(Math.max(radius, MIN_RING_RADIUS_PX), MAX_RING_RADIUS_PX))
-    }
-    function handlePointerUp() {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
   }
 
   function handleProceed() {
@@ -141,22 +117,14 @@ export function LesionMeasurementPage() {
             />
 
             {annotations.map((annotation) => (
-              <div
+              <AnnotationRing
                 key={annotation.id}
-                style={{
-                  left: `${annotation.x}%`,
-                  top: `${annotation.y}%`,
-                  width: ringRadius * 2,
-                  height: ringRadius * 2,
-                }}
-                className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
-              >
-                <div
-                  onPointerDown={(event) => handleRingResizeStart(event, annotation)}
-                  title="ドラッグしてサイズ調整"
-                  className="pointer-events-auto absolute top-1/2 right-0 h-3 w-3 translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border border-white bg-red-500 shadow-sm"
-                />
-              </div>
+                x={annotation.x}
+                y={annotation.y}
+                radius={ringRadius}
+                onRadiusChange={setRingRadius}
+                containerRef={canvasAreaRef}
+              />
             ))}
 
             <div className="absolute left-4 top-4 flex flex-col gap-2">
