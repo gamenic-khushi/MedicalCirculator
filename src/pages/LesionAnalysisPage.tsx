@@ -17,6 +17,7 @@ import {
   SelectedLesionModal,
   type SelectedLesionFormData,
 } from '@/components/model-viewer/SelectedLesionModal'
+import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useModel3D } from '@/hooks/useModel3D'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
@@ -74,14 +75,29 @@ const SELECTED_LESION_FIELDS: {
   { key: 'lesionPosition', label: '病変位置', unit: '' },
 ]
 
-function LesionSnapshotPanel({ image }: { image: string | null }) {
+function LesionSnapshotPanel({
+  proximalDiameter,
+  minDiameter,
+  distalDiameter,
+}: {
+  proximalDiameter: number
+  minDiameter: number
+  distalDiameter: number
+}) {
+  const hasShape = proximalDiameter > 0 && minDiameter > 0 && distalDiameter > 0
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
       <p className="text-sm font-semibold text-gray-900">
         生成される3D狭窄形状（中心線に沿った断面）
       </p>
-      {image ? (
-        <img src={image} alt="選択病変のスナップショット" className="mt-3 w-full rounded-lg" />
+      {hasShape ? (
+        <div className="mt-3">
+          <VesselShapeDiagram
+            proximalDiameter={proximalDiameter}
+            minDiameter={minDiameter}
+            distalDiameter={distalDiameter}
+          />
+        </div>
       ) : (
         <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400">
           FFRを計算すると表示されます
@@ -479,7 +495,11 @@ export function LesionAnalysisPage() {
           </div>
         </div>
 
-        <LesionSnapshotPanel image={snapshotImage} />
+        <LesionSnapshotPanel
+          proximalDiameter={Number(selectedLesion.lesionProximalDiameter) || 0}
+          minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
+          distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
+        />
 
         <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div
