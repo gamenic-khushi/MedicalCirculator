@@ -8,7 +8,11 @@ import { createModel3DFile } from '@/types/model'
 const FOLDER_OPTIONS = ['２D心弁解析']
 const STUDY_OPTIONS = ['XYZ心臓病研究']
 
-export function ThreeDAnalysisPage() {
+interface ThreeDAnalysisPageProps {
+  viewerPath?: string
+}
+
+export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: ThreeDAnalysisPageProps) {
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
   const { model, setModel } = useModel3D()
@@ -16,12 +20,12 @@ export function ThreeDAnalysisPage() {
   const [studyName, setStudyName] = useState(STUDY_OPTIONS[0])
 
   useEffect(() => {
-    if (model) navigate('/3d-analysis/viewer', { replace: true })
-  }, [model, navigate])
+    if (model) navigate(viewerPath, { replace: true })
+  }, [model, navigate, viewerPath])
 
   function loadFile(file: File) {
     setModel(createModel3DFile(file, { folder, studyName }))
-    navigate('/3d-analysis/viewer')
+    navigate(viewerPath)
   }
 
   function handleFileSelected(files: FileList | null) {
