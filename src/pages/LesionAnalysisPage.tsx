@@ -342,8 +342,6 @@ export function LesionAnalysisPage() {
         lesionPosition,
       })
 
-      canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
-      captureSnapshotAfterRender({ x: target.x, y: target.y })
       setIsMeasuring(false)
     }, 0)
   }
@@ -364,6 +362,14 @@ export function LesionAnalysisPage() {
       pd: pdValue,
       parameter: Math.abs(Number(pa) - Number(pdValue)).toFixed(1),
     }))
+
+    if (!measurement) {
+      const referenceDiameter = Number(params.avgDiameter)
+      if (referenceDiameter > 0) {
+        canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
+      }
+      captureSnapshotAfterRender({ x: target.x, y: target.y })
+    }
 
     const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds)
 
