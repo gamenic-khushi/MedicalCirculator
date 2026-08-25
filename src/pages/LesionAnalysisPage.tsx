@@ -79,10 +79,12 @@ function LesionSnapshotPanel({
   proximalDiameter,
   minDiameter,
   distalDiameter,
+  isMeasuring,
 }: {
   proximalDiameter: number
   minDiameter: number
   distalDiameter: number
+  isMeasuring: boolean
 }) {
   const hasShape = proximalDiameter > 0 && minDiameter > 0 && distalDiameter > 0
   return (
@@ -90,7 +92,11 @@ function LesionSnapshotPanel({
       <p className="text-sm font-semibold text-gray-900">
         生成される3D狭窄形状（中心線に沿った断面）
       </p>
-      {hasShape ? (
+      {isMeasuring ? (
+        <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400">
+          計測中...
+        </div>
+      ) : hasShape ? (
         <div className="mt-3">
           <VesselShapeDiagram
             proximalDiameter={proximalDiameter}
@@ -100,7 +106,7 @@ function LesionSnapshotPanel({
         </div>
       ) : (
         <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400">
-          FFRを計算すると表示されます
+          気になる箇所を丸で囲んでください
         </div>
       )}
     </div>
@@ -142,9 +148,15 @@ export function LesionAnalysisPage() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const annotationId = initialAnnotation?.id
-    const rawWorldPoint = initialAnnotation?.worldPoint
-    if (!rawWorldPoint || !annotationId) return
+    if (!initialAnnotation) return
+    const startingAnnotation: Annotation = initialAnnotation
+
+    const rawWorldPoint = startingAnnotation.worldPoint
+    if (!rawWorldPoint) {
+      measureLesion(startingAnnotation)
+      return
+    }
+    const annotationId = startingAnnotation.id
     const worldPoint: [number, number, number] = rawWorldPoint
 
     const MIN_FRAMES_BEFORE_TRUST = 3
@@ -153,17 +165,19 @@ export function LesionAnalysisPage() {
     function tryProject() {
       const projected = canvasRef.current?.projectWorldPoint(worldPoint)
       if (projected && frame >= MIN_FRAMES_BEFORE_TRUST) {
+        const updated = { ...startingAnnotation, x: projected.x, y: projected.y }
         setAnnotations((prev) =>
-          prev.map((annotation) =>
-            annotation.id === annotationId
-              ? { ...annotation, x: projected.x, y: projected.y }
-              : annotation,
-          ),
+          prev.map((annotation) => (annotation.id === annotationId ? updated : annotation)),
         )
+        measureLesion(updated)
         return
       }
       frame += 1
-      if (frame < 30) rafId = requestAnimationFrame(tryProject)
+      if (frame < 30) {
+        rafId = requestAnimationFrame(tryProject)
+      } else {
+        measureLesion(startingAnnotation)
+      }
     }
     rafId = requestAnimationFrame(tryProject)
     return () => cancelAnimationFrame(rafId)
@@ -197,10 +211,6 @@ export function LesionAnalysisPage() {
   function handleBloodPressureChange(value: string) {
     setBloodPressure(value)
     setMeasurement(null)
-    setParams(EMPTY_PARAMS)
-    setSelectedLesion(EMPTY_SELECTED_LESION)
-    setSnapshotImage(null)
-    canvasRef.current?.clearSelection()
   }
 
   async function cropToHighlightedRegion(imageDataUrl: string, point: { x: number; y: number }) {
@@ -263,8 +273,10 @@ export function LesionAnalysisPage() {
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    setAnnotations([{ id: crypto.randomUUID(), x, y }])
+    const target = { id: crypto.randomUUID(), x, y }
+    setAnnotations([target])
     setIsAnnotating(false)
+    measureLesion(target)
   }
 
   function measureReferenceWidth(x: number, y: number, direction: 1 | -1) {
@@ -276,16 +288,7 @@ export function LesionAnalysisPage() {
     return null
   }
 
-  function handleCalculateFfr() {
-    const target = annotations[annotations.length - 1]
-    const bounds = canvasAreaRef.current?.getBoundingClientRect()
-    if (!target || !bounds || !bloodPressure.trim()) return
-
-    if (measurement) {
-      applySelectedLesion(selectedLesion)
-      return
-    }
-
+  function measureLesion(target: { x: number; y: number }) {
     setIsMeasuring(true)
     setTimeout(() => {
       const narrowest = canvasRef.current?.measureVesselWidth(target.x, target.y)
@@ -303,9 +306,6 @@ export function LesionAnalysisPage() {
       const referenceDiameter = (upstream + downstream) / 2
       const rawStenosisRate = referenceDiameter > 0 ? (1 - narrowest / referenceDiameter) * 100 : 0
       const stenosisRate = Math.min(Math.max(rawStenosisRate, 0), 99)
-      const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
-      const pa = bloodPressure.trim()
-      const pdValue = (Number(pa) * ffrValue).toFixed(1)
       const mldValue = referenceDiameter * (1 - stenosisRate / 100)
       const mlaValue = Math.PI * (mldValue / 2) ** 2
       const segmentLength = canvasRef.current?.measureDistance3D(
@@ -320,20 +320,17 @@ export function LesionAnalysisPage() {
       const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(target.x, target.y)
       const lesionPosition = canvasRef.current?.measureLesionPosition(target.x, target.y) ?? ''
 
-      setParams({
+      setParams((prev) => ({
+        ...prev,
         upstreamSize: upstream.toFixed(1),
         downstreamSize: downstream.toFixed(1),
-        pa,
-        pd: pdValue,
-        parameter: Math.abs(Number(pa) - Number(pdValue)).toFixed(1),
         mld: mldValue.toFixed(1),
         mla: mlaValue.toFixed(2),
         stenosisRate: String(Math.round(stenosisRate)),
         avgDiameter: referenceDiameter.toFixed(1),
         lumenVolume: lumenVolumeValue !== null ? lumenVolumeValue.toFixed(1) : '',
-        calcificationVolume: '',
         bifurcationAngle: bifurcationAngleDeg ? bifurcationAngleDeg.toFixed(0) : '',
-      })
+      }))
 
       setSelectedLesion({
         lesionProximalDiameter: upstream.toFixed(2),
@@ -347,34 +344,56 @@ export function LesionAnalysisPage() {
 
       canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
       captureSnapshotAfterRender({ x: target.x, y: target.y })
-
-      const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds)
-
-      setMeasurement({
-        originX: target.x,
-        originY: target.y,
-        labelX,
-        labelY,
-        stenosisRate: Math.round(stenosisRate),
-        ffrValue,
-      })
       setIsMeasuring(false)
     }, 0)
   }
 
-  function applySelectedLesion(data: SelectedLesionFormData) {
-    if (!measurement) return
-    const stenosisRate = Math.min(Math.max(Number(data.stenosisRate) || 0, 0), 99)
+  function handleCalculateFfr() {
+    const target = annotations[annotations.length - 1]
+    const bounds = canvasAreaRef.current?.getBoundingClientRect()
+    if (!target || !bounds || !bloodPressure.trim() || !selectedLesion.stenosisRate) return
+
+    const stenosisRate = Math.min(Math.max(Number(selectedLesion.stenosisRate) || 0, 0), 99)
     const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
+    const pa = bloodPressure.trim()
+    const pdValue = (Number(pa) * ffrValue).toFixed(1)
+
+    setParams((prev) => ({
+      ...prev,
+      pa,
+      pd: pdValue,
+      parameter: Math.abs(Number(pa) - Number(pdValue)).toFixed(1),
+    }))
+
+    const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds)
+
+    setMeasurement({
+      originX: target.x,
+      originY: target.y,
+      labelX,
+      labelY,
+      stenosisRate: Math.round(stenosisRate),
+      ffrValue,
+    })
+  }
+
+  function applySelectedLesion(data: SelectedLesionFormData) {
+    const stenosisRate = Math.min(Math.max(Number(data.stenosisRate) || 0, 0), 99)
 
     setSelectedLesion(data)
-    setMeasurement({ ...measurement, stenosisRate: Math.round(stenosisRate), ffrValue })
     setParams((prev) => ({
       ...prev,
       stenosisRate: String(Math.round(stenosisRate)),
-      pd: (Number(prev.pa) * ffrValue).toFixed(1),
       mld: data.minVesselDiameter || prev.mld,
       mla: data.minCrossSectionArea || prev.mla,
+    }))
+
+    if (!measurement) return
+    const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
+    setMeasurement({ ...measurement, stenosisRate: Math.round(stenosisRate), ffrValue })
+    setParams((prev) => ({
+      ...prev,
+      pd: (Number(prev.pa) * ffrValue).toFixed(1),
     }))
   }
 
@@ -421,13 +440,13 @@ export function LesionAnalysisPage() {
     }
   }
 
-  const canCalculate = annotations.length > 0 && bloodPressure.trim() !== ''
-  const disabledReason =
-    annotations.length === 0
-      ? '先に気になる箇所を丸で囲んでください'
-      : bloodPressure.trim() === ''
-        ? '先に血圧の値を入力してください'
-        : undefined
+  const hasMeasurement = selectedLesion.stenosisRate !== ''
+  const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
+  const disabledReason = !hasMeasurement
+    ? '先に気になる箇所を丸で囲んでください'
+    : bloodPressure.trim() === ''
+      ? '先に血圧の値を入力してください'
+      : undefined
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
@@ -486,6 +505,7 @@ export function LesionAnalysisPage() {
           proximalDiameter={Number(selectedLesion.lesionProximalDiameter) || 0}
           minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
           distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
+          isMeasuring={isMeasuring}
         />
 
         <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -583,11 +603,11 @@ export function LesionAnalysisPage() {
         <button
           type="button"
           onClick={handleCalculateFfr}
-          disabled={!canCalculate || isMeasuring}
+          disabled={!canCalculate}
           title={disabledReason}
           className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isMeasuring ? '計算中...' : 'FFRを計算'}
+          FFRを計算
         </button>
         <button
           type="button"
