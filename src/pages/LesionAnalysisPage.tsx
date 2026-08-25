@@ -283,7 +283,6 @@ export function LesionAnalysisPage() {
 
     if (measurement) {
       applySelectedLesion(selectedLesion)
-      repaintHighlightFromSelectedLesion(selectedLesion)
       return
     }
 
@@ -379,19 +378,8 @@ export function LesionAnalysisPage() {
     }))
   }
 
-  function repaintHighlightFromSelectedLesion(data: SelectedLesionFormData) {
-    if (!measurement) return
-    const referenceWidth =
-      (Number(data.lesionProximalDiameter) + Number(data.lesionDistalDiameter)) / 2
-    if (referenceWidth > 0) {
-      canvasRef.current?.highlightAt(measurement.originX, measurement.originY, referenceWidth)
-    }
-    captureSnapshotAfterRender({ x: measurement.originX, y: measurement.originY })
-  }
-
   function handleSaveSelectedLesion(data: SelectedLesionFormData) {
     applySelectedLesion(data)
-    repaintHighlightFromSelectedLesion(data)
   }
 
   function handleSelectedLesionFieldChange(key: keyof SelectedLesionFormData, value: string) {
@@ -400,7 +388,6 @@ export function LesionAnalysisPage() {
 
   function handleUpdateSelectedLesion() {
     applySelectedLesion(selectedLesion)
-    repaintHighlightFromSelectedLesion(selectedLesion)
     showToast('選択病変を更新しました')
   }
 
