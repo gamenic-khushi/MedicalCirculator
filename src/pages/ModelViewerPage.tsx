@@ -87,7 +87,6 @@ export function ModelViewerPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
-  const [isSavingAll, setIsSavingAll] = useState(false)
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -431,29 +430,6 @@ export function ModelViewerPage() {
     }
   }
 
-  async function handleSaveAllForTraining() {
-    if (savedSnapshots.length === 0 || isSavingAll) return
-    setIsSavingAll(true)
-
-    try {
-      await Promise.all(
-        savedSnapshots.map((snapshot) =>
-          databaseService.create<LearningContentFrameRow>(
-            'learning_content_frames',
-            buildLearningContentPayload(snapshot),
-          ),
-        ),
-      )
-      setToastMessage('AIトレーニング用に保存しました')
-    } catch (error) {
-      console.error(error)
-      setToastMessage('保存に失敗しました')
-    } finally {
-      setIsSavingAll(false)
-    }
-    setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
-  }
-
   function handleDeleteSnapshot(id: string) {
     setSavedSnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id))
   }
@@ -635,7 +611,7 @@ export function ModelViewerPage() {
         {savedSnapshots.length > 0 ? (
           isTableView ? (
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4">
+              <div className="flex items-center gap-3 border-b border-gray-100 p-4">
                 <button
                   type="button"
                   onClick={() => setIsTableView(false)}
@@ -644,16 +620,6 @@ export function ModelViewerPage() {
                 >
                   <Menu className="h-4 w-4" />
                 </button>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={handleSaveAllForTraining}
-                    disabled={isSavingAll}
-                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSavingAll ? '保存中...' : '学習データに保存'}
-                  </button>
-                )}
               </div>
               <div>
                 <table className="w-full min-w-[820px] text-left text-sm">
@@ -710,43 +676,34 @@ export function ModelViewerPage() {
             <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-gray-900">画像</span>
-                <div className="flex items-center gap-2">
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={handleSaveAllForTraining}
-                      disabled={isSavingAll}
-                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isSavingAll ? '保存中...' : '学習データに保存'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIsTableView(true)}
-                    className="text-gray-400 transition hover:text-gray-600"
-                    title="テーブル表示に切り替える"
-                  >
-                    <Menu className="h-4 w-4" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsTableView(true)}
+                  className="text-gray-400 transition hover:text-gray-600"
+                  title="テーブル表示に切り替える"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
               </div>
               {savedSnapshots.map((snapshot) => (
                 <div
                   key={snapshot.id}
                   className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
                 >
-                  <p className="text-xs text-gray-500">{snapshot.date}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-gray-500">{snapshot.date}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSnapshot(snapshot.id)}
+                      className="rounded p-1 text-gray-400 transition hover:text-gray-600"
+                      title="削除"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                   <div className="overflow-hidden rounded-lg bg-gray-800">
                     <img src={snapshot.image} alt="保存されたモデル画像" className="w-full" />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteSnapshot(snapshot.id)}
-                    className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700"
-                  >
-                    削除
-                  </button>
                 </div>
               ))}
             </div>
