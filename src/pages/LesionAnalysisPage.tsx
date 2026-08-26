@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
+import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
 import type { DataRecord } from '@/types/dataRecord'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
@@ -41,8 +42,6 @@ function todayDisplayDate(): string {
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
-const CROP_FALLBACK_FRACTION = 0.1
-const CROP_OUTPUT_MIN_SIZE = 480
 
 type ParamKey = keyof Omit<LearningContentFrame, 'id' | 'image' | 'fileName' | 'createdAt'>
 
@@ -245,49 +244,12 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
   }
 
-  async function cropToHighlightedRegion(imageDataUrl: string, point: { x: number; y: number }) {
-    const imageElement = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.onerror = reject
-      img.src = imageDataUrl
-    })
-
-    const originalX = (point.x / 100) * imageElement.width
-    const originalY = (point.y / 100) * imageElement.height
-
-    const cropWidth = Math.min(imageElement.width * CROP_FALLBACK_FRACTION, imageElement.width)
-    const cropHeight = Math.min(imageElement.height * CROP_FALLBACK_FRACTION, imageElement.height)
-    const cropX = Math.min(Math.max(originalX - cropWidth / 2, 0), imageElement.width - cropWidth)
-    const cropY = Math.min(
-      Math.max(originalY - cropHeight / 2, 0),
-      imageElement.height - cropHeight,
-    )
-
-    const upscale = Math.max(1, CROP_OUTPUT_MIN_SIZE / Math.max(cropWidth, cropHeight))
-    const outputWidth = cropWidth * upscale
-    const outputHeight = cropHeight * upscale
-
-    const canvas = document.createElement('canvas')
-    canvas.width = outputWidth
-    canvas.height = outputHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return imageDataUrl
-
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(imageElement, cropX, cropY, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight)
-    return canvas.toDataURL('image/png')
-  }
-
   function captureSnapshotAfterRender(point: { x: number; y: number }) {
-    canvasRef.current?.hideHighlight()
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const snapshot = canvasRef.current?.capture()
-        canvasRef.current?.showHighlight()
         if (!snapshot) return
-        cropToHighlightedRegion(snapshot, point)
+        createAnnotatedSnapshot(snapshot, point)
           .then(setSnapshotImage)
           .catch(() => setSnapshotImage(snapshot))
       })

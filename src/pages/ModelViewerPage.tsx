@@ -21,6 +21,7 @@ import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
+import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { isAdminCategory } from '@/types/user'
@@ -321,41 +322,6 @@ export function ModelViewerPage() {
     setUpstreamDiameter('')
     setDownstreamDiameter('')
     canvasRef.current?.clearSelection()
-  }
-
-  async function createAnnotatedSnapshot(
-    imageDataUrl: string,
-    point: { x: number; y: number } | null,
-  ) {
-    if (!point) return imageDataUrl
-
-    const imageElement = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.onerror = reject
-      img.src = imageDataUrl
-    })
-
-    const originalX = (point.x / 100) * imageElement.width
-    const originalY = (point.y / 100) * imageElement.height
-
-    const cropWidth = Math.min(imageElement.width * 0.45, imageElement.width)
-    const cropHeight = Math.min(imageElement.height * 0.45, imageElement.height)
-    const cropX = Math.min(Math.max(originalX - cropWidth / 2, 0), imageElement.width - cropWidth)
-    const cropY = Math.min(
-      Math.max(originalY - cropHeight / 2, 0),
-      imageElement.height - cropHeight,
-    )
-
-    const canvas = document.createElement('canvas')
-    canvas.width = cropWidth
-    canvas.height = cropHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return imageDataUrl
-
-    ctx.drawImage(imageElement, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
-
-    return canvas.toDataURL('image/png')
   }
 
   async function handleSaveSnapshot() {
