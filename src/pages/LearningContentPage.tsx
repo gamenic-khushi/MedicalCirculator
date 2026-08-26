@@ -109,7 +109,7 @@ export function LearningContentPage() {
           学習データ管理
         </Link>
         <span>/</span>
-        <span className="font-medium text-gray-900">学習内容</span>
+        <span className="font-medium text-gray-900">学習名</span>
       </div>
 
       <div className="mt-3 flex items-center gap-2">
