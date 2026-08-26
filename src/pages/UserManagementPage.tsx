@@ -93,7 +93,7 @@ export function UserManagementPage() {
           <button
             type="button"
             onClick={() => setIsAdding(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white transition hover:bg-indigo-700"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700"
             title="ユーザーを追加"
           >
             <Plus className="h-4 w-4" />

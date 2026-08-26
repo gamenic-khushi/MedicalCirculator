@@ -11,7 +11,7 @@ interface FileDropzoneProps {
 }
 
 const BUTTON_VARIANT_CLASSES: Record<'solid' | 'outline', string> = {
-  solid: 'rounded-lg bg-indigo-600 text-white hover:bg-indigo-700',
+  solid: 'rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700',
   outline: 'rounded-full border border-indigo-200 text-indigo-600 hover:bg-indigo-50',
 }
 

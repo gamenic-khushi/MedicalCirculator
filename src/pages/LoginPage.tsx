@@ -67,7 +67,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-4 w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-4 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? 'ログイン中...' : 'ログイン'}
           </button>

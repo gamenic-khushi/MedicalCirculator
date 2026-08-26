@@ -455,7 +455,7 @@ export function ModelViewerPage() {
           <button
             type="button"
             onClick={handleRemoveModel}
-            className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
             <Upload className="h-4 w-4" />
             新しいモデルをアップロード
@@ -463,7 +463,7 @@ export function ModelViewerPage() {
           <button
             type="button"
             onClick={handleDownloadPdf}
-            className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
             PDFダウンロード
           </button>
@@ -472,7 +472,7 @@ export function ModelViewerPage() {
               type="button"
               onClick={handleSaveCurrentToLearningData}
               disabled={!ffrResult}
-              className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               学習データに保存
             </button>
@@ -595,7 +595,7 @@ export function ModelViewerPage() {
               disabled={!canCalculateFfr}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                 canCalculateFfr
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
                   : 'cursor-not-allowed bg-gray-100 text-gray-400'
               }`}
               title={disabledFfrReason}
@@ -605,7 +605,7 @@ export function ModelViewerPage() {
             <button
               type="button"
               onClick={handleSaveSnapshot}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
             >
               仮保存
             </button>

@@ -174,7 +174,7 @@ export function LesionMeasurementPage() {
         <button
           type="button"
           onClick={handleProceed}
-          className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
         >
           病変形状測定
         </button>

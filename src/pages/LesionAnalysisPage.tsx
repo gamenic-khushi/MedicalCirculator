@@ -500,7 +500,7 @@ export function LesionAnalysisPage() {
             <button
               type="button"
               onClick={handleUpdateSelectedLesion}
-              className="mt-3 w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+              className="mt-3 w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
             >
               更新
             </button>
@@ -611,7 +611,7 @@ export function LesionAnalysisPage() {
           onClick={handleCalculateFfr}
           disabled={!canCalculate}
           title={disabledReason}
-          className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           FFRを計算
         </button>
@@ -619,7 +619,7 @@ export function LesionAnalysisPage() {
           type="button"
           onClick={handleSave}
           disabled={!measurement || isSaving}
-          className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSaving ? '保存中...' : '保存'}
         </button>

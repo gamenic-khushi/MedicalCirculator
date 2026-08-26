@@ -106,7 +106,7 @@ export function DocumentsPage() {
           <button
             type="button"
             onClick={() => setIsAddingFolder(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white transition hover:bg-indigo-700"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700"
             title="フォルダを追加"
           >
             <Plus className="h-4 w-4" />
@@ -114,7 +114,7 @@ export function DocumentsPage() {
           <button
             type="button"
             onClick={() => setIsUploading(true)}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
             <Upload className="h-4 w-4" />
             ファイルのアップロード
