@@ -33,14 +33,23 @@ async function fetchAllFrames(): Promise<LearningContentFrame[]> {
     offset += PAGE_SIZE
   }
 
-  return rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
+  return rows.map(({ $id, $createdAt, ...rest }) => ({ id: $id, createdAt: $createdAt, ...rest }))
+}
+
+function formatFrameDate(createdAt: string | undefined): string {
+  if (!createdAt) return ''
+  const date = new Date(createdAt)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const datePart = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`
+  const timePart = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return `${datePart} ${timePart}`
 }
 
 function frameToSnapshot(frame: LearningContentFrame): SavedSnapshot {
   return {
     id: frame.id,
     image: frame.image,
-    date: '',
+    date: formatFrameDate(frame.createdAt),
     upstreamSize: frame.upstreamSize,
     downstreamSize: frame.downstreamSize,
     pd: frame.pd,

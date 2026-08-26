@@ -34,7 +34,7 @@ const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
 const CROP_FALLBACK_FRACTION = 0.1
 const CROP_OUTPUT_MIN_SIZE = 480
 
-type ParamKey = keyof Omit<LearningContentFrame, 'id' | 'image' | 'fileName'>
+type ParamKey = keyof Omit<LearningContentFrame, 'id' | 'image' | 'fileName' | 'createdAt'>
 
 const EMPTY_PARAMS: Record<ParamKey, string> = {
   upstreamSize: '',
