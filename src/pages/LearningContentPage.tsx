@@ -70,7 +70,7 @@ export function LearningContentPage() {
           onClick={handleAddNew}
           className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
         >
-          新規追加
+          ファイル名
         </button>
         <button
           type="button"
