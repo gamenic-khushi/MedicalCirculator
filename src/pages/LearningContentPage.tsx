@@ -64,7 +64,14 @@ export function LearningContentPage() {
         <span className="font-medium text-gray-900">学習内容</span>
       </div>
 
-      <div className="mt-3">
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleAddNew}
+          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
+        >
+          新規追加
+        </button>
         <button
           type="button"
           onClick={handleAddNew}
