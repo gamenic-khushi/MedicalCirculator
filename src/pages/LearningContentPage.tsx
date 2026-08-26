@@ -1,7 +1,7 @@
 import { Query, type Models } from 'appwrite'
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useViewerState } from '@/hooks/useViewerState'
@@ -61,7 +61,6 @@ export function LearningContentPage() {
   const navigate = useNavigate()
   const { setSavedSnapshots } = useViewerState()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
-  const [studyName, setStudyName] = useState(DEFAULT_STUDY_NAME)
 
   useEffect(() => {
     fetchAllFrames().then(setFrames)
@@ -84,21 +83,8 @@ export function LearningContentPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link to="/data" className="hover:text-gray-700">
-          学習データ管理
-        </Link>
-        <span>/</span>
-        <span className="font-medium text-gray-900">学習名</span>
-      </div>
-
       <div className="mt-3 flex items-center gap-2">
-        <input
-          type="text"
-          value={studyName}
-          onChange={(event) => setStudyName(event.target.value)}
-          className="w-56 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-indigo-400"
-        />
+        <span className="text-sm font-medium text-gray-900">{DEFAULT_STUDY_NAME}</span>
         <button
           type="button"
           onClick={handleAddNew}
