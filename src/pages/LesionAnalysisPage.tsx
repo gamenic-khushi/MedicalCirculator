@@ -1,6 +1,6 @@
 import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Link, Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Lasso, Pencil, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Toast } from '@/components/common/Toast'
@@ -19,14 +19,24 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
+import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { databaseService } from '@/services/appwrite/database'
+import type { DataRecord } from '@/types/dataRecord'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import type { Annotation, CameraState, FfrResult } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
+type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
+
+function todayDisplayDate(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}/${month}/${day}`
+}
 
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
@@ -116,6 +126,8 @@ function LesionSnapshotPanel({
 export function LesionAnalysisPage() {
   const { model } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const location = useLocation()
   const navigationState = location.state as {
     bloodPressure?: string
@@ -417,9 +429,10 @@ export function LesionAnalysisPage() {
   }
 
   async function handleSave() {
-    if (!measurement) return
+    if (!measurement || !validModel) return
     setIsSaving(true)
     const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
+    const currentModel = validModel
 
     try {
       await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
@@ -437,7 +450,13 @@ export function LesionAnalysisPage() {
         calcificationVolume: params.calcificationVolume || '—',
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
       })
-      showToast('学習データ管理に保存しました')
+      await databaseService.create<DataRecordRow>('data_records', {
+        date: todayDisplayDate(),
+        category: currentModel.studyName,
+        file: currentModel.file.name,
+        owner: user?.name ?? '',
+      })
+      navigate('/data')
     } catch (error) {
       console.error(error)
       showToast('保存に失敗しました')
