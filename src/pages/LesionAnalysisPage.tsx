@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Lasso, Pencil, ZoomIn, ZoomOut } from 'lucide-react'
 
+import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
@@ -151,6 +152,7 @@ export function LesionAnalysisPage() {
     useState<SelectedLesionFormData>(EMPTY_SELECTED_LESION)
   const [snapshotImage, setSnapshotImage] = useState<string | null>(null)
   const [isMeasuring, setIsMeasuring] = useState(false)
+  const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -262,14 +264,20 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
   }
 
-  function captureSnapshotAfterRender(point: { x: number; y: number }) {
-    requestAnimationFrame(() => {
+  function captureSnapshotAfterRender(point: { x: number; y: number }): Promise<void> {
+    return new Promise((resolve) => {
       requestAnimationFrame(() => {
-        const snapshot = canvasRef.current?.capture()
-        if (!snapshot) return
-        createAnnotatedSnapshot(snapshot, point)
-          .then(setSnapshotImage)
-          .catch(() => setSnapshotImage(snapshot))
+        requestAnimationFrame(() => {
+          const snapshot = canvasRef.current?.capture()
+          if (!snapshot) {
+            resolve()
+            return
+          }
+          createAnnotatedSnapshot(snapshot, point)
+            .then(setSnapshotImage)
+            .catch(() => setSnapshotImage(snapshot))
+            .finally(resolve)
+        })
       })
     })
   }
@@ -380,7 +388,10 @@ export function LesionAnalysisPage() {
       if (referenceDiameter > 0) {
         canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
       }
-      captureSnapshotAfterRender({ x: target.x, y: target.y })
+      setIsCalculatingFfr(true)
+      captureSnapshotAfterRender({ x: target.x, y: target.y }).finally(() =>
+        setIsCalculatingFfr(false),
+      )
     }
 
     const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds)
@@ -651,6 +662,8 @@ export function LesionAnalysisPage() {
           onSave={handleSaveSelectedLesion}
         />
       )}
+
+      {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
       {toastMessage && <Toast message={toastMessage} />}
     </div>

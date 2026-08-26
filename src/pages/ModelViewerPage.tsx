@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Lasso, Menu, Table2, Trash2, Upload, ZoomIn, ZoomOut } from 'lucide-react'
 
+import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { AnnotationRing } from '@/components/model-viewer/AnnotationRing'
@@ -709,12 +710,7 @@ export function ModelViewerPage() {
         )}
       </div>
 
-      {isCalculatingFfr && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/60 backdrop-blur-sm">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
-          <p className="text-sm font-medium text-gray-600">FFRを計算しています...</p>
-        </div>
-      )}
+      {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
       {toastMessage && <Toast message={toastMessage} />}
     </div>
