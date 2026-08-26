@@ -659,6 +659,8 @@ export function LesionAnalysisPage() {
         />
       )}
 
+      {isMeasuring && <LoadingOverlay message="病変を計測しています..." />}
+
       {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
       {toastMessage && <Toast message={toastMessage} />}
