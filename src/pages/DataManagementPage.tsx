@@ -40,10 +40,6 @@ export function DataManagementPage() {
     )
   }, [records, query])
 
-  function handleAddAfter() {
-    navigate('/data/lesion-measurement')
-  }
-
   function handleAddNew() {
     setModel(null)
     navigate('/data/3d-analysis')
@@ -102,7 +98,7 @@ export function DataManagementPage() {
           records={filteredRecords}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
-          onAddAfter={handleAddAfter}
+          onAddAfter={handleAddNew}
         />
       </div>
     </div>
