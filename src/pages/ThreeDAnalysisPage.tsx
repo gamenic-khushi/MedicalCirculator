@@ -24,7 +24,8 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
   }, [model, navigate, viewerPath])
 
   function loadFile(file: File) {
-    setModel(createModel3DFile(file, { folder, studyName }))
+    const uploadedStudyName = file.name.replace(/\.[^./]+$/, '')
+    setModel(createModel3DFile(file, { folder, studyName: uploadedStudyName }))
     navigate(viewerPath)
   }
 
