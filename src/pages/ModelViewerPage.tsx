@@ -104,6 +104,29 @@ export function ModelViewerPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!ffrResult) return
+    const result = ffrResult
+    const referenceDiameter = (Number(upstreamDiameter) + Number(downstreamDiameter)) / 2
+    if (!(referenceDiameter > 0)) return
+
+    let frame = 0
+    let rafId: number
+    function tryHighlight() {
+      const applied = canvasRef.current?.highlightAt(
+        result.originX,
+        result.originY,
+        referenceDiameter,
+      )
+      if (applied) return
+      frame += 1
+      if (frame < 60) rafId = requestAnimationFrame(tryHighlight)
+    }
+    rafId = requestAnimationFrame(tryHighlight)
+    return () => cancelAnimationFrame(rafId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   if (!validModel) {
     return <Navigate to="/3d-analysis" replace />
   }
