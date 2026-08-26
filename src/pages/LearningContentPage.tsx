@@ -5,10 +5,12 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useModel3D } from '@/hooks/useModel3D'
+import { useViewerState } from '@/hooks/useViewerState'
 import { pickModelFile } from '@/lib/filePickerMemory'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { createModel3DFile } from '@/types/model'
+import type { SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
@@ -34,9 +36,26 @@ async function fetchAllFrames(): Promise<LearningContentFrame[]> {
   return rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
 }
 
+function frameToSnapshot(frame: LearningContentFrame): SavedSnapshot {
+  return {
+    id: frame.id,
+    image: frame.image,
+    date: '',
+    upstreamSize: frame.upstreamSize,
+    downstreamSize: frame.downstreamSize,
+    pd: frame.pd,
+    pa: frame.pa,
+    stenosisRate: frame.stenosisRate ?? '—',
+    mla: frame.mla ?? '—',
+    lumenVolume: frame.lumenVolume ?? '—',
+    bifurcationAngle: frame.bifurcationAngle ?? '—',
+  }
+}
+
 export function LearningContentPage() {
   const navigate = useNavigate()
   const { setModel } = useModel3D()
+  const { setSavedSnapshots } = useViewerState()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -46,6 +65,7 @@ export function LearningContentPage() {
 
   function loadFile(file: File) {
     setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
+    setSavedSnapshots(frames.map(frameToSnapshot))
     navigate('/3d-analysis/viewer')
   }
 
