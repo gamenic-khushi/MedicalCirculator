@@ -45,6 +45,10 @@ export function DataManagementPage() {
     navigate('/data/3d-analysis')
   }
 
+  function handleAddAfter() {
+    navigate('/data/lesion-measurement')
+  }
+
   async function handleDelete(id: string) {
     await databaseService.remove('data_records', id)
     setRecords((prev) => prev.filter((record) => record.id !== id))
@@ -98,7 +102,7 @@ export function DataManagementPage() {
           records={filteredRecords}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
-          onAddAfter={handleAddNew}
+          onAddAfter={handleAddAfter}
         />
       </div>
     </div>
