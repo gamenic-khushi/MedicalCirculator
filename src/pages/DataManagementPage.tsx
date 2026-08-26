@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DataRecordTable } from '@/components/data/DataRecordTable'
+import { useModel3D } from '@/hooks/useModel3D'
 import { databaseService } from '@/services/appwrite/database'
 import type { DataRecord } from '@/types/dataRecord'
 
@@ -18,6 +19,7 @@ function todayDisplayDate(): string {
 
 export function DataManagementPage() {
   const navigate = useNavigate()
+  const { setModel } = useModel3D()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
 
@@ -40,6 +42,11 @@ export function DataManagementPage() {
 
   function handleAddAfter() {
     navigate('/data/lesion-measurement')
+  }
+
+  function handleAddNew() {
+    setModel(null)
+    navigate('/data/3d-analysis')
   }
 
   async function handleDelete(id: string) {
@@ -70,7 +77,7 @@ export function DataManagementPage() {
           <h1 className="text-2xl font-bold text-gray-900">学習データ管理</h1>
           <button
             type="button"
-            onClick={() => navigate('/data/3d-analysis')}
+            onClick={handleAddNew}
             className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
           >
             <Upload className="h-4 w-4" />
