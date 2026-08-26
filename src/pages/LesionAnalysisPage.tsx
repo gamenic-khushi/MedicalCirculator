@@ -196,6 +196,26 @@ export function LesionAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    const container = canvasAreaRef.current
+    if (!container) return
+
+    function syncAnnotationPositions() {
+      setAnnotations((prev) =>
+        prev.map((annotation) => {
+          if (!annotation.worldPoint) return annotation
+          const projected = canvasRef.current?.projectWorldPoint(annotation.worldPoint)
+          if (!projected) return annotation
+          return { ...annotation, x: projected.x, y: projected.y }
+        }),
+      )
+    }
+
+    const observer = new ResizeObserver(syncAnnotationPositions)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
   if (!validModel) {
     return <Navigate to="/data/3d-analysis" replace />
   }
