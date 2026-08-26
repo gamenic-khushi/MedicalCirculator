@@ -1,16 +1,20 @@
 import { Query, type Models } from 'appwrite'
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useModel3D } from '@/hooks/useModel3D'
+import { pickModelFile } from '@/lib/filePickerMemory'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
+import { createModel3DFile } from '@/types/model'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const PAGE_SIZE = 100
+const DEFAULT_FOLDER = '２D心弁解析'
+const DEFAULT_STUDY_NAME = 'XYZ心臓病研究'
 
 async function fetchAllFrames(): Promise<LearningContentFrame[]> {
   const rows: LearningContentFrameRow[] = []
@@ -34,14 +38,25 @@ export function LearningContentPage() {
   const navigate = useNavigate()
   const { setModel } = useModel3D()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchAllFrames().then(setFrames)
   }, [])
 
-  function handleAddNew() {
-    setModel(null)
-    navigate('/3d-analysis')
+  function loadFile(file: File) {
+    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
+    navigate('/3d-analysis/viewer')
+  }
+
+  function handleFileSelected(files: FileList | null) {
+    if (!files?.length) return
+    loadFile(files[0])
+  }
+
+  async function handleAddNew() {
+    const file = await pickModelFile(() => inputRef.current?.click())
+    if (file) loadFile(file)
   }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
@@ -80,6 +95,13 @@ export function LearningContentPage() {
         >
           <Plus className="h-4 w-4" />
         </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".fbx,.stl,.obj"
+          className="hidden"
+          onChange={(event) => handleFileSelected(event.target.files)}
+        />
       </div>
 
       <div className="mt-4">
