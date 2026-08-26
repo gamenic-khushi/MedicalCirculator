@@ -1,8 +1,10 @@
 import { Query, type Models } from 'appwrite'
+import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
+import { useModel3D } from '@/hooks/useModel3D'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 
@@ -29,11 +31,18 @@ async function fetchAllFrames(): Promise<LearningContentFrame[]> {
 }
 
 export function LearningContentPage() {
+  const navigate = useNavigate()
+  const { setModel } = useModel3D()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
 
   useEffect(() => {
     fetchAllFrames().then(setFrames)
   }, [])
+
+  function handleAddNew() {
+    setModel(null)
+    navigate('/data/3d-analysis')
+  }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
     await databaseService.update<LearningContentFrameRow>('learning_content_frames', id, data)
@@ -53,6 +62,17 @@ export function LearningContentPage() {
         </Link>
         <span>/</span>
         <span className="font-medium text-gray-900">学習内容</span>
+      </div>
+
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={handleAddNew}
+          title="新規追加"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="mt-4">
