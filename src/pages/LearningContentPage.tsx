@@ -84,7 +84,7 @@ export function LearningContentPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="mt-3 flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-900">{DEFAULT_STUDY_NAME}</span>
+        <span className="text-2xl font-bold text-gray-900">{DEFAULT_STUDY_NAME}</span>
         <button
           type="button"
           onClick={handleAddNew}
