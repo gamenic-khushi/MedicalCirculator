@@ -453,16 +453,14 @@ export function ModelViewerPage() {
           {validModel.folder} ＞ {validModel.studyName}
         </h1>
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
-          {ffrResult && (
-            <button
-              type="button"
-              onClick={handleRemoveModel}
-              className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-            >
-              <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
-              新しいモデルをアップロード
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleRemoveModel}
+            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+          >
+            <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
+            新しいモデルをアップロード
+          </button>
           <button
             type="button"
             onClick={handleDownloadPdf}
@@ -610,7 +608,7 @@ export function ModelViewerPage() {
               onClick={handleSaveSnapshot}
               className="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
             >
-              キャプチャ
+              仮保存
             </button>
           </div>
         </div>
