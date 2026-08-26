@@ -1,8 +1,7 @@
 import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Lasso, Menu, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
-import vectorIcon from '@/assets/SVG/Vector.svg'
+import { Lasso, Menu, Table2, Trash2, Upload, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
@@ -456,15 +455,15 @@ export function ModelViewerPage() {
           <button
             type="button"
             onClick={handleRemoveModel}
-            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
           >
-            <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
+            <Upload className="h-4 w-4" />
             新しいモデルをアップロード
           </button>
           <button
             type="button"
             onClick={handleDownloadPdf}
-            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
           >
             PDFダウンロード
           </button>
@@ -473,7 +472,7 @@ export function ModelViewerPage() {
               type="button"
               onClick={handleSaveCurrentToLearningData}
               disabled={!ffrResult}
-              className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               学習データに保存
             </button>
@@ -596,7 +595,7 @@ export function ModelViewerPage() {
               disabled={!canCalculateFfr}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
                 canCalculateFfr
-                  ? 'bg-gray-700 text-white hover:bg-gray-800'
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : 'cursor-not-allowed bg-gray-100 text-gray-400'
               }`}
               title={disabledFfrReason}
@@ -606,7 +605,7 @@ export function ModelViewerPage() {
             <button
               type="button"
               onClick={handleSaveSnapshot}
-              className="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
             >
               仮保存
             </button>

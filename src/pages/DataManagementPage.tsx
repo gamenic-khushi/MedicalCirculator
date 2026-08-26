@@ -1,9 +1,8 @@
 import type { Models } from 'appwrite'
-import { Search } from 'lucide-react'
+import { Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import vectorIcon from '@/assets/SVG/Vector.svg'
 import { DataRecordTable } from '@/components/data/DataRecordTable'
 import { databaseService } from '@/services/appwrite/database'
 import type { DataRecord } from '@/types/dataRecord'
@@ -72,9 +71,9 @@ export function DataManagementPage() {
           <button
             type="button"
             onClick={() => navigate('/data/3d-analysis')}
-            className="flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
           >
-            <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
+            <Upload className="h-4 w-4" />
             新規追加
           </button>
         </div>

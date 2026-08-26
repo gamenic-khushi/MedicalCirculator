@@ -611,7 +611,7 @@ export function LesionAnalysisPage() {
           onClick={handleCalculateFfr}
           disabled={!canCalculate}
           title={disabledReason}
-          className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           FFRを計算
         </button>
@@ -619,7 +619,7 @@ export function LesionAnalysisPage() {
           type="button"
           onClick={handleSave}
           disabled={!measurement || isSaving}
-          className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSaving ? '保存中...' : '保存'}
         </button>
