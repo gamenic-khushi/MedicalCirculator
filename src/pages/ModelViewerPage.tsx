@@ -689,27 +689,29 @@ export function ModelViewerPage() {
                   <Menu className="h-4 w-4" />
                 </button>
               </div>
-              {savedSnapshots.map((snapshot) => (
-                <div
-                  key={snapshot.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-gray-500">{snapshot.date}</p>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSnapshot(snapshot.id)}
-                      className="rounded p-1 text-gray-400 transition hover:text-gray-600"
-                      title="削除"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+              <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1">
+                {savedSnapshots.map((snapshot) => (
+                  <div
+                    key={snapshot.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-gray-500">{snapshot.date}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSnapshot(snapshot.id)}
+                        className="rounded p-1 text-gray-400 transition hover:text-gray-600"
+                        title="削除"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="overflow-hidden rounded-lg bg-gray-800">
+                      <img src={snapshot.image} alt="保存されたモデル画像" className="w-full" />
+                    </div>
                   </div>
-                  <div className="overflow-hidden rounded-lg bg-gray-800">
-                    <img src={snapshot.image} alt="保存されたモデル画像" className="w-full" />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )
         ) : (
