@@ -456,7 +456,7 @@ export function LesionAnalysisPage() {
         file: currentModel.file.name,
         owner: user?.name ?? '',
       })
-      navigate('/data')
+      navigate('/data/learning-content')
     } catch (error) {
       console.error(error)
       showToast('保存に失敗しました')
