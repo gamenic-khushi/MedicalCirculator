@@ -142,9 +142,7 @@ export function LesionAnalysisPage() {
     navigationState?.cameraState ?? null,
   )
   const [isAnnotating, setIsAnnotating] = useState(false)
-  const [annotations, setAnnotations] = useState<Annotation[]>(
-    initialAnnotation ? [initialAnnotation] : [],
-  )
+  const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
   const [bloodPressure, setBloodPressure] = useState(initialBloodPressure ?? '')
   const [params, setParams] = useState<Record<ParamKey, string>>(EMPTY_PARAMS)
@@ -166,17 +164,18 @@ export function LesionAnalysisPage() {
 
     const rawWorldPoint = startingAnnotation.worldPoint
     if (!rawWorldPoint) {
+      setAnnotations([startingAnnotation])
       measureLesion(startingAnnotation)
       return
     }
-    const annotationId = startingAnnotation.id
     const worldPoint: [number, number, number] = rawWorldPoint
     const expectedTarget = cameraState?.target ?? null
 
-    const MAX_FRAMES_BEFORE_GIVING_UP = 600
+    const POLL_INTERVAL_MS = 100
+    const MAX_ATTEMPTS_BEFORE_GIVING_UP = 100
     const TARGET_EPSILON = 0.01
-    let frame = 0
-    let rafId: number
+    let attempt = 0
+    let timeoutId: ReturnType<typeof setTimeout>
 
     function cameraSettled() {
       if (!expectedTarget) return true
@@ -191,27 +190,24 @@ export function LesionAnalysisPage() {
       const projected = canvasRef.current?.projectWorldPoint(worldPoint)
       if (projected && cameraSettled()) {
         const updated = { ...startingAnnotation, x: projected.x, y: projected.y }
-        setAnnotations((prev) =>
-          prev.map((annotation) => (annotation.id === annotationId ? updated : annotation)),
-        )
+        setAnnotations([updated])
         measureLesion(updated)
         return
       }
-      frame += 1
-      if (frame < MAX_FRAMES_BEFORE_GIVING_UP) {
-        rafId = requestAnimationFrame(tryProject)
+      attempt += 1
+      if (attempt < MAX_ATTEMPTS_BEFORE_GIVING_UP) {
+        timeoutId = setTimeout(tryProject, POLL_INTERVAL_MS)
       } else if (projected) {
         const updated = { ...startingAnnotation, x: projected.x, y: projected.y }
-        setAnnotations((prev) =>
-          prev.map((annotation) => (annotation.id === annotationId ? updated : annotation)),
-        )
+        setAnnotations([updated])
         measureLesion(updated)
       } else {
+        setAnnotations([startingAnnotation])
         measureLesion(startingAnnotation)
       }
     }
-    rafId = requestAnimationFrame(tryProject)
-    return () => cancelAnimationFrame(rafId)
+    timeoutId = setTimeout(tryProject, POLL_INTERVAL_MS)
+    return () => clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
