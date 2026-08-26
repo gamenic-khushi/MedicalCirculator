@@ -677,8 +677,8 @@ export function ModelViewerPage() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white py-4 pl-4 pr-1 shadow-sm">
+              <div className="flex items-center justify-between gap-2 pr-3">
                 <span className="text-sm font-semibold text-gray-900">画像</span>
                 <button
                   type="button"
@@ -689,7 +689,7 @@ export function ModelViewerPage() {
                   <Menu className="h-4 w-4" />
                 </button>
               </div>
-              <div className="flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-1">
+              <div className="pill-scrollbar flex max-h-[70vh] flex-col gap-3 overflow-y-auto pr-3">
                 {savedSnapshots.map((snapshot) => (
                   <div
                     key={snapshot.id}
