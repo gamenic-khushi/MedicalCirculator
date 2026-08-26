@@ -41,7 +41,7 @@ export function LearningContentPage() {
 
   function handleAddNew() {
     setModel(null)
-    navigate('/data/3d-analysis')
+    navigate('/3d-analysis')
   }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
