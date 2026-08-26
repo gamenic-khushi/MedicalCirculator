@@ -3,6 +3,7 @@ import { Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { AlertDialog } from '@/components/common/AlertDialog'
 import { DataRecordTable } from '@/components/data/DataRecordTable'
 import { useModel3D } from '@/hooks/useModel3D'
 import { databaseService } from '@/services/appwrite/database'
@@ -19,9 +20,10 @@ function todayDisplayDate(): string {
 
 export function DataManagementPage() {
   const navigate = useNavigate()
-  const { setModel } = useModel3D()
+  const { model, setModel } = useModel3D()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
+  const [showUploadPrompt, setShowUploadPrompt] = useState(false)
 
   useEffect(() => {
     databaseService.list<DataRecordRow>('data_records').then(({ rows }) => {
@@ -46,6 +48,11 @@ export function DataManagementPage() {
   }
 
   function handleAddAfter() {
+    const validModel = model && model.file instanceof File ? model : null
+    if (!validModel) {
+      setShowUploadPrompt(true)
+      return
+    }
     navigate('/data/lesion-measurement')
   }
 
@@ -105,6 +112,13 @@ export function DataManagementPage() {
           onAddAfter={handleAddAfter}
         />
       </div>
+
+      {showUploadPrompt && (
+        <AlertDialog
+          message="先に3D分析ページでモデルをアップロードしてください"
+          onConfirm={() => setShowUploadPrompt(false)}
+        />
+      )}
     </div>
   )
 }
