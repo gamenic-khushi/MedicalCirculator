@@ -149,7 +149,7 @@ export function LesionAnalysisPage() {
   const [selectedLesion, setSelectedLesion] =
     useState<SelectedLesionFormData>(EMPTY_SELECTED_LESION)
   const [snapshotImage, setSnapshotImage] = useState<string | null>(null)
-  const [isMeasuring, setIsMeasuring] = useState(false)
+  const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotation))
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
