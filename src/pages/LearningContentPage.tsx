@@ -1,22 +1,18 @@
 import { Query, type Models } from 'appwrite'
 import { Plus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
-import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
-import { pickModelFile } from '@/lib/filePickerMemory'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
-import { createModel3DFile } from '@/types/model'
 import type { SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const PAGE_SIZE = 100
-const DEFAULT_FOLDER = '２D心弁解析'
-const DEFAULT_STUDY_NAME = 'XYZ心臓病研究'
+const DEFAULT_STUDY_NAME = '２D心弁解析'
 
 async function fetchAllFrames(): Promise<LearningContentFrame[]> {
   const rows: LearningContentFrameRow[] = []
@@ -63,29 +59,13 @@ function frameToSnapshot(frame: LearningContentFrame): SavedSnapshot {
 
 export function LearningContentPage() {
   const navigate = useNavigate()
-  const { setModel } = useModel3D()
   const { setSavedSnapshots } = useViewerState()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [studyName, setStudyName] = useState(DEFAULT_STUDY_NAME)
 
   useEffect(() => {
     fetchAllFrames().then(setFrames)
   }, [])
-
-  function loadFile(file: File) {
-    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
-    navigate('/3d-analysis/viewer')
-  }
-
-  function handleFileSelected(files: FileList | null) {
-    if (!files?.length) return
-    loadFile(files[0])
-  }
-
-  async function handleUploadNew() {
-    const file = await pickModelFile(() => inputRef.current?.click())
-    if (file) loadFile(file)
-  }
 
   function handleAddNew() {
     setSavedSnapshots(frames.map(frameToSnapshot))
@@ -113,13 +93,12 @@ export function LearningContentPage() {
       </div>
 
       <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={handleUploadNew}
-          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-        >
-          ファイル名
-        </button>
+        <input
+          type="text"
+          value={studyName}
+          onChange={(event) => setStudyName(event.target.value)}
+          className="w-56 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-indigo-400"
+        />
         <button
           type="button"
           onClick={handleAddNew}
@@ -128,13 +107,6 @@ export function LearningContentPage() {
         >
           <Plus className="h-4 w-4" />
         </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".fbx,.stl,.obj"
-          className="hidden"
-          onChange={(event) => handleFileSelected(event.target.files)}
-        />
       </div>
 
       <div className="mt-4">
