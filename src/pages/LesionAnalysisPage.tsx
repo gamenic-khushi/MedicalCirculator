@@ -169,13 +169,25 @@ export function LesionAnalysisPage() {
     }
     const annotationId = startingAnnotation.id
     const worldPoint: [number, number, number] = rawWorldPoint
+    const expectedTarget = cameraState?.target ?? null
 
-    const MIN_FRAMES_BEFORE_TRUST = 3
+    const MAX_FRAMES_BEFORE_GIVING_UP = 600
+    const TARGET_EPSILON = 0.01
     let frame = 0
     let rafId: number
+
+    function cameraSettled() {
+      if (!expectedTarget) return true
+      const currentTarget = canvasRef.current?.getCameraState()?.target
+      if (!currentTarget) return false
+      return expectedTarget.every(
+        (value, index) => Math.abs(value - currentTarget[index]) < TARGET_EPSILON,
+      )
+    }
+
     function tryProject() {
       const projected = canvasRef.current?.projectWorldPoint(worldPoint)
-      if (projected && frame >= MIN_FRAMES_BEFORE_TRUST) {
+      if (projected && cameraSettled()) {
         const updated = { ...startingAnnotation, x: projected.x, y: projected.y }
         setAnnotations((prev) =>
           prev.map((annotation) => (annotation.id === annotationId ? updated : annotation)),
@@ -184,8 +196,14 @@ export function LesionAnalysisPage() {
         return
       }
       frame += 1
-      if (frame < 30) {
+      if (frame < MAX_FRAMES_BEFORE_GIVING_UP) {
         rafId = requestAnimationFrame(tryProject)
+      } else if (projected) {
+        const updated = { ...startingAnnotation, x: projected.x, y: projected.y }
+        setAnnotations((prev) =>
+          prev.map((annotation) => (annotation.id === annotationId ? updated : annotation)),
+        )
+        measureLesion(updated)
       } else {
         measureLesion(startingAnnotation)
       }
