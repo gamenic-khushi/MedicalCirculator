@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
+import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
+import { loadDefaultModel } from '@/lib/defaultModel'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import type { SavedSnapshot } from '@/types/viewerState'
@@ -59,6 +61,7 @@ function frameToSnapshot(frame: LearningContentFrame): SavedSnapshot {
 
 export function LearningContentPage() {
   const navigate = useNavigate()
+  const { model, setModel } = useModel3D()
   const { setSavedSnapshots } = useViewerState()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
 
@@ -66,7 +69,11 @@ export function LearningContentPage() {
     fetchAllFrames().then(setFrames)
   }, [])
 
-  function handleAddNew() {
+  async function handleAddNew() {
+    const validModel = model && model.file instanceof File ? model : null
+    if (!validModel) {
+      setModel(await loadDefaultModel())
+    }
     setSavedSnapshots(frames.map(frameToSnapshot))
     navigate('/3d-analysis/viewer')
   }
