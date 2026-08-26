@@ -1,8 +1,10 @@
 import { Query, type Models } from 'appwrite'
+import { Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
+import { useModel3D } from '@/hooks/useModel3D'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 
@@ -29,11 +31,18 @@ async function fetchAllFrames(): Promise<LearningContentFrame[]> {
 }
 
 export function LearningContentPage() {
+  const navigate = useNavigate()
+  const { setModel } = useModel3D()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
 
   useEffect(() => {
     fetchAllFrames().then(setFrames)
   }, [])
+
+  function handleAddNew() {
+    setModel(null)
+    navigate('/data/3d-analysis')
+  }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
     await databaseService.update<LearningContentFrameRow>('learning_content_frames', id, data)
@@ -47,12 +56,22 @@ export function LearningContentPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link to="/data" className="hover:text-gray-700">
-          学習データ管理
-        </Link>
-        <span>/</span>
-        <span className="font-medium text-gray-900">学習内容</span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Link to="/data" className="hover:text-gray-700">
+            学習データ管理
+          </Link>
+          <span>/</span>
+          <span className="font-medium text-gray-900">学習内容</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleAddNew}
+          className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
+        >
+          <Upload className="h-4 w-4" />
+          新規追加
+        </button>
       </div>
 
       <div className="mt-4">
