@@ -6,7 +6,7 @@ import { useModel3D } from '@/hooks/useModel3D'
 import { createModel3DFile } from '@/types/model'
 
 const DEFAULT_FOLDER = '２D心弁解析'
-const DEFAULT_STUDY_NAME = 'XYZ心臓病研究'
+const DEFAULT_STUDY_NAME = '２D心弁解析'
 
 interface ThreeDAnalysisPageProps {
   viewerPath?: string
