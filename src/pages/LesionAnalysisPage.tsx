@@ -14,6 +14,7 @@ import {
   type ViewerTool,
 } from '@/components/model-viewer/ModelCanvas'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
+import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPanel'
 import {
   SelectedLesionModal,
   type SelectedLesionFormData,
@@ -22,6 +23,7 @@ import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
+import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
@@ -127,6 +129,7 @@ export function LesionAnalysisPage() {
   const { model } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
   const { user } = useAuth()
+  const { savedSnapshots, setSavedSnapshots, isTableView, setIsTableView } = useViewerState()
   const navigate = useNavigate()
   const location = useLocation()
   const navigationState = location.state as {
@@ -243,6 +246,10 @@ export function LesionAnalysisPage() {
   function handleToolChange(tool: ViewerTool) {
     setActiveTool(tool)
     canvasRef.current?.setTool(tool)
+  }
+
+  function handleDeleteSnapshot(id: string) {
+    setSavedSnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id))
   }
 
   function handleResetAnnotations() {
@@ -490,7 +497,13 @@ export function LesionAnalysisPage() {
         <span className="font-medium text-gray-900">病変形状測定</span>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[220px_260px_1fr]">
+      <div
+        className={`mt-6 grid grid-cols-1 gap-4 ${
+          isTableView
+            ? 'pill-scrollbar overflow-x-auto lg:grid-cols-[220px_260px_700px_980px]'
+            : 'lg:grid-cols-[220px_260px_1fr_220px]'
+        }`}
+      >
         <div className="flex flex-1 flex-col gap-4">
           <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
             <BloodPressureCard
@@ -629,6 +642,13 @@ export function LesionAnalysisPage() {
             />
           </div>
         </div>
+
+        <SavedSnapshotsPanel
+          savedSnapshots={savedSnapshots}
+          isTableView={isTableView}
+          onSetTableView={setIsTableView}
+          onDelete={handleDeleteSnapshot}
+        />
       </div>
 
       <div className="mt-4 flex justify-end gap-3">
