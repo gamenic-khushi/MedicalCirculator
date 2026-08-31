@@ -12,7 +12,7 @@ export function PressurePointsPanel({ pa, pd }: PressurePointsPanelProps) {
   const values = { Pa: pa, Pd: pd }
 
   return (
-    <div className="absolute right-4 top-[60%] flex -translate-y-1/2 flex-col gap-2">
+    <div className="absolute right-4 top-[78%] flex -translate-y-1/2 flex-col gap-2">
       {POINTS.map((point) => (
         <div
           key={point.key}

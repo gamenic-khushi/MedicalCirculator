@@ -22,6 +22,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
+import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
@@ -35,13 +36,6 @@ const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
 const DEFAULT_RING_RADIUS_PX = 12
-
-function formatSnapshotDate(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  const datePart = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`
-  const timePart = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  return `${datePart} ${timePart}`
-}
 
 export function ModelViewerPage() {
   const navigate = useNavigate()

@@ -1,6 +1,5 @@
-import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { Lasso, Pencil, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
@@ -21,26 +20,14 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
-import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
+import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
-import { databaseService } from '@/services/appwrite/database'
-import type { DataRecord } from '@/types/dataRecord'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import type { Annotation, CameraState, FfrResult } from '@/types/viewerState'
-
-type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
-type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
-
-function todayDisplayDate(): string {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}/${month}/${day}`
-}
 
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
@@ -128,9 +115,7 @@ function LesionSnapshotPanel({
 export function LesionAnalysisPage() {
   const { model } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
-  const { user } = useAuth()
   const { savedSnapshots, setSavedSnapshots, isTableView, setIsTableView } = useViewerState()
-  const navigate = useNavigate()
   const location = useLocation()
   const navigationState = location.state as {
     bloodPressure?: string
@@ -154,7 +139,6 @@ export function LesionAnalysisPage() {
   const [snapshotImage, setSnapshotImage] = useState<string | null>(null)
   const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotation))
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -442,41 +426,27 @@ export function LesionAnalysisPage() {
     showToast('選択病変を更新しました')
   }
 
-  async function handleSave() {
-    if (!measurement || !validModel) return
-    setIsSaving(true)
+  function handleSave() {
+    if (!measurement) return
     const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
-    const currentModel = validModel
+    if (!image) return
 
-    try {
-      await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
+    setSavedSnapshots((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
         image,
+        date: formatSnapshotDate(new Date()),
         upstreamSize: params.upstreamSize ? `${params.upstreamSize} mm` : '—',
         downstreamSize: params.downstreamSize ? `${params.downstreamSize} mm` : '—',
-        pa: params.pa ? `${params.pa} mmHg` : '—',
         pd: params.pd ? `${params.pd} mmHg` : '—',
-        parameter: params.parameter ? `${params.parameter} mmHg` : '—',
-        mld: params.mld ? `${params.mld} mm` : '—',
-        mla: params.mla ? `${params.mla} mm²` : '—',
+        pa: params.pa ? `${params.pa} mmHg` : '—',
         stenosisRate: params.stenosisRate ? `${params.stenosisRate} %` : '—',
-        avgDiameter: params.avgDiameter ? `${params.avgDiameter} mm` : '—',
+        mla: params.mla ? `${params.mla} mm²` : '—',
         lumenVolume: params.lumenVolume ? `${params.lumenVolume} mm³` : '—',
-        calcificationVolume: params.calcificationVolume || '—',
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
-      })
-      await databaseService.create<DataRecordRow>('data_records', {
-        date: todayDisplayDate(),
-        category: currentModel.studyName,
-        file: currentModel.file.name,
-        owner: user?.name ?? '',
-      })
-      navigate('/data/learning-content')
-    } catch (error) {
-      console.error(error)
-      showToast('保存に失敗しました')
-    } finally {
-      setIsSaving(false)
-    }
+      },
+    ])
   }
 
   const hasMeasurement = selectedLesion.stenosisRate !== ''
@@ -664,10 +634,10 @@ export function LesionAnalysisPage() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={!measurement || isSaving}
+          disabled={!measurement}
           className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isSaving ? '保存中...' : '保存'}
+          保存
         </button>
       </div>
 
