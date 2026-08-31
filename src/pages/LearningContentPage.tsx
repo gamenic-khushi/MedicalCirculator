@@ -75,7 +75,7 @@ export function LearningContentPage() {
       setModel(await loadDefaultModel())
     }
     setSavedSnapshots(frames.map(frameToSnapshot))
-    navigate('/3d-analysis/viewer')
+    navigate('/data/lesion-measurement')
   }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
