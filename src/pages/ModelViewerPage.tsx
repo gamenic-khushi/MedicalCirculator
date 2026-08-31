@@ -576,11 +576,7 @@ export function ModelViewerPage() {
               type="button"
               onClick={handleCalculateFfr}
               disabled={!canCalculateFfr}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                canCalculateFfr
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700'
-                  : 'cursor-not-allowed bg-gray-100 text-gray-400'
-              }`}
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               title={disabledFfrReason}
             >
               {ffrResult ? 'FFRを再計算' : 'FFRを計算'}

@@ -23,7 +23,6 @@ import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
-import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
@@ -31,7 +30,7 @@ import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { isAdminCategory } from '@/types/user'
-import type { Annotation, CameraState, FfrResult } from '@/types/viewerState'
+import type { Annotation, CameraState, FfrResult, SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
@@ -124,7 +123,8 @@ export function LesionAnalysisPage() {
   const isAdmin = isAdminCategory(user?.category)
   const { model, setModel } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
-  const { savedSnapshots, setSavedSnapshots, isTableView, setIsTableView } = useViewerState()
+  const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshot[]>([])
+  const [isTableView, setIsTableView] = useState(false)
   const location = useLocation()
   const navigationState = location.state as {
     bloodPressure?: string
@@ -744,6 +744,26 @@ export function LesionAnalysisPage() {
               onReset={handleResetAnnotations}
             />
           </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-4">
+            <button
+              type="button"
+              onClick={handleCalculateFfr}
+              disabled={!canCalculate}
+              title={disabledReason}
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              FFRを計算
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!measurement}
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              保存
+            </button>
+          </div>
         </div>
 
         <SavedSnapshotsPanel
@@ -752,26 +772,6 @@ export function LesionAnalysisPage() {
           onSetTableView={setIsTableView}
           onDelete={handleDeleteSnapshot}
         />
-      </div>
-
-      <div className="mt-4 flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={handleCalculateFfr}
-          disabled={!canCalculate}
-          title={disabledReason}
-          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          FFRを計算
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!measurement}
-          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          保存
-        </button>
       </div>
 
       {isEditingLesion && measurement && (
