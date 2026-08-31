@@ -1,7 +1,8 @@
-import { Query, type Models } from 'appwrite'
+import { ID, Query, type Models } from 'appwrite'
 
 import type { UserCategory } from '@/types/user'
 
+import { account } from './client'
 import { databaseService } from './database'
 
 export interface AppwriteUser {
@@ -23,132 +24,60 @@ async function lookupCategory(email: string): Promise<UserCategory | undefined> 
   }
 }
 
-const USERS_KEY = 'testAuthUsers'
-const CURRENT_USER_KEY = 'testAuthCurrentUser'
-
-const DEFAULT_TEST_USERS = [
-  { $id: 'test-user', email: 'test@example.com', name: 'Test User', password: 'password' },
-  { $id: 'test-admin', email: 'admin@example.com', name: 'Admin', password: 'password' },
-  { $id: 'test-staff', email: 'staff@example.com', name: 'Staff', password: 'password' },
-]
-
-function getStoredUsers() {
-  try {
-    const raw = localStorage.getItem(USERS_KEY)
-    if (!raw) return DEFAULT_TEST_USERS
-    return JSON.parse(raw) as Array<(typeof DEFAULT_TEST_USERS)[number]>
-  } catch {
-    return DEFAULT_TEST_USERS
-  }
-}
-
-function saveStoredUsers(users: Array<(typeof DEFAULT_TEST_USERS)[number]>) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users))
-}
-
-function setCurrentUser(user: AppwriteUser | null) {
-  if (user) {
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user))
-  } else {
-    localStorage.removeItem(CURRENT_USER_KEY)
-  }
-}
-
-function getCurrentUserFromStorage(): AppwriteUser | null {
-  try {
-    const raw = localStorage.getItem(CURRENT_USER_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as AppwriteUser
-  } catch {
-    return null
+async function toAppwriteUser(me: Models.User<Models.Preferences>): Promise<AppwriteUser> {
+  return {
+    $id: me.$id,
+    email: me.email,
+    name: me.name,
+    category: await lookupCategory(me.email),
   }
 }
 
 export const authService = {
+  /**
+   * Self-registration: creates the account and logs in as it, replacing
+   * whatever session is currently active.
+   */
   async createAccount(email: string, password: string, name?: string): Promise<AppwriteUser> {
-    const users = getStoredUsers()
-    const existing = users.find((user) => user.email === email)
-    if (existing) {
-      throw new Error('既に同じメールアドレスのアカウントが存在します。')
-    }
-
-    const newUser = {
-      $id: `user-${Date.now()}`,
-      email,
-      name: name ?? email,
-      password,
-    }
-
-    saveStoredUsers([...users, newUser])
+    await account.create(ID.unique(), email, password, name)
     return authService.login(email, password)
   },
 
+  /**
+   * Admin-driven creation: creates the account without touching the
+   * caller's own session, so an admin can add a new user while staying
+   * logged in as themselves.
+   */
+  async createAccountWithoutSession(
+    email: string,
+    password: string,
+    name?: string,
+  ): Promise<void> {
+    await account.create(ID.unique(), email, password, name)
+  },
+
   async login(email: string, password: string): Promise<AppwriteUser> {
-    const users = getStoredUsers()
-    const found = users.find((user) => user.email === email && user.password === password)
-    if (!found) {
-      throw new Error('認証に失敗しました。')
-    }
-
-    const currentUser: AppwriteUser = {
-      $id: found.$id,
-      email: found.email,
-      name: found.name,
-      category: await lookupCategory(found.email),
-    }
-
-    setCurrentUser(currentUser)
-    return currentUser
+    await account.createEmailPasswordSession(email, password)
+    return toAppwriteUser(await account.get())
   },
 
   async logout(): Promise<void> {
-    setCurrentUser(null)
+    await account.deleteSession('current')
   },
 
   async getCurrentUser(): Promise<AppwriteUser | null> {
-    const stored = getCurrentUserFromStorage()
-    if (!stored) return null
-    return { ...stored, category: await lookupCategory(stored.email) }
+    try {
+      return await toAppwriteUser(await account.get())
+    } catch {
+      return null
+    }
   },
 
   async updateEmail(newEmail: string, password: string): Promise<AppwriteUser> {
-    const stored = getCurrentUserFromStorage()
-    if (!stored) throw new Error('ログインしていません。')
-
-    const users = getStoredUsers()
-    const index = users.findIndex((user) => user.$id === stored.$id)
-    if (index === -1 || users[index].password !== password) {
-      throw new Error('パスワードが正しくありません。')
-    }
-    if (users.some((user, i) => i !== index && user.email === newEmail)) {
-      throw new Error('既に同じメールアドレスのアカウントが存在します。')
-    }
-
-    const updatedUsers = [...users]
-    updatedUsers[index] = { ...updatedUsers[index], email: newEmail }
-    saveStoredUsers(updatedUsers)
-
-    const currentUser: AppwriteUser = {
-      ...stored,
-      email: newEmail,
-      category: await lookupCategory(newEmail),
-    }
-    setCurrentUser(currentUser)
-    return currentUser
+    return toAppwriteUser(await account.updateEmail(newEmail, password))
   },
 
   async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
-    const stored = getCurrentUserFromStorage()
-    if (!stored) throw new Error('ログインしていません。')
-
-    const users = getStoredUsers()
-    const index = users.findIndex((user) => user.$id === stored.$id)
-    if (index === -1 || users[index].password !== currentPassword) {
-      throw new Error('現在のパスワードが正しくありません。')
-    }
-
-    const updatedUsers = [...users]
-    updatedUsers[index] = { ...updatedUsers[index], password: newPassword }
-    saveStoredUsers(updatedUsers)
+    await account.updatePassword(newPassword, currentPassword)
   },
 }
