@@ -5,11 +5,9 @@ import { useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useModel3D } from '@/hooks/useModel3D'
-import { useViewerState } from '@/hooks/useViewerState'
 import { loadDefaultModel } from '@/lib/defaultModel'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
-import type { SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
@@ -34,35 +32,9 @@ async function fetchAllFrames(): Promise<LearningContentFrame[]> {
   return rows.map(({ $id, $createdAt, ...rest }) => ({ id: $id, createdAt: $createdAt, ...rest }))
 }
 
-function formatFrameDate(createdAt: string | undefined): string {
-  if (!createdAt) return ''
-  const date = new Date(createdAt)
-  const pad = (value: number) => String(value).padStart(2, '0')
-  const datePart = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`
-  const timePart = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  return `${datePart} ${timePart}`
-}
-
-function frameToSnapshot(frame: LearningContentFrame): SavedSnapshot {
-  return {
-    id: frame.id,
-    image: frame.image,
-    date: formatFrameDate(frame.createdAt),
-    upstreamSize: frame.upstreamSize,
-    downstreamSize: frame.downstreamSize,
-    pd: frame.pd,
-    pa: frame.pa,
-    stenosisRate: frame.stenosisRate ?? '—',
-    mla: frame.mla ?? '—',
-    lumenVolume: frame.lumenVolume ?? '—',
-    bifurcationAngle: frame.bifurcationAngle ?? '—',
-  }
-}
-
 export function LearningContentPage() {
   const navigate = useNavigate()
   const { model, setModel } = useModel3D()
-  const { setSavedSnapshots } = useViewerState()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
 
   useEffect(() => {
@@ -74,7 +46,6 @@ export function LearningContentPage() {
     if (!validModel) {
       setModel(await loadDefaultModel())
     }
-    setSavedSnapshots(frames.map(frameToSnapshot))
     navigate('/data/lesion-measurement')
   }
 
