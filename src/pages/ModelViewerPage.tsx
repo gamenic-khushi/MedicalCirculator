@@ -14,7 +14,6 @@ import {
   type ModelCanvasHandle,
   type ViewerTool,
 } from '@/components/model-viewer/ModelCanvas'
-import { MeasurementResultsCard } from '@/components/model-viewer/MeasurementResultsCard'
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
@@ -483,16 +482,6 @@ export function ModelViewerPage() {
             value={bloodPressure}
             onChange={handleBloodPressureChange}
             onUpdate={handleUpdateBloodPressure}
-          />
-          <MeasurementResultsCard
-            upstreamSize={upstreamDiameter}
-            downstreamSize={downstreamDiameter}
-            pa={calculatedPa}
-            pd={pd}
-            stenosisRate={ffrResult ? String(ffrResult.stenosisRate) : ''}
-            mla={mla}
-            lumenVolume={lumenVolume}
-            bifurcationAngle={bifurcationAngle}
           />
           <ModelInfoCard model={validModel} />
         </div>
