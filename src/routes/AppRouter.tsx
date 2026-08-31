@@ -11,7 +11,6 @@ import { LearningContentPage } from '@/pages/LearningContentPage'
 import { LesionAnalysisPage } from '@/pages/LesionAnalysisPage'
 import { LesionMeasurementPage } from '@/pages/LesionMeasurementPage'
 import { LoginPage } from '@/pages/LoginPage'
-import { LogoutPage } from '@/pages/LogoutPage'
 import { ModelViewerErrorPage } from '@/pages/ModelViewerErrorPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
@@ -99,7 +98,6 @@ const router = createBrowserRouter([
     ],
   },
   { path: '/login', element: <LoginPage /> },
-  { path: '/logout', element: <LogoutPage /> },
 ])
 
 export function AppRouter() {
