@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom'
 
 import { DataRecordTable } from '@/components/data/DataRecordTable'
 import { useModel3D } from '@/hooks/useModel3D'
-import { loadDefaultModel } from '@/lib/defaultModel'
 import { databaseService } from '@/services/appwrite/database'
 import type { DataRecord } from '@/types/dataRecord'
 
@@ -20,7 +19,7 @@ function todayDisplayDate(): string {
 
 export function DataManagementPage() {
   const navigate = useNavigate()
-  const { model, setModel } = useModel3D()
+  const { setModel } = useModel3D()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
 
@@ -44,14 +43,6 @@ export function DataManagementPage() {
   function handleAddNew() {
     setModel(null)
     navigate('/data/3d-analysis')
-  }
-
-  async function handleAddAfter() {
-    const validModel = model && model.file instanceof File ? model : null
-    if (!validModel) {
-      setModel(await loadDefaultModel())
-    }
-    navigate('/data/lesion-measurement')
   }
 
   async function handleDelete(id: string) {
@@ -107,7 +98,6 @@ export function DataManagementPage() {
           records={filteredRecords}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
-          onAddAfter={handleAddAfter}
         />
       </div>
     </div>
