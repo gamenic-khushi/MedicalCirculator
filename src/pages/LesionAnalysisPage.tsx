@@ -1,6 +1,7 @@
+import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Link, Navigate, useLocation } from 'react-router-dom'
-import { Lasso, Pencil, ZoomIn, ZoomOut } from 'lucide-react'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Lasso, Pencil, Upload, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
@@ -20,14 +21,19 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
+import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
+import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
+import { isAdminCategory } from '@/types/user'
 import type { Annotation, CameraState, FfrResult } from '@/types/viewerState'
+
+type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
@@ -113,7 +119,10 @@ function LesionSnapshotPanel({
 }
 
 export function LesionAnalysisPage() {
-  const { model } = useModel3D()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = isAdminCategory(user?.category)
+  const { model, setModel } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
   const { savedSnapshots, setSavedSnapshots, isTableView, setIsTableView } = useViewerState()
   const location = useLocation()
@@ -449,6 +458,101 @@ export function LesionAnalysisPage() {
     ])
   }
 
+  function handleUploadNewModel() {
+    setModel(null)
+    navigate('/data/3d-analysis')
+  }
+
+  function handleDownloadPdf() {
+    if (!validModel) return
+    const image = snapshotImage ?? canvasRef.current?.capture() ?? null
+    const reportWindow = window.open('', '_blank')
+    if (!reportWindow) return
+
+    const rows: [string, string][] = [
+      ['ファイル名', validModel.file.name],
+      ['Pa', params.pa ? `${params.pa} mmHg` : '—'],
+      ['Pd', params.pd ? `${params.pd} mmHg` : '—'],
+      ['Stenosis rate', params.stenosisRate ? `${params.stenosisRate} %` : '—'],
+      ['FFR', measurement ? measurement.ffrValue.toFixed(2) : '—'],
+      ['上流血管のサイズ', params.upstreamSize ? `${params.upstreamSize} mm` : '—'],
+      ['下流血管のサイズ', params.downstreamSize ? `${params.downstreamSize} mm` : '—'],
+      ['MLA', params.mla ? `${params.mla} mm²` : '—'],
+      ['Lumen volume', params.lumenVolume ? `${params.lumenVolume} mm³` : '—'],
+      ['Bifurcation angle', params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—'],
+    ]
+
+    reportWindow.document.write(`<!DOCTYPE html>
+      <html lang="ja">
+        <head>
+          <meta charset="utf-8" />
+          <title>3D医療モデル分析レポート</title>
+          <style>
+            body { font-family: sans-serif; padding: 24px; color: #111; }
+            h1 { font-size: 18px; margin-bottom: 16px; }
+            img { max-width: 100%; border-radius: 8px; margin-bottom: 16px; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            td { padding: 6px 8px; border-bottom: 1px solid #e5e5e5; }
+            td:first-child { color: #666; width: 40%; }
+          </style>
+        </head>
+        <body>
+          <h1>3D医療モデル分析レポート</h1>
+          <div id="image-slot"></div>
+          <table id="data-table"></table>
+        </body>
+      </html>`)
+    reportWindow.document.close()
+
+    if (image) {
+      const img = reportWindow.document.createElement('img')
+      img.src = image
+      img.alt = 'モデル画像'
+      reportWindow.document.getElementById('image-slot')?.appendChild(img)
+    }
+
+    const table = reportWindow.document.getElementById('data-table')
+    for (const [label, value] of rows) {
+      const row = reportWindow.document.createElement('tr')
+      const labelCell = reportWindow.document.createElement('td')
+      labelCell.textContent = label
+      const valueCell = reportWindow.document.createElement('td')
+      valueCell.textContent = value
+      row.append(labelCell, valueCell)
+      table?.appendChild(row)
+    }
+
+    reportWindow.focus()
+    reportWindow.onload = () => reportWindow.print()
+  }
+
+  async function handleSaveToLearningData() {
+    if (!measurement) return
+    const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
+
+    try {
+      await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
+        image,
+        upstreamSize: params.upstreamSize ? `${params.upstreamSize} mm` : '—',
+        downstreamSize: params.downstreamSize ? `${params.downstreamSize} mm` : '—',
+        pa: params.pa ? `${params.pa} mmHg` : '—',
+        pd: params.pd ? `${params.pd} mmHg` : '—',
+        parameter: params.parameter ? `${params.parameter} mmHg` : '—',
+        mld: params.mld ? `${params.mld} mm` : '—',
+        mla: params.mla ? `${params.mla} mm²` : '—',
+        stenosisRate: params.stenosisRate ? `${params.stenosisRate} %` : '—',
+        avgDiameter: params.avgDiameter ? `${params.avgDiameter} mm` : '—',
+        lumenVolume: params.lumenVolume ? `${params.lumenVolume} mm³` : '—',
+        calcificationVolume: params.calcificationVolume || '—',
+        bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
+      })
+      showToast('学習データに保存しました')
+    } catch (error) {
+      console.error(error)
+      showToast('保存に失敗しました')
+    }
+  }
+
   const hasMeasurement = selectedLesion.stenosisRate !== ''
   const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
   const disabledReason = !hasMeasurement
@@ -459,12 +563,41 @@ export function LesionAnalysisPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link to="/data" className="hover:text-gray-700">
-          学習データ管理
-        </Link>
-        <span>/</span>
-        <span className="font-medium text-gray-900">病変形状測定</span>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <Link to="/data" className="hover:text-gray-700">
+            学習データ管理
+          </Link>
+          <span>/</span>
+          <span className="font-medium text-gray-900">病変形状測定</span>
+        </div>
+        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={handleUploadNewModel}
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
+          >
+            <Upload className="h-4 w-4" />
+            新しいモデルをアップロード
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
+          >
+            PDFダウンロード
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleSaveToLearningData}
+              disabled={!measurement}
+              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              学習データに保存
+            </button>
+          )}
+        </div>
       </div>
 
       <div
