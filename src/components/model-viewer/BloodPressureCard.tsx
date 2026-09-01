@@ -27,7 +27,7 @@ export function BloodPressureCard({ value, onChange, onUpdate }: BloodPressureCa
       <button
         type="button"
         onClick={onUpdate}
-        className="mt-3 w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+        className="mt-3 w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
       >
         更新
       </button>

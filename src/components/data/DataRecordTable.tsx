@@ -9,15 +9,9 @@ interface DataRecordTableProps {
   records: DataRecord[]
   onDelete: (id: string) => void
   onDuplicate: (record: DataRecord) => void
-  onAddAfter: () => void
 }
 
-export function DataRecordTable({
-  records,
-  onDelete,
-  onDuplicate,
-  onAddAfter,
-}: DataRecordTableProps) {
+export function DataRecordTable({ records, onDelete, onDuplicate }: DataRecordTableProps) {
   const navigate = useNavigate()
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
@@ -57,7 +51,6 @@ export function DataRecordTable({
                     onEdit={openLearningContent}
                     onDelete={() => setPendingDeleteId(record.id)}
                     onDuplicate={() => onDuplicate(record)}
-                    onAdd={onAddAfter}
                   />
                 </td>
               </tr>

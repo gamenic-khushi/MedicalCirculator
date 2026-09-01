@@ -28,6 +28,7 @@ body {
 
 .pill-scrollbar::-webkit-scrollbar {
   height: 8px;
+  width: 6px;
 }
 
 .pill-scrollbar::-webkit-scrollbar-track {

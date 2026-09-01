@@ -1,10 +1,10 @@
 import type { Models } from 'appwrite'
-import { Search } from 'lucide-react'
+import { Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import vectorIcon from '@/assets/SVG/Vector.svg'
 import { DataRecordTable } from '@/components/data/DataRecordTable'
+import { useModel3D } from '@/hooks/useModel3D'
 import { databaseService } from '@/services/appwrite/database'
 import type { DataRecord } from '@/types/dataRecord'
 
@@ -19,6 +19,7 @@ function todayDisplayDate(): string {
 
 export function DataManagementPage() {
   const navigate = useNavigate()
+  const { setModel } = useModel3D()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
 
@@ -39,8 +40,9 @@ export function DataManagementPage() {
     )
   }, [records, query])
 
-  function handleAddAfter() {
-    navigate('/data/lesion-measurement')
+  function handleAddNew() {
+    setModel(null)
+    navigate('/data/3d-analysis')
   }
 
   async function handleDelete(id: string) {
@@ -71,10 +73,10 @@ export function DataManagementPage() {
           <h1 className="text-2xl font-bold text-gray-900">学習データ管理</h1>
           <button
             type="button"
-            onClick={() => navigate('/data/3d-analysis')}
-            className="flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            onClick={handleAddNew}
+            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
-            <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
+            <Upload className="h-4 w-4" />
             新規追加
           </button>
         </div>
@@ -96,7 +98,6 @@ export function DataManagementPage() {
           records={filteredRecords}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
-          onAddAfter={handleAddAfter}
         />
       </div>
     </div>

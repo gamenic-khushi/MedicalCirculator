@@ -44,7 +44,7 @@ export function DocumentNameModal({
         <div className="mt-2 flex justify-end">
           <button
             type="submit"
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
             {initialName ? '保存' : '登録'}
           </button>

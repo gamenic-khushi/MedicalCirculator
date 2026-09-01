@@ -31,7 +31,7 @@ export interface ModelCanvasHandle {
     y2Percent: number,
   ) => number | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
-  highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => void
+  highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => boolean
   clearSelection: () => void
   hideHighlight: () => void
   showHighlight: () => void
@@ -384,7 +384,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     },
     highlightAt: (xPercent, yPercent, referenceWidth) => {
       const hit = getHitResult(xPercent, yPercent)
-      if (!hit || !(hit.object instanceof THREE.Mesh)) return
+      if (!hit || !(hit.object instanceof THREE.Mesh)) return false
       const width = referenceWidth ?? computeVesselWidth(xPercent, yPercent)
       const radius = width ? (width / 2) * 0.55 : FALLBACK_HIGHLIGHT_RADIUS
 
@@ -394,6 +394,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       paintedMeshRef.current = hit.object
       lastHighlightRef.current = { point: hit.point.clone(), radius }
       paintVesselFill(hit.object, hit.point, radius)
+      return true
     },
     clearSelection: () => {
       if (paintedMeshRef.current) {

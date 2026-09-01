@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { UserFormModal } from '@/components/users/UserFormModal'
 import { UserTable } from '@/components/users/UserTable'
+import { authService } from '@/services/appwrite/auth'
 import { databaseService } from '@/services/appwrite/database'
 import type { AppUser, UserCategory } from '@/types/user'
 
@@ -49,10 +50,14 @@ export function UserManagementPage() {
     [users],
   )
 
-  async function handleAdd(data: UserFormData) {
+  async function handleAdd(data: UserFormData & { password?: string }) {
+    const { password, ...profileData } = data
+    if (password) {
+      await authService.createAccountWithoutSession(profileData.email, password, profileData.name)
+    }
     const row = await databaseService.create<UserRow>('users', {
       date: todayDisplayDate(),
-      ...data,
+      ...profileData,
     })
     const { $id, ...rest } = row
     setUsers((prev) => [{ id: $id, ...rest }, ...prev])
@@ -93,7 +98,7 @@ export function UserManagementPage() {
           <button
             type="button"
             onClick={() => setIsAdding(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white transition hover:bg-indigo-700"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700"
             title="ユーザーを追加"
           >
             <Plus className="h-4 w-4" />

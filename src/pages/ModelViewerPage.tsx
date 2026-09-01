@@ -1,11 +1,12 @@
 import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Lasso, Menu, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react'
-import vectorIcon from '@/assets/SVG/Vector.svg'
+import { Lasso, Upload, ZoomIn, ZoomOut } from 'lucide-react'
 
+import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
+import { AnnotationRing } from '@/components/model-viewer/AnnotationRing'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
 import { FfrResultOverlay } from '@/components/model-viewer/FfrResultOverlay'
 import {
@@ -15,12 +16,15 @@ import {
 } from '@/components/model-viewer/ModelCanvas'
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
+import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPanel'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
+import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
+import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { isAdminCategory } from '@/types/user'
@@ -31,13 +35,7 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
-
-function formatSnapshotDate(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  const datePart = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`
-  const timePart = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  return `${datePart} ${timePart}`
-}
+const DEFAULT_RING_RADIUS_PX = 12
 
 export function ModelViewerPage() {
   const navigate = useNavigate()
@@ -87,7 +85,7 @@ export function ModelViewerPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
-  const [isSavingAll, setIsSavingAll] = useState(false)
+  const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -101,6 +99,29 @@ export function ModelViewerPage() {
     return () => {
       document.title = previousTitle
     }
+  }, [])
+
+  useEffect(() => {
+    if (!ffrResult) return
+    const result = ffrResult
+    const referenceDiameter = (Number(upstreamDiameter) + Number(downstreamDiameter)) / 2
+    if (!(referenceDiameter > 0)) return
+
+    let frame = 0
+    let rafId: number
+    function tryHighlight() {
+      const applied = canvasRef.current?.highlightAt(
+        result.originX,
+        result.originY,
+        referenceDiameter,
+      )
+      if (applied) return
+      frame += 1
+      if (frame < 60) rafId = requestAnimationFrame(tryHighlight)
+    }
+    rafId = requestAnimationFrame(tryHighlight)
+    return () => cancelAnimationFrame(rafId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (!validModel) {
@@ -122,6 +143,7 @@ export function ModelViewerPage() {
     setMla('')
     setLumenVolume('')
     setBifurcationAngle('')
+    setRingRadius(DEFAULT_RING_RADIUS_PX)
     canvasRef.current?.clearSelection()
   }
 
@@ -298,41 +320,6 @@ export function ModelViewerPage() {
     canvasRef.current?.clearSelection()
   }
 
-  async function createAnnotatedSnapshot(
-    imageDataUrl: string,
-    point: { x: number; y: number } | null,
-  ) {
-    if (!point) return imageDataUrl
-
-    const imageElement = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.onerror = reject
-      img.src = imageDataUrl
-    })
-
-    const originalX = (point.x / 100) * imageElement.width
-    const originalY = (point.y / 100) * imageElement.height
-
-    const cropWidth = Math.min(imageElement.width * 0.45, imageElement.width)
-    const cropHeight = Math.min(imageElement.height * 0.45, imageElement.height)
-    const cropX = Math.min(Math.max(originalX - cropWidth / 2, 0), imageElement.width - cropWidth)
-    const cropY = Math.min(
-      Math.max(originalY - cropHeight / 2, 0),
-      imageElement.height - cropHeight,
-    )
-
-    const canvas = document.createElement('canvas')
-    canvas.width = cropWidth
-    canvas.height = cropHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return imageDataUrl
-
-    ctx.drawImage(imageElement, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
-
-    return canvas.toDataURL('image/png')
-  }
-
   async function handleSaveSnapshot() {
     const image = canvasRef.current?.capture()
     if (!image) return
@@ -431,29 +418,6 @@ export function ModelViewerPage() {
     }
   }
 
-  async function handleSaveAllForTraining() {
-    if (savedSnapshots.length === 0 || isSavingAll) return
-    setIsSavingAll(true)
-
-    try {
-      await Promise.all(
-        savedSnapshots.map((snapshot) =>
-          databaseService.create<LearningContentFrameRow>(
-            'learning_content_frames',
-            buildLearningContentPayload(snapshot),
-          ),
-        ),
-      )
-      setToastMessage('AIトレーニング用に保存しました')
-    } catch (error) {
-      console.error(error)
-      setToastMessage('保存に失敗しました')
-    } finally {
-      setIsSavingAll(false)
-    }
-    setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
-  }
-
   function handleDeleteSnapshot(id: string) {
     setSavedSnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id))
   }
@@ -469,24 +433,20 @@ export function ModelViewerPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {validModel.folder} ＞ {validModel.studyName}
-        </h1>
+        <h1 className="text-2xl font-bold text-gray-900">{validModel.studyName}</h1>
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
-          {ffrResult && (
-            <button
-              type="button"
-              onClick={handleRemoveModel}
-              className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
-            >
-              <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
-              新しいモデルをアップロード
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleRemoveModel}
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
+          >
+            <Upload className="h-4 w-4" />
+            新しいモデルをアップロード
+          </button>
           <button
             type="button"
             onClick={handleDownloadPdf}
-            className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
             PDFダウンロード
           </button>
@@ -495,7 +455,7 @@ export function ModelViewerPage() {
               type="button"
               onClick={handleSaveCurrentToLearningData}
               disabled={!ffrResult}
-              className="flex items-center justify-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               学習データに保存
             </button>
@@ -551,10 +511,13 @@ export function ModelViewerPage() {
 
             {!ffrResult &&
               annotations.map((annotation) => (
-                <div
+                <AnnotationRing
                   key={annotation.id}
-                  style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                  className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
+                  x={annotation.x}
+                  y={annotation.y}
+                  radius={ringRadius}
+                  onRadiusChange={setRingRadius}
+                  containerRef={canvasAreaRef}
                 />
               ))}
 
@@ -613,11 +576,7 @@ export function ModelViewerPage() {
               type="button"
               onClick={handleCalculateFfr}
               disabled={!canCalculateFfr}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                canCalculateFfr
-                  ? 'bg-gray-700 text-white hover:bg-gray-800'
-                  : 'cursor-not-allowed bg-gray-100 text-gray-400'
-              }`}
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               title={disabledFfrReason}
             >
               {ffrResult ? 'FFRを再計算' : 'FFRを計算'}
@@ -625,146 +584,22 @@ export function ModelViewerPage() {
             <button
               type="button"
               onClick={handleSaveSnapshot}
-              className="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
             >
-              キャプチャ
+              仮保存
             </button>
           </div>
         </div>
 
-        {savedSnapshots.length > 0 ? (
-          isTableView ? (
-            <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-4">
-                <button
-                  type="button"
-                  onClick={() => setIsTableView(false)}
-                  className="text-gray-400 transition hover:text-gray-600"
-                  title="カード表示に戻る"
-                >
-                  <Menu className="h-4 w-4" />
-                </button>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={handleSaveAllForTraining}
-                    disabled={isSavingAll}
-                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSavingAll ? '保存中...' : '学習データに保存'}
-                  </button>
-                )}
-              </div>
-              <div>
-                <table className="w-full min-w-[820px] text-left text-sm">
-                  <thead>
-                    <tr className="divide-x divide-gray-200 whitespace-nowrap bg-gray-50 text-xs font-medium text-gray-500">
-                      <th className="w-56 px-3 py-4">画像</th>
-                      <th className="px-3 py-4 text-center">上流血管のサイズ</th>
-                      <th className="px-3 py-4 text-center">下流血管のサイズ</th>
-                      <th className="px-3 py-4 text-center">Pd</th>
-                      <th className="px-3 py-4 text-center">Pa</th>
-                      <th className="w-16 px-3 py-4" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...savedSnapshots].reverse().map((snapshot) => (
-                      <tr
-                        key={snapshot.id}
-                        className="divide-x divide-gray-100 border-t border-gray-100"
-                      >
-                        <td className="px-3 py-4">
-                          <p className="mb-2 text-xs text-gray-500">{snapshot.date}</p>
-                          <div className="h-20 w-32 overflow-hidden rounded-lg bg-gray-800">
-                            <img
-                              src={snapshot.image}
-                              alt="保存されたモデル画像"
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        </td>
-                        <td className="px-3 py-4 text-center text-gray-900">
-                          {snapshot.upstreamSize}
-                        </td>
-                        <td className="px-3 py-4 text-center text-gray-900">
-                          {snapshot.downstreamSize}
-                        </td>
-                        <td className="px-3 py-4 text-center text-gray-900">{snapshot.pd}</td>
-                        <td className="px-3 py-4 text-center text-gray-900">{snapshot.pa}</td>
-                        <td className="px-3 py-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSnapshot(snapshot.id)}
-                            className="rounded p-1 text-red-500 transition hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-gray-900">画像</span>
-                <div className="flex items-center gap-2">
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={handleSaveAllForTraining}
-                      disabled={isSavingAll}
-                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isSavingAll ? '保存中...' : '学習データに保存'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIsTableView(true)}
-                    className="text-gray-400 transition hover:text-gray-600"
-                    title="テーブル表示に切り替える"
-                  >
-                    <Menu className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              {savedSnapshots.map((snapshot) => (
-                <div
-                  key={snapshot.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"
-                >
-                  <p className="text-xs text-gray-500">{snapshot.date}</p>
-                  <div className="overflow-hidden rounded-lg bg-gray-800">
-                    <img src={snapshot.image} alt="保存されたモデル画像" className="w-full" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteSnapshot(snapshot.id)}
-                    className="w-full rounded-lg bg-indigo-600 py-2 text-xs font-medium whitespace-nowrap text-white transition hover:bg-indigo-700"
-                  >
-                    削除
-                  </button>
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white p-4 text-center shadow-sm">
-            <Table2 className="h-6 w-6 text-gray-300" />
-            <p className="text-xs text-gray-400">利用可能なデータがありません</p>
-          </div>
-        )}
+        <SavedSnapshotsPanel
+          savedSnapshots={savedSnapshots}
+          isTableView={isTableView}
+          onSetTableView={setIsTableView}
+          onDelete={handleDeleteSnapshot}
+        />
       </div>
 
-      {isCalculatingFfr && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/60 backdrop-blur-sm">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
-          <p className="text-sm font-medium text-gray-600">FFRを計算しています...</p>
-        </div>
-      )}
+      {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
       {toastMessage && <Toast message={toastMessage} />}
     </div>

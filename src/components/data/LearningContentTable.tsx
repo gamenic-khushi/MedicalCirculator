@@ -17,6 +17,22 @@ export function LearningContentTable({ frames, onEdit, onDelete }: LearningConte
   const [previewing, setPreviewing] = useState<LearningContentFrame | null>(null)
   const [editing, setEditing] = useState<LearningContentFrame | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [fileNameDrafts, setFileNameDrafts] = useState<Record<string, string>>({})
+
+  function getFileNameValue(frame: LearningContentFrame) {
+    return fileNameDrafts[frame.id] ?? frame.fileName ?? ''
+  }
+
+  function handleFileNameChange(frameId: string, value: string) {
+    setFileNameDrafts((prev) => ({ ...prev, [frameId]: value }))
+  }
+
+  function handleFileNameCommit(frame: LearningContentFrame) {
+    const value = fileNameDrafts[frame.id]
+    if (value === undefined || value === (frame.fileName ?? '')) return
+    const { id, image, ...rest } = frame
+    onEdit(id, { ...rest, fileName: value })
+  }
 
   if (frames.length === 0) {
     return (
@@ -32,6 +48,7 @@ export function LearningContentTable({ frames, onEdit, onDelete }: LearningConte
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="divide-x divide-gray-200 whitespace-nowrap bg-gray-50 text-xs font-medium text-gray-500">
+              <th className="w-40 px-3 py-4">ファイル名</th>
               <th className="w-56 px-3 py-4">画像</th>
               <th className="px-3 py-4 text-center">上流血管のサイズ</th>
               <th className="px-3 py-4 text-center">下流血管のサイズ</th>
@@ -44,6 +61,16 @@ export function LearningContentTable({ frames, onEdit, onDelete }: LearningConte
           <tbody>
             {frames.map((frame) => (
               <tr key={frame.id} className="divide-x divide-gray-100 border-t border-gray-100">
+                <td className="px-3 py-6">
+                  <input
+                    type="text"
+                    value={getFileNameValue(frame)}
+                    onChange={(event) => handleFileNameChange(frame.id, event.target.value)}
+                    onBlur={() => handleFileNameCommit(frame)}
+                    placeholder="ファイル名"
+                    className="w-full rounded border border-transparent bg-transparent px-1.5 py-1 text-sm text-gray-900 outline-none hover:border-gray-200 focus:border-indigo-400 focus:bg-white"
+                  />
+                </td>
                 <td className="px-3 py-6">
                   <div className="h-36 w-52 overflow-hidden rounded-lg bg-black">
                     <img src={frame.image} alt="学習内容" className="h-full w-full object-cover" />

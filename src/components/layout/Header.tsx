@@ -1,9 +1,10 @@
 import { ChevronDown, Menu, User, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 
 import { Logo } from './Logo'
 import { useAuth } from '@/hooks/useAuth'
+import { useModel3D } from '@/hooks/useModel3D'
 import { isAdminCategory } from '@/types/user'
 
 const NAV_ITEMS = [
@@ -24,9 +25,18 @@ const SETTINGS_MENU_ITEMS = [
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isInfoOpen, setIsInfoOpen] = useState(false)
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const { setModel } = useModel3D()
+  const navigate = useNavigate()
   const isAdmin = isAdminCategory(user?.category)
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
+
+  async function handleLogout() {
+    setIsMenuOpen(false)
+    await logout()
+    setModel(null)
+    navigate('/login', { replace: true })
+  }
 
   const infoRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -142,13 +152,13 @@ export function Header() {
                   ))}
                 </>
               )}
-              <NavLink
-                to="/logout"
-                onClick={() => setIsMenuOpen(false)}
-                className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                className="block w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100"
               >
                 ログアウト
-              </NavLink>
+              </button>
             </div>
           )}
 
@@ -213,13 +223,13 @@ export function Header() {
               ))}
             </>
           )}
-          <NavLink
-            to="/logout"
-            onClick={() => setIsMenuOpen(false)}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-white transition hover:bg-white/20"
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            className="rounded-lg px-3 py-2 text-left text-sm font-medium text-white transition hover:bg-white/20"
           >
             ログアウト
-          </NavLink>
+          </button>
         </nav>
       )}
     </header>

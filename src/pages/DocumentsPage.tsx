@@ -1,8 +1,7 @@
 import type { Models } from 'appwrite'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
-import vectorIcon from '@/assets/SVG/Vector.svg'
 import { Toast } from '@/components/common/Toast'
 import { DocumentFileTable } from '@/components/documents/DocumentFileTable'
 import { DocumentNameModal } from '@/components/documents/DocumentNameModal'
@@ -107,7 +106,7 @@ export function DocumentsPage() {
           <button
             type="button"
             onClick={() => setIsAddingFolder(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white transition hover:bg-indigo-700"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700"
             title="フォルダを追加"
           >
             <Plus className="h-4 w-4" />
@@ -115,9 +114,9 @@ export function DocumentsPage() {
           <button
             type="button"
             onClick={() => setIsUploading(true)}
-            className="flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
-            <img src={vectorIcon} alt="アップロード" className="h-4 w-4" />
+            <Upload className="h-4 w-4" />
             ファイルのアップロード
           </button>
         </div>

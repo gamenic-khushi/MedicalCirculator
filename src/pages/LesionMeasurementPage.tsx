@@ -1,8 +1,9 @@
-import { useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Lasso, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
+import { AnnotationRing } from '@/components/model-viewer/AnnotationRing'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
 import {
   ModelCanvas,
@@ -16,6 +17,7 @@ import { useModel3D } from '@/hooks/useModel3D'
 import type { Annotation, CameraState } from '@/types/viewerState'
 
 const MODEL_COLOR = '#d8dce3'
+const DEFAULT_RING_RADIUS_PX = 12
 
 export function LesionMeasurementPage() {
   const navigate = useNavigate()
@@ -27,8 +29,30 @@ export function LesionMeasurementPage() {
   const [bloodPressure, setBloodPressure] = useState('')
   const [isAnnotating, setIsAnnotating] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
+  const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
+  const canvasAreaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const container = canvasAreaRef.current
+    if (!container) return
+
+    function syncAnnotationPositions() {
+      setAnnotations((prev) =>
+        prev.map((annotation) => {
+          if (!annotation.worldPoint) return annotation
+          const projected = canvasRef.current?.projectWorldPoint(annotation.worldPoint)
+          if (!projected) return annotation
+          return { ...annotation, x: projected.x, y: projected.y }
+        }),
+      )
+    }
+
+    const observer = new ResizeObserver(syncAnnotationPositions)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
 
   if (!validModel) {
     return <Navigate to="/data/3d-analysis" replace />
@@ -59,6 +83,7 @@ export function LesionMeasurementPage() {
   function handleResetAnnotation() {
     setIsAnnotating(false)
     setAnnotations([])
+    setRingRadius(DEFAULT_RING_RADIUS_PX)
     canvasRef.current?.clearSelection()
   }
 
@@ -90,6 +115,7 @@ export function LesionMeasurementPage() {
 
         <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div
+            ref={canvasAreaRef}
             onClick={handleViewerClick}
             style={{
               backgroundColor: '#737373',
@@ -111,10 +137,13 @@ export function LesionMeasurementPage() {
             />
 
             {annotations.map((annotation) => (
-              <div
+              <AnnotationRing
                 key={annotation.id}
-                style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
+                x={annotation.x}
+                y={annotation.y}
+                radius={ringRadius}
+                onRadiusChange={setRingRadius}
+                containerRef={canvasAreaRef}
               />
             ))}
 
@@ -165,7 +194,7 @@ export function LesionMeasurementPage() {
         <button
           type="button"
           onClick={handleProceed}
-          className="rounded-lg border border-indigo-200 px-6 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50"
+          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
         >
           病変形状測定
         </button>

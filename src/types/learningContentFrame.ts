@@ -1,6 +1,8 @@
 export interface LearningContentFrame {
   id: string
   image: string
+  fileName?: string
+  createdAt?: string
   upstreamSize: string
   downstreamSize: string
   pd: string
