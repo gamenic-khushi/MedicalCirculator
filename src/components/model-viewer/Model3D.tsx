@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
-import { FBXLoader, OBJLoader, STLLoader } from 'three-stdlib'
+import { DRACOLoader, FBXLoader, GLTFLoader, OBJLoader, STLLoader } from 'three-stdlib'
 
 interface Model3DProps {
   url: string
@@ -12,6 +12,7 @@ interface Model3DProps {
 export function Model3D({ url, extension, color }: Model3DProps) {
   if (extension === 'obj') return <ObjModel url={url} color={color} />
   if (extension === 'fbx') return <FbxModel url={url} color={color} />
+  if (extension === 'glb' || extension === 'gltf') return <GltfModel url={url} color={color} />
   return <StlModel url={url} color={color} />
 }
 
@@ -82,6 +83,20 @@ function FbxModel({ url, color }: { url: string; color: string }) {
     applyMaterial(object, color)
   }, [object, color])
   return <primitive object={object} />
+}
+
+const dracoLoader = new DRACOLoader()
+dracoLoader.setDecoderPath('/draco/')
+
+function GltfModel({ url, color }: { url: string; color: string }) {
+  const gltf = useLoader(GLTFLoader, url, (loader) => {
+    loader.setDRACOLoader(dracoLoader)
+  })
+  useMemo(() => {
+    disableAnimations(gltf.scene)
+    applyMaterial(gltf.scene, color)
+  }, [gltf, color])
+  return <primitive object={gltf.scene} />
 }
 
 function disableAnimations(object: THREE.Object3D) {
