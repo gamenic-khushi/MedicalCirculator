@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { Lasso, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
@@ -95,13 +95,7 @@ export function LesionMeasurementPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link to="/data" className="hover:text-gray-700">
-          学習データ管理
-        </Link>
-        <span>/</span>
-        <span className="font-medium text-gray-900">病変形状測定</span>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900">{validModel.studyName}</h1>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
         <div className="flex flex-1 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm">

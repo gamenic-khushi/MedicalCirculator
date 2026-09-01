@@ -1,6 +1,6 @@
 import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Lasso, Pencil, Upload, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
@@ -564,13 +564,7 @@ export function LesionAnalysisPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link to="/data" className="hover:text-gray-700">
-            学習データ管理
-          </Link>
-          <span>/</span>
-          <span className="font-medium text-gray-900">病変形状測定</span>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">{validModel.studyName}</h1>
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
           <button
             type="button"
