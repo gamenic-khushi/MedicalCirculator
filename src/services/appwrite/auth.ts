@@ -57,6 +57,11 @@ export const authService = {
   },
 
   async login(email: string, password: string): Promise<AppwriteUser> {
+    try {
+      await account.deleteSession('current')
+    } catch {
+      // No active session to delete — that's fine
+    }
     await account.createEmailPasswordSession(email, password)
     return toAppwriteUser(await account.get())
   },
