@@ -50,6 +50,13 @@ export function DataManagementPage() {
     setRecords((prev) => prev.filter((record) => record.id !== id))
   }
 
+  async function handleUpdateCategory(id: string, category: string) {
+    await databaseService.update<DataRecordRow>('data_records', id, { category })
+    setRecords((prev) =>
+      prev.map((record) => (record.id === id ? { ...record, category } : record)),
+    )
+  }
+
   async function handleDuplicate(record: DataRecord) {
     const row = await databaseService.create<DataRecordRow>('data_records', {
       date: todayDisplayDate(),
@@ -98,6 +105,7 @@ export function DataManagementPage() {
           records={filteredRecords}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
+          onUpdateCategory={handleUpdateCategory}
         />
       </div>
     </div>

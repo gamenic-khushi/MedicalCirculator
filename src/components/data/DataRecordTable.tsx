@@ -9,9 +9,66 @@ interface DataRecordTableProps {
   records: DataRecord[]
   onDelete: (id: string) => void
   onDuplicate: (record: DataRecord) => void
+  onUpdateCategory: (id: string, category: string) => void
 }
 
-export function DataRecordTable({ records, onDelete, onDuplicate }: DataRecordTableProps) {
+function EditableCategoryCell({
+  value,
+  onSave,
+}: {
+  value: string
+  onSave: (next: string) => void
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+
+  function commit() {
+    setIsEditing(false)
+    const trimmed = draft.trim()
+    if (trimmed && trimmed !== value) {
+      onSave(trimmed)
+    } else {
+      setDraft(value)
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit()
+          if (event.key === 'Escape') {
+            setDraft(value)
+            setIsEditing(false)
+          }
+        }}
+        className="w-full rounded border border-indigo-300 px-2 py-1 text-gray-900 outline-none focus:border-indigo-400"
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setIsEditing(true)}
+      className="w-full rounded px-2 py-1 text-left transition hover:bg-gray-50"
+      title="クリックして編集"
+    >
+      {value}
+    </button>
+  )
+}
+
+export function DataRecordTable({
+  records,
+  onDelete,
+  onDuplicate,
+  onUpdateCategory,
+}: DataRecordTableProps) {
   const navigate = useNavigate()
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
@@ -43,7 +100,12 @@ export function DataRecordTable({ records, onDelete, onDuplicate }: DataRecordTa
             {records.map((record) => (
               <tr key={record.id} className="border-t border-gray-100">
                 <td className="px-10 py-4 text-gray-500">{record.date}</td>
-                <td className="px-10 py-4 text-gray-900">{record.category}</td>
+                <td className="px-8 py-2 text-gray-900">
+                  <EditableCategoryCell
+                    value={record.category}
+                    onSave={(next) => onUpdateCategory(record.id, next)}
+                  />
+                </td>
                 <td className="px-10 py-4 text-gray-900">{record.owner}</td>
                 <td className="px-6 py-4">
                   <RowActionIcons
