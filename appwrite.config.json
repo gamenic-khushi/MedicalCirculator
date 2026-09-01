@@ -1,0 +1,23 @@
+{
+    "projectId": "6a85582b0023b5c32287",
+    "sites": [
+        {
+            "$id": "medicalCirculator",
+            "name": "medicalCirculator",
+            "framework": "vite",
+            "adapter": "static",
+            "buildRuntime": "node-22",
+            "installCommand": "npm install",
+            "buildCommand": "npm run build",
+            "outputDirectory": "./dist",
+            "fallbackFile": "index.html",
+            "buildSpecification": "s-8vcpu-8gb",
+            "runtimeSpecification": "s-8vcpu-8gb",
+            "deploymentRetention": 0,
+            "enabled": true,
+            "timeout": 30,
+            "logging": true,
+            "path": "."
+        }
+    ]
+}
