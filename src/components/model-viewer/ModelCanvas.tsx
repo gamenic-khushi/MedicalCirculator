@@ -55,6 +55,11 @@ interface ThreeState {
 }
 
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
+// A highlight sized strictly to the vessel's real width becomes imperceptible
+// (a handful of pixels) once the camera is framing the whole model — which is
+// exactly when a narrow stenosis is most clinically interesting. Enforce a
+// floor in screen-space pixels so the highlight is always clearly visible.
+const MIN_HIGHLIGHT_RADIUS_PX = 12
 const HIGHLIGHT_COLOR = new THREE.Color(0x39ff14)
 const WHITE = new THREE.Color(1, 1, 1)
 const EDGE_SCAN_STEP_PERCENT = 0.4
@@ -208,6 +213,17 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     }
   }
 
+  function worldUnitsPerPixelAtDistance(distance: number) {
+    const canvasElement = containerRef.current?.querySelector('canvas')
+    const camera = threeStateRef.current?.camera
+    if (!camera || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) {
+      return null
+    }
+    const fovRad = (camera.fov * Math.PI) / 180
+    const worldHeightAtDistance = 2 * distance * Math.tan(fovRad / 2)
+    return worldHeightAtDistance / canvasElement.clientHeight
+  }
+
   function computeVesselWidth(xPercent: number, yPercent: number) {
     const canvasElement = containerRef.current?.querySelector('canvas')
     const camera = threeStateRef.current?.camera
@@ -233,9 +249,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const widthPercent = rightEdge - leftEdge
     const widthPx = (widthPercent / 100) * canvasElement.clientWidth
 
-    const fovRad = (camera.fov * Math.PI) / 180
-    const worldHeightAtDistance = 2 * center.hit.distance * Math.tan(fovRad / 2)
-    const worldUnitsPerPixel = worldHeightAtDistance / canvasElement.clientHeight
+    const worldUnitsPerPixel = worldUnitsPerPixelAtDistance(center.hit.distance)
+    if (!worldUnitsPerPixel) return null
 
     return widthPx * worldUnitsPerPixel
   }
@@ -386,7 +401,16 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const hit = getHitResult(xPercent, yPercent)
       if (!hit || !(hit.object instanceof THREE.Mesh)) return false
       const width = referenceWidth ?? computeVesselWidth(xPercent, yPercent)
-      const radius = width ? (width / 2) * 0.55 : FALLBACK_HIGHLIGHT_RADIUS
+      let radius = width ? (width / 2) * 0.55 : FALLBACK_HIGHLIGHT_RADIUS
+
+      const camera = threeStateRef.current?.camera
+      if (camera) {
+        const distance = camera.position.distanceTo(hit.point)
+        const worldUnitsPerPixel = worldUnitsPerPixelAtDistance(distance)
+        if (worldUnitsPerPixel) {
+          radius = Math.max(radius, MIN_HIGHLIGHT_RADIUS_PX * worldUnitsPerPixel)
+        }
+      }
 
       if (paintedMeshRef.current && paintedMeshRef.current !== hit.object) {
         resetMeshColors(paintedMeshRef.current)

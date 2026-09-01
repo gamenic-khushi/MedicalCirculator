@@ -1,7 +1,7 @@
 import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Lasso, Pencil, Upload, ZoomIn, ZoomOut } from 'lucide-react'
+import { MousePointerClick, Pencil, Upload, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
@@ -19,6 +19,7 @@ import {
   SelectedLesionModal,
   type SelectedLesionFormData,
 } from '@/components/model-viewer/SelectedLesionModal'
+import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
@@ -27,6 +28,7 @@ import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
+import { measureTwoPointLesion, type PercentPoint } from '@/lib/twoPointLesionMeasurement'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { isAdminCategory } from '@/types/user'
@@ -36,7 +38,10 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
-const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
+
+function sortByProximity(points: Annotation[]): Annotation[] {
+  return [...points].sort((a, b) => a.y - b.y)
+}
 
 type ParamKey = keyof Omit<LearningContentFrame, 'id' | 'image' | 'fileName' | 'createdAt'>
 
@@ -110,7 +115,7 @@ function LesionSnapshotPanel({
         </div>
       ) : (
         <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400">
-          気になる箇所を丸で囲んでください
+          2点をクリックして選択してください
         </div>
       )}
     </div>
@@ -128,11 +133,14 @@ export function LesionAnalysisPage() {
   const location = useLocation()
   const navigationState = location.state as {
     bloodPressure?: string
-    annotation?: Annotation | null
+    annotations?: Annotation[] | null
     cameraState?: CameraState | null
   } | null
   const initialBloodPressure = navigationState?.bloodPressure
-  const initialAnnotation = navigationState?.annotation
+  const initialAnnotations =
+    navigationState?.annotations && navigationState.annotations.length === 2
+      ? navigationState.annotations
+      : null
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [cameraState, setCameraState] = useState<CameraState | null>(
@@ -146,7 +154,7 @@ export function LesionAnalysisPage() {
   const [selectedLesion, setSelectedLesion] =
     useState<SelectedLesionFormData>(EMPTY_SELECTED_LESION)
   const [snapshotImage, setSnapshotImage] = useState<string | null>(null)
-  const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotation))
+  const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotations))
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -155,16 +163,14 @@ export function LesionAnalysisPage() {
   const canvasAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!initialAnnotation) return
-    const startingAnnotation: Annotation = initialAnnotation
+    if (!initialAnnotations) return
+    const startingAnnotations = initialAnnotations
 
-    const rawWorldPoint = startingAnnotation.worldPoint
-    if (!rawWorldPoint) {
-      setAnnotations([startingAnnotation])
-      measureLesion(startingAnnotation)
+    if (startingAnnotations.some((annotation) => !annotation.worldPoint)) {
+      setAnnotations(startingAnnotations)
+      measureLesion(startingAnnotations[0], startingAnnotations[1])
       return
     }
-    const worldPoint: [number, number, number] = rawWorldPoint
     const expectedTarget = cameraState?.target ?? null
 
     const POLL_INTERVAL_MS = 100
@@ -182,24 +188,33 @@ export function LesionAnalysisPage() {
       )
     }
 
+    function projectAll() {
+      return startingAnnotations.map((annotation) => {
+        const projected = annotation.worldPoint
+          ? canvasRef.current?.projectWorldPoint(annotation.worldPoint)
+          : null
+        return projected ? { ...annotation, x: projected.x, y: projected.y } : null
+      })
+    }
+
     function tryProject() {
-      const projected = canvasRef.current?.projectWorldPoint(worldPoint)
-      if (projected && cameraSettled()) {
-        const updated = { ...startingAnnotation, x: projected.x, y: projected.y }
-        setAnnotations([updated])
-        measureLesion(updated)
+      const projected = projectAll()
+      if (projected.every((point) => point !== null) && cameraSettled()) {
+        const updated = projected as Annotation[]
+        setAnnotations(updated)
+        measureLesion(updated[0], updated[1])
         return
       }
       attempt += 1
       if (attempt < MAX_ATTEMPTS_BEFORE_GIVING_UP) {
         timeoutId = setTimeout(tryProject, POLL_INTERVAL_MS)
-      } else if (projected) {
-        const updated = { ...startingAnnotation, x: projected.x, y: projected.y }
-        setAnnotations([updated])
-        measureLesion(updated)
+      } else if (projected.every((point) => point !== null)) {
+        const updated = projected as Annotation[]
+        setAnnotations(updated)
+        measureLesion(updated[0], updated[1])
       } else {
-        setAnnotations([startingAnnotation])
-        measureLesion(startingAnnotation)
+        setAnnotations(startingAnnotations)
+        measureLesion(startingAnnotations[0], startingAnnotations[1])
       }
     }
     timeoutId = setTimeout(tryProject, POLL_INTERVAL_MS)
@@ -284,62 +299,53 @@ export function LesionAnalysisPage() {
 
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
     if (!isAnnotating) return
-    if (annotations.length > 0) return
+    if (annotations.length >= 2) return
     if ((event.target as HTMLElement).closest('button')) return
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    const target = { id: crypto.randomUUID(), x, y }
-    setAnnotations([target])
-    setIsAnnotating(false)
-    measureLesion(target)
-  }
-
-  function measureReferenceWidth(x: number, y: number, direction: 1 | -1) {
-    for (const offset of REFERENCE_POINT_OFFSETS_PERCENT) {
-      const sampleY = Math.min(Math.max(y + direction * offset, 2), 98)
-      const width = canvasRef.current?.measureVesselWidth(x, sampleY)
-      if (width) return { width, y: sampleY }
+    const next = [...annotations, { id: crypto.randomUUID(), x, y }]
+    if (next.length === 2) {
+      const sorted = sortByProximity(next)
+      setAnnotations(sorted)
+      setIsAnnotating(false)
+      measureLesion(sorted[0], sorted[1])
+    } else {
+      setAnnotations(next)
     }
-    return null
   }
 
-  function measureLesion(target: { x: number; y: number }) {
+  function measureLesion(proximal: PercentPoint, distal: PercentPoint) {
+    if (!canvasRef.current) return
     setIsMeasuring(true)
     setTimeout(() => {
-      const narrowest = canvasRef.current?.measureVesselWidth(target.x, target.y)
-      const upstreamResult = measureReferenceWidth(target.x, target.y, -1)
-      const downstreamResult = measureReferenceWidth(target.x, target.y, 1)
+      const result = measureTwoPointLesion(canvasRef.current!, proximal, distal)
 
-      if (!narrowest || !upstreamResult || !downstreamResult) {
+      if (!result) {
         setIsMeasuring(false)
         showToast('血管の幅を測定できませんでした。別の場所を選択してください。')
         return
       }
 
-      const upstream = upstreamResult.width
-      const downstream = downstreamResult.width
-      const referenceDiameter = (upstream + downstream) / 2
-      const rawStenosisRate = referenceDiameter > 0 ? (1 - narrowest / referenceDiameter) * 100 : 0
+      const { proximalWidth, distalWidth, narrowestWidth, segmentLength, lesionPosition } = result
+      const referenceDiameter = (proximalWidth + distalWidth) / 2
+      const rawStenosisRate =
+        referenceDiameter > 0 ? (1 - narrowestWidth / referenceDiameter) * 100 : 0
       const stenosisRate = Math.min(Math.max(rawStenosisRate, 0), 99)
       const mldValue = referenceDiameter * (1 - stenosisRate / 100)
       const mlaValue = Math.PI * (mldValue / 2) ** 2
-      const segmentLength = canvasRef.current?.measureDistance3D(
-        target.x,
-        upstreamResult.y,
-        target.x,
-        downstreamResult.y,
-      )
       const lumenVolumeValue = segmentLength
         ? Math.PI * (referenceDiameter / 2) ** 2 * segmentLength
         : null
-      const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(target.x, target.y)
-      const lesionPosition = canvasRef.current?.measureLesionPosition(target.x, target.y) ?? ''
+      const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(
+        result.narrowestPoint.x,
+        result.narrowestPoint.y,
+      )
 
       setParams((prev) => ({
         ...prev,
-        upstreamSize: upstream.toFixed(1),
-        downstreamSize: downstream.toFixed(1),
+        upstreamSize: proximalWidth.toFixed(1),
+        downstreamSize: distalWidth.toFixed(1),
         mld: mldValue.toFixed(1),
         mla: mlaValue.toFixed(2),
         stenosisRate: String(Math.round(stenosisRate)),
@@ -349,9 +355,9 @@ export function LesionAnalysisPage() {
       }))
 
       setSelectedLesion({
-        lesionProximalDiameter: upstream.toFixed(2),
+        lesionProximalDiameter: proximalWidth.toFixed(2),
         minVesselDiameter: mldValue.toFixed(2),
-        lesionDistalDiameter: downstream.toFixed(2),
+        lesionDistalDiameter: distalWidth.toFixed(2),
         minCrossSectionArea: mlaValue.toFixed(2),
         stenosisRate: String(Math.round(stenosisRate)),
         stenosisLength: segmentLength ? segmentLength.toFixed(1) : '',
@@ -363,7 +369,10 @@ export function LesionAnalysisPage() {
   }
 
   function handleCalculateFfr() {
-    const target = annotations[annotations.length - 1]
+    const target =
+      annotations.length === 2
+        ? { x: (annotations[0].x + annotations[1].x) / 2, y: (annotations[0].y + annotations[1].y) / 2 }
+        : null
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
     if (!target || !bounds || !bloodPressure.trim() || !selectedLesion.stenosisRate) return
 
@@ -556,7 +565,7 @@ export function LesionAnalysisPage() {
   const hasMeasurement = selectedLesion.stenosisRate !== ''
   const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
   const disabledReason = !hasMeasurement
-    ? '先に気になる箇所を丸で囲んでください'
+    ? '先に2点を選択してください'
     : bloodPressure.trim() === ''
       ? '先に血圧の値を入力してください'
       : undefined
@@ -668,19 +677,12 @@ export function LesionAnalysisPage() {
               url={validModel.objectUrl}
               extension={validModel.extension}
               color={MODEL_COLOR}
-              controlsEnabled={!isAnnotating && annotations.length === 0}
+              controlsEnabled={!isAnnotating && annotations.length < 2}
               initialCamera={cameraState}
               onCameraChange={setCameraState}
             />
 
-            {!measurement &&
-              annotations.map((annotation) => (
-                <div
-                  key={annotation.id}
-                  style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-                  className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-red-500"
-                />
-              ))}
+            <TwoPointMarkers points={annotations} />
 
             <div className="absolute left-4 top-4 flex flex-col gap-2">
               <button
@@ -691,11 +693,19 @@ export function LesionAnalysisPage() {
                     ? 'border-red-200 bg-red-50 text-red-500'
                     : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
                 }`}
-                title="気になる箇所を丸で囲む"
+                title="2点をクリックして選択（①心臓に近い側 → ②遠い側）"
               >
-                <Lasso className="h-4 w-4" />
+                <MousePointerClick className="h-4 w-4" />
               </button>
             </div>
+
+            {isAnnotating && (
+              <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
+                {annotations.length === 0
+                  ? '① 心臓に近い点をクリックしてください'
+                  : '② 心臓から遠い点をクリックしてください'}
+              </div>
+            )}
 
             <div className="absolute right-4 top-4 flex flex-col gap-2">
               {measurement && (

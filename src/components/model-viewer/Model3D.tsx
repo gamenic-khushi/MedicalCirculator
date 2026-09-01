@@ -88,6 +88,14 @@ function FbxModel({ url, color }: { url: string; color: string }) {
 const dracoLoader = new DRACOLoader()
 dracoLoader.setDecoderPath('/draco/')
 
+// FBX stores units as centimeters; converting to glTF (which uses meters) via
+// FBX2glTF scales geometry down by 100x. This app has always treated a
+// model's raw coordinate units as millimeters directly (no unit conversion),
+// so GLTF-sourced models need to be scaled back up to match that convention —
+// otherwise every downstream measurement (vessel width, stenosis length, the
+// highlight radius) comes out 100x too small.
+const GLTF_UNIT_SCALE = 100
+
 function GltfModel({ url, color }: { url: string; color: string }) {
   const gltf = useLoader(GLTFLoader, url, (loader) => {
     loader.setDRACOLoader(dracoLoader)
@@ -96,7 +104,7 @@ function GltfModel({ url, color }: { url: string; color: string }) {
     disableAnimations(gltf.scene)
     applyMaterial(gltf.scene, color)
   }, [gltf, color])
-  return <primitive object={gltf.scene} />
+  return <primitive object={gltf.scene} scale={GLTF_UNIT_SCALE} />
 }
 
 function disableAnimations(object: THREE.Object3D) {
