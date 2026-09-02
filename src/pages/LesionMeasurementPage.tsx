@@ -149,14 +149,6 @@ export function LesionMeasurementPage() {
               </button>
             </div>
 
-            {isAnnotating && (
-              <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
-                {annotations.length === 0
-                  ? '① 心臓に近い点をクリックしてください'
-                  : '② 心臓から遠い点をクリックしてください'}
-              </div>
-            )}
-
             <div className="absolute right-4 top-4 flex flex-col gap-2">
               <button
                 type="button"

@@ -22,7 +22,7 @@ export function TwoPointMarkers({ points }: TwoPointMarkersProps) {
           <div
             key={point.id}
             style={{ left: `${point.x}%`, top: `${point.y}%` }}
-            className={`pointer-events-none absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs font-bold text-white ${style.border} ${style.bg}`}
+            className={`pointer-events-none absolute flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[9px] font-bold text-white ${style.border} ${style.bg}`}
           >
             {index + 1}
           </div>
