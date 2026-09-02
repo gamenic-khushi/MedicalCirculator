@@ -391,7 +391,13 @@ export function LesionAnalysisPage() {
     if (!measurement) {
       const referenceDiameter = Number(params.avgDiameter)
       if (referenceDiameter > 0) {
-        canvasRef.current?.highlightAt(target.x, target.y, referenceDiameter)
+        canvasRef.current?.highlightSegment(
+          annotations[0].x,
+          annotations[0].y,
+          annotations[1].x,
+          annotations[1].y,
+          referenceDiameter,
+        )
       }
       setIsCalculatingFfr(true)
       captureSnapshotAfterRender({ x: target.x, y: target.y }).finally(() =>

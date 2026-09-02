@@ -32,6 +32,13 @@ export interface ModelCanvasHandle {
   ) => number | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
   highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => boolean
+  highlightSegment: (
+    x1Percent: number,
+    y1Percent: number,
+    x2Percent: number,
+    y2Percent: number,
+    referenceWidth?: number,
+  ) => boolean
   clearSelection: () => void
   hideHighlight: () => void
   showHighlight: () => void
@@ -60,6 +67,10 @@ const FALLBACK_HIGHLIGHT_RADIUS = 0.28
 // exactly when a narrow stenosis is most clinically interesting. Enforce a
 // floor in screen-space pixels so the highlight is always clearly visible.
 const MIN_HIGHLIGHT_RADIUS_PX = 12
+// A segment highlight is a chain of overlapping discs, so each disc's own
+// radius pads past the first/last sample point — kept smaller than the
+// single-point highlight so the fill doesn't bulge past the ①/② markers.
+const SEGMENT_MIN_HIGHLIGHT_RADIUS_PX = 6
 const HIGHLIGHT_COLOR = new THREE.Color(0x39ff14)
 const WHITE = new THREE.Color(1, 1, 1)
 const EDGE_SCAN_STEP_PERCENT = 0.4
@@ -72,6 +83,7 @@ const SNAP_SEARCH_ANGLE_STEPS = 8
 const POSITION_SCAN_STEP_PERCENT = 1
 const POSITION_SCAN_MAX_STEPS = 45
 const POSITION_WIDTH_JUMP_RATIO = 1.6
+const SEGMENT_HIGHLIGHT_STEPS = 30
 
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
@@ -105,7 +117,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const containerRef = useRef<HTMLDivElement>(null)
   const threeStateRef = useRef<ThreeState | null>(null)
   const paintedMeshRef = useRef<THREE.Mesh | null>(null)
-  const lastHighlightRef = useRef<{ point: THREE.Vector3; radius: number } | null>(null)
+  const lastHighlightRef = useRef<{ points: THREE.Vector3[]; radius: number } | null>(null)
 
   function resetMeshColors(mesh: THREE.Mesh) {
     const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
@@ -114,12 +126,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     colorAttr.needsUpdate = true
   }
 
-  function paintVesselFill(mesh: THREE.Mesh, worldPoint: THREE.Vector3, worldRadius: number) {
+  function paintVesselFill(mesh: THREE.Mesh, worldPoints: THREE.Vector3[], worldRadius: number) {
     const positionAttr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
     const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
-    if (!positionAttr || !colorAttr) return
+    if (!positionAttr || !colorAttr || worldPoints.length === 0) return
 
-    const localPoint = mesh.worldToLocal(worldPoint.clone())
+    const localPoints = worldPoints.map((point) => mesh.worldToLocal(point.clone()))
     const worldScale = mesh.getWorldScale(new THREE.Vector3())
     const avgScale = (worldScale.x + worldScale.y + worldScale.z) / 3 || 1
     const innerRadius = (worldRadius / avgScale) * 0.9
@@ -129,8 +141,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const blended = new THREE.Color()
     for (let i = 0; i < positionAttr.count; i += 1) {
       vertex.fromBufferAttribute(positionAttr, i)
-      const distance = vertex.distanceTo(localPoint)
-      const t = 1 - THREE.MathUtils.smoothstep(distance, innerRadius, outerRadius)
+      let minDistance = Infinity
+      for (const localPoint of localPoints) {
+        const distance = vertex.distanceTo(localPoint)
+        if (distance < minDistance) minDistance = distance
+      }
+      const t = 1 - THREE.MathUtils.smoothstep(minDistance, innerRadius, outerRadius)
       blended.copy(WHITE).lerp(HIGHLIGHT_COLOR, t)
       colorAttr.setXYZ(i, blended.r, blended.g, blended.b)
     }
@@ -416,8 +432,44 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         resetMeshColors(paintedMeshRef.current)
       }
       paintedMeshRef.current = hit.object
-      lastHighlightRef.current = { point: hit.point.clone(), radius }
-      paintVesselFill(hit.object, hit.point, radius)
+      lastHighlightRef.current = { points: [hit.point.clone()], radius }
+      paintVesselFill(hit.object, [hit.point], radius)
+      return true
+    },
+    highlightSegment: (x1Percent, y1Percent, x2Percent, y2Percent, referenceWidth) => {
+      const samples: { point: THREE.Vector3; object: THREE.Object3D }[] = []
+      for (let step = 0; step <= SEGMENT_HIGHLIGHT_STEPS; step++) {
+        const t = step / SEGMENT_HIGHLIGHT_STEPS
+        const x = x1Percent + (x2Percent - x1Percent) * t
+        const y = y1Percent + (y2Percent - y1Percent) * t
+        const hit = getHitResult(x, y)
+        if (hit) samples.push({ point: hit.point, object: hit.object })
+      }
+      const targetObject = samples[0]?.object
+      if (!targetObject || !(targetObject instanceof THREE.Mesh)) return false
+
+      const points = samples.filter((sample) => sample.object === targetObject).map((sample) => sample.point)
+
+      const midX = (x1Percent + x2Percent) / 2
+      const midY = (y1Percent + y2Percent) / 2
+      const width = referenceWidth ?? computeVesselWidth(midX, midY)
+      let radius = width ? (width / 2) * 0.4 : FALLBACK_HIGHLIGHT_RADIUS * 0.7
+
+      const camera = threeStateRef.current?.camera
+      if (camera && points[0]) {
+        const distance = camera.position.distanceTo(points[0])
+        const worldUnitsPerPixel = worldUnitsPerPixelAtDistance(distance)
+        if (worldUnitsPerPixel) {
+          radius = Math.max(radius, SEGMENT_MIN_HIGHLIGHT_RADIUS_PX * worldUnitsPerPixel)
+        }
+      }
+
+      if (paintedMeshRef.current && paintedMeshRef.current !== targetObject) {
+        resetMeshColors(paintedMeshRef.current)
+      }
+      paintedMeshRef.current = targetObject
+      lastHighlightRef.current = { points: points.map((point) => point.clone()), radius }
+      paintVesselFill(targetObject, points, radius)
       return true
     },
     clearSelection: () => {
@@ -434,7 +486,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       if (paintedMeshRef.current && lastHighlightRef.current) {
         paintVesselFill(
           paintedMeshRef.current,
-          lastHighlightRef.current.point,
+          lastHighlightRef.current.points,
           lastHighlightRef.current.radius,
         )
       }
