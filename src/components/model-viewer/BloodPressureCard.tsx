@@ -3,7 +3,7 @@ import { Activity } from 'lucide-react'
 interface BloodPressureCardProps {
   value: string
   onChange: (value: string) => void
-  onUpdate: () => void
+  onUpdate?: () => void
 }
 
 export function BloodPressureCard({ value, onChange, onUpdate }: BloodPressureCardProps) {
@@ -19,18 +19,20 @@ export function BloodPressureCard({ value, onChange, onUpdate }: BloodPressureCa
           type="number"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full bg-transparent text-sm text-gray-900 outline-none"
+          className="bp-spinner-input w-full bg-transparent text-sm text-gray-900 outline-none"
         />
         <span className="text-xs text-gray-400">mmHg</span>
       </div>
 
-      <button
-        type="button"
-        onClick={onUpdate}
-        className="mt-3 w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-      >
-        更新
-      </button>
+      {onUpdate && (
+        <button
+          type="button"
+          onClick={onUpdate}
+          className="mt-3 w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
+        >
+          更新
+        </button>
+      )}
     </div>
   )
 }

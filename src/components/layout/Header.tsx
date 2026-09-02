@@ -7,10 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { isAdminCategory } from '@/types/user'
 
-const NAV_ITEMS = [
-  { label: '3D分析', to: '/3d-analysis', adminOnly: false },
-  { label: '学習データ管理', to: '/data', adminOnly: true },
-]
+const NAV_ITEMS = [{ label: '学習データ管理', to: '/data', adminOnly: true }]
 
 const INFO_MENU_ITEMS = [
   { label: '学会', to: '/conference' },

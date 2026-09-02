@@ -101,11 +101,7 @@ export function LesionMeasurementPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
         <div className="flex flex-1 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <BloodPressureCard
-            value={bloodPressure}
-            onChange={setBloodPressure}
-            onUpdate={() => {}}
-          />
+          <BloodPressureCard value={bloodPressure} onChange={setBloodPressure} onUpdate={() => {}} />
           <ModelInfoCard model={validModel} />
         </div>
 

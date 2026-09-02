@@ -50,3 +50,14 @@ input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+input.bp-spinner-input[type='number']::-webkit-outer-spin-button,
+input.bp-spinner-input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: auto;
+  margin: 0 0 0 4px;
+}
+
+input.bp-spinner-input[type='number'] {
+  -moz-appearance: auto;
+  appearance: auto;
+}

@@ -293,10 +293,6 @@ export function LesionAnalysisPage() {
     })
   }
 
-  function handleUpdateBloodPressure() {
-    showToast('血圧が更新されました')
-  }
-
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
     if (!isAnnotating) return
     if (annotations.length >= 2) return
@@ -616,16 +612,10 @@ export function LesionAnalysisPage() {
             : 'lg:grid-cols-[220px_260px_1fr_220px]'
         }`}
       >
-        <div className="flex flex-1 flex-col gap-4">
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-            <BloodPressureCard
-              value={bloodPressure}
-              onChange={handleBloodPressureChange}
-              onUpdate={handleUpdateBloodPressure}
-            />
-          </div>
+        <div className="flex flex-1 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />
 
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="border-t border-gray-100 p-4">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">選択病変</p>
               <p className="text-[11px] text-gray-400">自動計測値（修正前）</p>
