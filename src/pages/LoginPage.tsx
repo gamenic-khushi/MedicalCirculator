@@ -1,13 +1,11 @@
 import { useState } from 'react'
-import { useLocation, useNavigate, type Location } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/hooks/useAuth'
 
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
-  const from = (location.state as { from?: Location } | null)?.from
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +18,7 @@ export function LoginPage() {
 
     try {
       await login(email, password)
-      navigate(from ? `${from.pathname}${from.search}${from.hash}` : '/', { replace: true })
+      navigate('/', { replace: true })
     } catch (err) {
       console.error(err)
       setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。')

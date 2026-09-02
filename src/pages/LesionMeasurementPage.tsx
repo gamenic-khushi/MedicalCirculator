@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { MousePointerClick, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
@@ -14,6 +14,7 @@ import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPan
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useModel3D } from '@/hooks/useModel3D'
+import { generateId } from '@/lib/id'
 import type { Annotation, CameraState } from '@/types/viewerState'
 
 const MODEL_COLOR = '#d8dce3'
@@ -24,6 +25,8 @@ function sortByProximity(points: Annotation[]): Annotation[] {
 
 export function LesionMeasurementPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const dataRecordId = (location.state as { dataRecordId?: string } | null)?.dataRecordId
   const { model } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
 
@@ -73,7 +76,7 @@ export function LesionMeasurementPage() {
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
     const worldPoint = canvasRef.current?.getWorldPoint(x, y) ?? undefined
-    const next = [...annotations, { id: crypto.randomUUID(), x, y, worldPoint }]
+    const next = [...annotations, { id: generateId(), x, y, worldPoint }]
     setAnnotations(next.length === 2 ? sortByProximity(next) : next)
     if (next.length >= 2) setIsAnnotating(false)
 
@@ -91,7 +94,7 @@ export function LesionMeasurementPage() {
 
   function handleProceed() {
     navigate('/data/lesion-measurement/analysis', {
-      state: { bloodPressure, annotations, cameraState },
+      state: { bloodPressure, annotations, cameraState, dataRecordId },
     })
   }
 

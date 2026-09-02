@@ -16,14 +16,19 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
   const { model, setModel } = useModel3D()
-  const [studyName, setStudyName] = useState(DEFAULT_STUDY_NAME)
+  const [studyName, setStudyName] = useState('')
 
   useEffect(() => {
     if (model) navigate(viewerPath, { replace: true })
   }, [model, navigate, viewerPath])
 
   function loadFile(file: File) {
-    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName }))
+    setModel(
+      createModel3DFile(file, {
+        folder: DEFAULT_FOLDER,
+        studyName: studyName.trim() || DEFAULT_STUDY_NAME,
+      }),
+    )
     navigate(viewerPath)
   }
 
@@ -54,6 +59,7 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
             type="text"
             value={studyName}
             onChange={(event) => setStudyName(event.target.value)}
+            placeholder={DEFAULT_STUDY_NAME}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-indigo-400"
           />
         </label>

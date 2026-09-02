@@ -24,6 +24,7 @@ import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
+import { generateId } from '@/lib/id'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
@@ -230,7 +231,7 @@ export function ModelViewerPage() {
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    setAnnotations([{ id: crypto.randomUUID(), x, y }])
+    setAnnotations([{ id: generateId(), x, y }])
     setIsAnnotating(false)
   }
 
@@ -333,7 +334,7 @@ export function ModelViewerPage() {
     setSavedSnapshots((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: generateId(),
         image: highlightedImage,
         date: formatSnapshotDate(new Date()),
         upstreamSize: upstreamDiameter.trim() ? `${upstreamDiameter}mm` : '4mm',
@@ -361,7 +362,7 @@ export function ModelViewerPage() {
     const pdValue = pd.trim() || pa
 
     const snapshot: SavedSnapshot = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       image: highlightedImage,
       date: formatSnapshotDate(new Date()),
       upstreamSize: upstreamDiameter.trim() ? `${upstreamDiameter}mm` : '4mm',

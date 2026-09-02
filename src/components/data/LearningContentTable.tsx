@@ -4,18 +4,22 @@ import { useState } from 'react'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 
-import { LearningContentFormModal } from './LearningContentFormModal'
 import { LearningContentPreviewModal } from './LearningContentPreviewModal'
 
 interface LearningContentTableProps {
   frames: LearningContentFrame[]
   onEdit: (id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) => void
+  onOpenAnalysis: (frame: LearningContentFrame) => void
   onDelete: (id: string) => void
 }
 
-export function LearningContentTable({ frames, onEdit, onDelete }: LearningContentTableProps) {
+export function LearningContentTable({
+  frames,
+  onEdit,
+  onOpenAnalysis,
+  onDelete,
+}: LearningContentTableProps) {
   const [previewing, setPreviewing] = useState<LearningContentFrame | null>(null)
-  const [editing, setEditing] = useState<LearningContentFrame | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [fileNameDrafts, setFileNameDrafts] = useState<Record<string, string>>({})
 
@@ -93,7 +97,7 @@ export function LearningContentTable({ frames, onEdit, onDelete }: LearningConte
                     </button>
                     <button
                       type="button"
-                      onClick={() => setEditing(frame)}
+                      onClick={() => onOpenAnalysis(frame)}
                       className="rounded p-1 text-gray-500 transition hover:bg-gray-100"
                       title="編集"
                     >
@@ -117,14 +121,6 @@ export function LearningContentTable({ frames, onEdit, onDelete }: LearningConte
 
       {previewing && (
         <LearningContentPreviewModal frame={previewing} onClose={() => setPreviewing(null)} />
-      )}
-
-      {editing && (
-        <LearningContentFormModal
-          frame={editing}
-          onClose={() => setEditing(null)}
-          onSave={(data) => onEdit(editing.id, data)}
-        />
       )}
 
       {pendingDeleteId && (

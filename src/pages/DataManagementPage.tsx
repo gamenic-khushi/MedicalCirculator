@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DataRecordTable } from '@/components/data/DataRecordTable'
+import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { pickModelFile } from '@/lib/filePickerMemory'
 import { databaseService } from '@/services/appwrite/database'
@@ -25,6 +26,7 @@ function todayDisplayDate(): string {
 
 export function DataManagementPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { setModel } = useModel3D()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
@@ -47,20 +49,34 @@ export function DataManagementPage() {
     )
   }, [records, query])
 
-  function loadFile(file: File) {
+  async function loadFile(file: File) {
     setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
-    navigate(VIEWER_PATH)
+
+    const row = await databaseService.create<DataRecordRow>('data_records', {
+      date: todayDisplayDate(),
+      category: DEFAULT_STUDY_NAME,
+      file: file.name,
+      owner: user?.name || user?.email || '',
+    })
+    const { $id, ...rest } = row
+    setRecords((prev) => [{ id: $id, ...rest }, ...prev])
+
+    navigate(VIEWER_PATH, { state: { dataRecordId: $id } })
   }
 
   async function handleAddNew() {
     setModel(null)
     const file = await pickModelFile(() => inputRef.current?.click())
-    if (file) loadFile(file)
+    if (file) await loadFile(file)
   }
 
   function handleFileSelected(files: FileList | null) {
     if (!files?.length) return
-    loadFile(files[0])
+    void loadFile(files[0])
+  }
+
+  function handleEditRecord(record: DataRecord) {
+    navigate('/data/learning-content', { state: { dataRecordId: record.id } })
   }
 
   async function handleDelete(id: string) {
@@ -128,6 +144,7 @@ export function DataManagementPage() {
       <div className="mt-6">
         <DataRecordTable
           records={filteredRecords}
+          onEdit={handleEditRecord}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
           onUpdateCategory={handleUpdateCategory}

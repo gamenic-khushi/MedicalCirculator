@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { RowActionIcons } from '@/components/common/RowActionIcons'
@@ -7,6 +6,7 @@ import type { DataRecord } from '@/types/dataRecord'
 
 interface DataRecordTableProps {
   records: DataRecord[]
+  onEdit: (record: DataRecord) => void
   onDelete: (id: string) => void
   onDuplicate: (record: DataRecord) => void
   onUpdateCategory: (id: string, category: string) => void
@@ -65,16 +65,12 @@ function EditableCategoryCell({
 
 export function DataRecordTable({
   records,
+  onEdit,
   onDelete,
   onDuplicate,
   onUpdateCategory,
 }: DataRecordTableProps) {
-  const navigate = useNavigate()
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-
-  function openLearningContent() {
-    navigate('/data/learning-content')
-  }
 
   if (records.length === 0) {
     return (
@@ -110,7 +106,7 @@ export function DataRecordTable({
                 <td className="px-6 py-4">
                   <RowActionIcons
                     copyText={`${window.location.origin}/data/${record.id}`}
-                    onEdit={openLearningContent}
+                    onEdit={() => onEdit(record)}
                     onDelete={() => setPendingDeleteId(record.id)}
                     onDuplicate={() => onDuplicate(record)}
                   />

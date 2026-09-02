@@ -1,29 +1,33 @@
 import { Query, type Models } from 'appwrite'
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useModel3D } from '@/hooks/useModel3D'
-import { loadDefaultModel } from '@/lib/defaultModel'
+import { pickModelFile } from '@/lib/filePickerMemory'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
+import { createModel3DFile } from '@/types/model'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const PAGE_SIZE = 100
+const DEFAULT_FOLDER = '２D心弁解析'
 const DEFAULT_STUDY_NAME = '２D心弁解析'
 
-async function fetchAllFrames(): Promise<LearningContentFrame[]> {
+async function fetchFrames(dataRecordId?: string): Promise<LearningContentFrame[]> {
   const rows: LearningContentFrameRow[] = []
   let offset = 0
 
   while (true) {
-    const page = await databaseService.list<LearningContentFrameRow>('learning_content_frames', [
-      Query.orderDesc('$createdAt'),
-      Query.limit(PAGE_SIZE),
-      Query.offset(offset),
-    ])
+    const queries = [Query.orderDesc('$createdAt'), Query.limit(PAGE_SIZE), Query.offset(offset)]
+    if (dataRecordId) queries.push(Query.equal('dataRecordId', dataRecordId))
+
+    const page = await databaseService.list<LearningContentFrameRow>(
+      'learning_content_frames',
+      queries,
+    )
     rows.push(...page.rows)
     if (page.rows.length < PAGE_SIZE) break
     offset += PAGE_SIZE
@@ -34,19 +38,31 @@ async function fetchAllFrames(): Promise<LearningContentFrame[]> {
 
 export function LearningContentPage() {
   const navigate = useNavigate()
-  const { model, setModel } = useModel3D()
+  const location = useLocation()
+  const dataRecordId = (location.state as { dataRecordId?: string } | null)?.dataRecordId
+  const { setModel } = useModel3D()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchAllFrames().then(setFrames)
-  }, [])
+    fetchFrames(dataRecordId)
+      .then(setFrames)
+      .catch((error) => console.error(error))
+  }, [dataRecordId])
+
+  function loadFile(file: File) {
+    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
+    navigate('/data/lesion-measurement', { state: { dataRecordId } })
+  }
 
   async function handleAddNew() {
-    const validModel = model && model.file instanceof File ? model : null
-    if (!validModel) {
-      setModel(await loadDefaultModel())
-    }
-    navigate('/data/lesion-measurement')
+    const file = await pickModelFile(() => inputRef.current?.click())
+    if (file) loadFile(file)
+  }
+
+  function handleFileSelected(files: FileList | null) {
+    if (!files?.length) return
+    loadFile(files[0])
   }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
@@ -57,6 +73,10 @@ export function LearningContentPage() {
   async function handleDelete(id: string) {
     await databaseService.remove('learning_content_frames', id)
     setFrames((prev) => prev.filter((frame) => frame.id !== id))
+  }
+
+  function handleOpenAnalysis(frame: LearningContentFrame) {
+    navigate('/data/lesion-measurement/analysis', { state: { dataRecordId, viewFrame: frame } })
   }
 
   return (
@@ -71,10 +91,22 @@ export function LearningContentPage() {
         >
           <Plus className="h-4 w-4" />
         </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".fbx,.stl,.obj"
+          className="hidden"
+          onChange={(event) => handleFileSelected(event.target.files)}
+        />
       </div>
 
       <div className="mt-4">
-        <LearningContentTable frames={frames} onEdit={handleEdit} onDelete={handleDelete} />
+        <LearningContentTable
+          frames={frames}
+          onEdit={handleEdit}
+          onOpenAnalysis={handleOpenAnalysis}
+          onDelete={handleDelete}
+        />
       </div>
     </div>
   )

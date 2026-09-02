@@ -1,4 +1,4 @@
-import type { Models } from 'appwrite'
+import { Query, type Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { MousePointerClick, Pencil, Upload, ZoomIn, ZoomOut } from 'lucide-react'
@@ -27,6 +27,7 @@ import { useModel3D } from '@/hooks/useModel3D'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { getFfrStenosisFactor } from '@/lib/formulaSettings'
+import { generateId } from '@/lib/id'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { measureTwoPointLesion, type PercentPoint } from '@/lib/twoPointLesionMeasurement'
 import { databaseService } from '@/services/appwrite/database'
@@ -43,7 +44,63 @@ function sortByProximity(points: Annotation[]): Annotation[] {
   return [...points].sort((a, b) => a.y - b.y)
 }
 
-type ParamKey = keyof Omit<LearningContentFrame, 'id' | 'image' | 'fileName' | 'createdAt'>
+function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
+  return {
+    id: row.$id,
+    image: row.image,
+    date: formatSnapshotDate(row.$createdAt ? new Date(row.$createdAt) : new Date()),
+    upstreamSize: row.upstreamSize,
+    downstreamSize: row.downstreamSize,
+    pd: row.pd,
+    pa: row.pa,
+    stenosisRate: row.stenosisRate ?? '—',
+    mla: row.mla ?? '—',
+    lumenVolume: row.lumenVolume ?? '—',
+    bifurcationAngle: row.bifurcationAngle ?? '—',
+  }
+}
+
+// Saved captures store numbers with their unit baked in (e.g. "58.86 mm"),
+// while the live editing state holds bare numbers with the unit shown
+// separately — strip it back off when reloading a capture for viewing.
+function stripUnit(value: string | undefined): string {
+  if (!value || value === '—') return ''
+  return value.split(' ')[0]
+}
+
+function buildParamsFromFrame(frame: LearningContentFrame): Record<ParamKey, string> {
+  return {
+    upstreamSize: stripUnit(frame.upstreamSize),
+    downstreamSize: stripUnit(frame.downstreamSize),
+    pa: stripUnit(frame.pa),
+    pd: stripUnit(frame.pd),
+    parameter: stripUnit(frame.parameter),
+    mld: stripUnit(frame.mld),
+    mla: stripUnit(frame.mla),
+    stenosisRate: stripUnit(frame.stenosisRate),
+    avgDiameter: stripUnit(frame.avgDiameter),
+    lumenVolume: stripUnit(frame.lumenVolume),
+    calcificationVolume: frame.calcificationVolume === '—' ? '' : (frame.calcificationVolume ?? ''),
+    bifurcationAngle: stripUnit(frame.bifurcationAngle),
+  }
+}
+
+function buildSelectedLesionFromFrame(frame: LearningContentFrame): SelectedLesionFormData {
+  return {
+    lesionProximalDiameter: stripUnit(frame.upstreamSize),
+    minVesselDiameter: stripUnit(frame.mld),
+    lesionDistalDiameter: stripUnit(frame.downstreamSize),
+    minCrossSectionArea: stripUnit(frame.mla),
+    stenosisRate: stripUnit(frame.stenosisRate),
+    stenosisLength: '',
+    lesionPosition: '',
+  }
+}
+
+type ParamKey = keyof Omit<
+  LearningContentFrame,
+  'id' | 'dataRecordId' | 'image' | 'fileName' | 'createdAt'
+>
 
 const EMPTY_PARAMS: Record<ParamKey, string> = {
   upstreamSize: '',
@@ -135,7 +192,11 @@ export function LesionAnalysisPage() {
     bloodPressure?: string
     annotations?: Annotation[] | null
     cameraState?: CameraState | null
+    dataRecordId?: string
+    viewFrame?: LearningContentFrame
   } | null
+  const dataRecordId = navigationState?.dataRecordId
+  const viewFrame = navigationState?.viewFrame ?? null
   const initialBloodPressure = navigationState?.bloodPressure
   const initialAnnotations =
     navigationState?.annotations && navigationState.annotations.length === 2
@@ -149,11 +210,16 @@ export function LesionAnalysisPage() {
   const [isAnnotating, setIsAnnotating] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
-  const [bloodPressure, setBloodPressure] = useState(initialBloodPressure ?? '')
-  const [params, setParams] = useState<Record<ParamKey, string>>(EMPTY_PARAMS)
-  const [selectedLesion, setSelectedLesion] =
-    useState<SelectedLesionFormData>(EMPTY_SELECTED_LESION)
-  const [snapshotImage, setSnapshotImage] = useState<string | null>(null)
+  const [bloodPressure, setBloodPressure] = useState(
+    initialBloodPressure ?? (viewFrame ? stripUnit(viewFrame.pa) : ''),
+  )
+  const [params, setParams] = useState<Record<ParamKey, string>>(
+    viewFrame ? buildParamsFromFrame(viewFrame) : EMPTY_PARAMS,
+  )
+  const [selectedLesion, setSelectedLesion] = useState<SelectedLesionFormData>(
+    viewFrame ? buildSelectedLesionFromFrame(viewFrame) : EMPTY_SELECTED_LESION,
+  )
+  const [snapshotImage, setSnapshotImage] = useState<string | null>(viewFrame?.image ?? null)
   const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotations))
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
@@ -161,6 +227,16 @@ export function LesionAnalysisPage() {
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!dataRecordId) return
+    databaseService
+      .list<LearningContentFrameRow>('learning_content_frames', [
+        Query.equal('dataRecordId', dataRecordId),
+        Query.orderDesc('$createdAt'),
+      ])
+      .then(({ rows }) => setSavedSnapshots(rows.map(toSavedSnapshot)))
+  }, [dataRecordId])
 
   useEffect(() => {
     if (!initialAnnotations) return
@@ -242,7 +318,7 @@ export function LesionAnalysisPage() {
     return () => observer.disconnect()
   }, [])
 
-  if (!validModel) {
+  if (!validModel && !viewFrame) {
     return <Navigate to="/data/3d-analysis" replace />
   }
 
@@ -300,7 +376,7 @@ export function LesionAnalysisPage() {
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    const next = [...annotations, { id: crypto.randomUUID(), x, y }]
+    const next = [...annotations, { id: generateId(), x, y }]
     if (next.length === 2) {
       const sorted = sortByProximity(next)
       setAnnotations(sorted)
@@ -454,7 +530,7 @@ export function LesionAnalysisPage() {
     setSavedSnapshots((prev) => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: generateId(),
         image,
         date: formatSnapshotDate(new Date()),
         upstreamSize: params.upstreamSize ? `${params.upstreamSize} mm` : '—',
@@ -475,17 +551,23 @@ export function LesionAnalysisPage() {
   }
 
   function handleDownloadPdf() {
-    if (!validModel) return
+    if (!validModel && !viewFrame) return
     const image = snapshotImage ?? canvasRef.current?.capture() ?? null
     const reportWindow = window.open('', '_blank')
     if (!reportWindow) return
 
+    const ffrDisplay = measurement
+      ? measurement.ffrValue.toFixed(2)
+      : params.stenosisRate
+        ? (1 - (Number(params.stenosisRate) / 100) * getFfrStenosisFactor()).toFixed(2)
+        : '—'
+
     const rows: [string, string][] = [
-      ['ファイル名', validModel.file.name],
+      ['ファイル名', validModel ? validModel.file.name : (viewFrame?.fileName ?? '—')],
       ['Pa', params.pa ? `${params.pa} mmHg` : '—'],
       ['Pd', params.pd ? `${params.pd} mmHg` : '—'],
       ['Stenosis rate', params.stenosisRate ? `${params.stenosisRate} %` : '—'],
-      ['FFR', measurement ? measurement.ffrValue.toFixed(2) : '—'],
+      ['FFR', ffrDisplay],
       ['上流血管のサイズ', params.upstreamSize ? `${params.upstreamSize} mm` : '—'],
       ['下流血管のサイズ', params.downstreamSize ? `${params.downstreamSize} mm` : '—'],
       ['MLA', params.mla ? `${params.mla} mm²` : '—'],
@@ -542,7 +624,8 @@ export function LesionAnalysisPage() {
     const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
 
     try {
-      await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
+      const row = await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
+        ...(dataRecordId ? { dataRecordId } : {}),
         image,
         upstreamSize: params.upstreamSize ? `${params.upstreamSize} mm` : '—',
         downstreamSize: params.downstreamSize ? `${params.downstreamSize} mm` : '—',
@@ -557,6 +640,7 @@ export function LesionAnalysisPage() {
         calcificationVolume: params.calcificationVolume || '—',
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
       })
+      setSavedSnapshots((prev) => [toSavedSnapshot(row), ...prev])
       showToast('学習データに保存しました')
     } catch (error) {
       console.error(error)
@@ -575,7 +659,9 @@ export function LesionAnalysisPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{validModel.studyName}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {validModel?.studyName ?? '保存済みキャプチャ'}
+        </h1>
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
           <button
             type="button"
@@ -592,7 +678,7 @@ export function LesionAnalysisPage() {
           >
             PDFダウンロード
           </button>
-          {isAdmin && (
+          {isAdmin && !viewFrame && (
             <button
               type="button"
               onClick={handleSaveToLearningData}
@@ -668,94 +754,110 @@ export function LesionAnalysisPage() {
               isAnnotating ? 'cursor-crosshair' : ''
             }`}
           >
-            <ModelCanvas
-              ref={canvasRef}
-              url={validModel.objectUrl}
-              extension={validModel.extension}
-              color={MODEL_COLOR}
-              controlsEnabled={!isAnnotating && annotations.length < 2}
-              initialCamera={cameraState}
-              onCameraChange={setCameraState}
-            />
+            {viewFrame ? (
+              <>
+                <img
+                  src={viewFrame.image}
+                  alt="保存されたキャプチャ"
+                  className="h-full w-full object-contain"
+                />
+                <PressurePointsPanel pa={params.pa} pd={params.pd} />
+                <AnatomyGuideThumbnail />
+              </>
+            ) : (
+              <>
+                <ModelCanvas
+                  ref={canvasRef}
+                  url={validModel!.objectUrl}
+                  extension={validModel!.extension}
+                  color={MODEL_COLOR}
+                  controlsEnabled={!isAnnotating && annotations.length < 2}
+                  initialCamera={cameraState}
+                  onCameraChange={setCameraState}
+                />
 
-            <TwoPointMarkers points={annotations} />
+                <TwoPointMarkers points={annotations} />
 
-            <div className="absolute left-4 top-4 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => setIsAnnotating((value) => !value)}
-                className={`rounded-full border p-2 shadow-sm transition ${
-                  isAnnotating
-                    ? 'border-red-200 bg-red-50 text-red-500'
-                    : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-                title="2点をクリックして選択（①心臓に近い側 → ②遠い側）"
-              >
-                <MousePointerClick className="h-4 w-4" />
-              </button>
-            </div>
+                <div className="absolute left-4 top-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAnnotating((value) => !value)}
+                    className={`rounded-full border p-2 shadow-sm transition ${
+                      isAnnotating
+                        ? 'border-red-200 bg-red-50 text-red-500'
+                        : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title="2点をクリックして選択（①心臓に近い側 → ②遠い側）"
+                  >
+                    <MousePointerClick className="h-4 w-4" />
+                  </button>
+                </div>
 
-            <div className="absolute right-4 top-4 flex flex-col gap-2">
-              {measurement && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingLesion(true)}
-                  className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                  title="選択病変を修正"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => canvasRef.current?.zoomIn()}
-                className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-              >
-                <ZoomIn className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => canvasRef.current?.zoomOut()}
-                className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-              >
-                <ZoomOut className="h-4 w-4" />
-              </button>
-            </div>
+                <div className="absolute right-4 top-4 flex flex-col gap-2">
+                  {measurement && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingLesion(true)}
+                      className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                      title="選択病変を修正"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => canvasRef.current?.zoomIn()}
+                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => canvasRef.current?.zoomOut()}
+                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </button>
+                </div>
 
-            {measurement && <FfrResultOverlay {...measurement} />}
+                {measurement && <FfrResultOverlay {...measurement} />}
 
-            <PressurePointsPanel
-              pa={measurement ? params.pa : ''}
-              pd={measurement ? params.pd : ''}
-            />
-            <AnatomyGuideThumbnail />
-            <ViewerToolbar
-              activeTool={activeTool}
-              onToolChange={handleToolChange}
-              onToggleFullscreen={() => {}}
-              onReset={handleResetAnnotations}
-            />
+                <PressurePointsPanel
+                  pa={measurement ? params.pa : ''}
+                  pd={measurement ? params.pd : ''}
+                />
+                <AnatomyGuideThumbnail />
+                <ViewerToolbar
+                  activeTool={activeTool}
+                  onToolChange={handleToolChange}
+                  onToggleFullscreen={() => {}}
+                  onReset={handleResetAnnotations}
+                />
+              </>
+            )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-4">
-            <button
-              type="button"
-              onClick={handleCalculateFfr}
-              disabled={!canCalculate}
-              title={disabledReason}
-              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              FFRを計算
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!measurement}
-              className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              保存
-            </button>
-          </div>
+          {!viewFrame && (
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-4">
+              <button
+                type="button"
+                onClick={handleCalculateFfr}
+                disabled={!canCalculate}
+                title={disabledReason}
+                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                FFRを計算
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!measurement}
+                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                保存
+              </button>
+            </div>
+          )}
         </div>
 
         <SavedSnapshotsPanel

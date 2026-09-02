@@ -1,5 +1,6 @@
 export interface LearningContentFrame {
   id: string
+  dataRecordId?: string
   image: string
   fileName?: string
   createdAt?: string
