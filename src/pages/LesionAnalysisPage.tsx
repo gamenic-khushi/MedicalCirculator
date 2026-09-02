@@ -319,7 +319,7 @@ export function LesionAnalysisPage() {
   }, [])
 
   if (!validModel && !viewFrame) {
-    return <Navigate to="/data/3d-analysis" replace />
+    return <Navigate to="/data/3d-analysis" state={{ dataRecordId }} replace />
   }
 
   function showToast(message: string) {
@@ -547,7 +547,7 @@ export function LesionAnalysisPage() {
 
   function handleUploadNewModel() {
     setModel(null)
-    navigate('/data/3d-analysis')
+    navigate('/data/3d-analysis', { state: { dataRecordId } })
   }
 
   function handleDownloadPdf() {

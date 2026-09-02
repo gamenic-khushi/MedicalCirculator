@@ -60,7 +60,7 @@ export function LesionMeasurementPage() {
   }, [])
 
   if (!validModel) {
-    return <Navigate to="/data/3d-analysis" replace />
+    return <Navigate to="/data/3d-analysis" state={{ dataRecordId }} replace />
   }
 
   function handleToolChange(tool: ViewerTool) {

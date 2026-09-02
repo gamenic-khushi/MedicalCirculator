@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { pickModelFile } from '@/lib/filePickerMemory'
 import { useModel3D } from '@/hooks/useModel3D'
@@ -14,12 +14,15 @@ interface ThreeDAnalysisPageProps {
 
 export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: ThreeDAnalysisPageProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const dataRecordId = (location.state as { dataRecordId?: string } | null)?.dataRecordId
   const inputRef = useRef<HTMLInputElement>(null)
   const { model, setModel } = useModel3D()
   const [studyName, setStudyName] = useState('')
 
   useEffect(() => {
-    if (model) navigate(viewerPath, { replace: true })
+    if (model) navigate(viewerPath, { replace: true, state: { dataRecordId } })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, navigate, viewerPath])
 
   function loadFile(file: File) {
@@ -29,7 +32,7 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
         studyName: studyName.trim() || DEFAULT_STUDY_NAME,
       }),
     )
-    navigate(viewerPath)
+    navigate(viewerPath, { state: { dataRecordId } })
   }
 
   function handleFileSelected(files: FileList | null) {
