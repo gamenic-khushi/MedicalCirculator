@@ -101,6 +101,9 @@ export function DataRecordTable({
                     value={record.category}
                     onSave={(next) => onUpdateCategory(record.id, next)}
                   />
+                  {record.file && (
+                    <p className="truncate px-2 text-xs text-gray-400">{record.file}</p>
+                  )}
                 </td>
                 <td className="px-10 py-4 text-gray-900">{record.owner}</td>
                 <td className="px-6 py-4">

@@ -7,10 +7,12 @@ import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useModel3D } from '@/hooks/useModel3D'
 import { pickModelFile } from '@/lib/filePickerMemory'
 import { databaseService } from '@/services/appwrite/database'
+import type { DataRecord } from '@/types/dataRecord'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { createModel3DFile } from '@/types/model'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
+type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
 
 const PAGE_SIZE = 100
 const DEFAULT_FOLDER = '２D心弁解析'
@@ -42,11 +44,23 @@ export function LearningContentPage() {
   const dataRecordId = (location.state as { dataRecordId?: string } | null)?.dataRecordId
   const { setModel } = useModel3D()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
+  const [record, setRecord] = useState<DataRecord | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchFrames(dataRecordId)
       .then(setFrames)
+      .catch((error) => console.error(error))
+  }, [dataRecordId])
+
+  useEffect(() => {
+    if (!dataRecordId) {
+      setRecord(null)
+      return
+    }
+    databaseService
+      .get<DataRecordRow>('data_records', dataRecordId)
+      .then(({ $id, ...rest }) => setRecord({ id: $id, ...rest }))
       .catch((error) => console.error(error))
   }, [dataRecordId])
 
@@ -82,7 +96,7 @@ export function LearningContentPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="mt-3 flex items-center gap-2">
-        <span className="text-2xl font-bold text-gray-900">{DEFAULT_STUDY_NAME}</span>
+        <span className="text-2xl font-bold text-gray-900">{record?.category ?? DEFAULT_STUDY_NAME}</span>
         <button
           type="button"
           onClick={handleAddNew}
@@ -99,6 +113,11 @@ export function LearningContentPage() {
           onChange={(event) => handleFileSelected(event.target.files)}
         />
       </div>
+      {record && (
+        <p className="mt-1 text-sm text-gray-400">
+          {record.file} ・ {record.date} ・ {record.owner}
+        </p>
+      )}
 
       <div className="mt-4">
         <LearningContentTable
