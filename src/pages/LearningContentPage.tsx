@@ -18,18 +18,19 @@ const PAGE_SIZE = 100
 const DEFAULT_FOLDER = '２D心弁解析'
 const DEFAULT_STUDY_NAME = '２D心弁解析'
 
-async function fetchFrames(dataRecordId?: string): Promise<LearningContentFrame[]> {
+// Every folder's ✏️ shows the same shared list of captures for now, rather
+// than each folder's own separate data — per Aki-san's note that this is
+// fine short-term, so this intentionally does not filter by dataRecordId.
+async function fetchFrames(): Promise<LearningContentFrame[]> {
   const rows: LearningContentFrameRow[] = []
   let offset = 0
 
   while (true) {
-    const queries = [Query.orderDesc('$createdAt'), Query.limit(PAGE_SIZE), Query.offset(offset)]
-    if (dataRecordId) queries.push(Query.equal('dataRecordId', dataRecordId))
-
-    const page = await databaseService.list<LearningContentFrameRow>(
-      'learning_content_frames',
-      queries,
-    )
+    const page = await databaseService.list<LearningContentFrameRow>('learning_content_frames', [
+      Query.orderDesc('$createdAt'),
+      Query.limit(PAGE_SIZE),
+      Query.offset(offset),
+    ])
     rows.push(...page.rows)
     if (page.rows.length < PAGE_SIZE) break
     offset += PAGE_SIZE
@@ -48,10 +49,10 @@ export function LearningContentPage() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchFrames(dataRecordId)
+    fetchFrames()
       .then(setFrames)
       .catch((error) => console.error(error))
-  }, [dataRecordId])
+  }, [])
 
   useEffect(() => {
     if (!dataRecordId) {

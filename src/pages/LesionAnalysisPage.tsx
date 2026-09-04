@@ -155,7 +155,7 @@ function LesionSnapshotPanel({
 }) {
   const hasShape = proximalDiameter > 0 && minDiameter > 0 && distalDiameter > 0
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="flex-1">
       <p className="text-sm font-semibold text-gray-900">
         生成される3D狭窄形状（中心線に沿った断面）
       </p>
@@ -751,57 +751,12 @@ export function LesionAnalysisPage() {
         </div>
       </div>
 
-      <div
-        className={`mt-6 grid grid-cols-1 gap-4 ${
-          isTableView
-            ? 'pill-scrollbar overflow-x-auto lg:grid-cols-[220px_260px_700px_980px]'
-            : 'lg:grid-cols-[220px_260px_1fr_220px]'
-        }`}
-      >
-        <div className="flex flex-1 flex-col rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />
-
-          <div className="border-t border-gray-100 p-4">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900">選択病変</p>
-              <p className="text-[11px] text-gray-400">自動計測値（修正前）</p>
-            </div>
-            <div className="mt-3 flex flex-col gap-2">
-              {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
-                <div key={key} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-gray-500">{label}</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={selectedLesion[key]}
-                      onChange={(event) => handleSelectedLesionFieldChange(key, event.target.value)}
-                      className={`w-16 rounded border border-gray-200 px-1.5 py-1 text-right outline-none focus:border-indigo-400 ${
-                        key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
-                      }`}
-                    />
-                    <span className="w-6 shrink-0 text-gray-400">{unit}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={handleUpdateSelectedLesion}
-              className="mt-3 w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-            >
-              更新
-            </button>
-          </div>
-        </div>
-
-        <LesionSnapshotPanel
-          proximalDiameter={Number(selectedLesion.lesionProximalDiameter) || 0}
-          minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
-          distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
-          isMeasuring={isMeasuring}
-        />
-
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* 3Dブロック */}
         <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
+            3Dブロック
+          </p>
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
@@ -898,28 +853,98 @@ export function LesionAnalysisPage() {
           </div>
 
           {!viewFrame && (
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-4">
+            <div className="flex items-center justify-center border-t border-gray-100 p-4">
               <button
                 type="button"
-                onClick={handleCalculateFfr}
-                disabled={!canCalculate}
-                title={disabledReason}
-                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleUpdateSelectedLesion}
+                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
               >
-                FFRを計算
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!measurement}
-                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                保存
+                測定範囲を更新
               </button>
             </div>
           )}
         </div>
 
+        {/* 形状ブロック */}
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
+            形状ブロック
+          </p>
+          <div className="flex flex-col gap-4 p-4 sm:flex-row">
+          <div className="flex-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-900">選択病変</p>
+              <p className="text-[11px] text-gray-400">自動計測値（修正前）</p>
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
+                <div key={key} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-gray-500">{label}</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={selectedLesion[key]}
+                      onChange={(event) => handleSelectedLesionFieldChange(key, event.target.value)}
+                      className={`w-16 rounded border border-gray-200 px-1.5 py-1 text-right outline-none focus:border-indigo-400 ${
+                        key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
+                      }`}
+                    />
+                    <span className="w-6 shrink-0 text-gray-400">{unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <LesionSnapshotPanel
+            proximalDiameter={Number(selectedLesion.lesionProximalDiameter) || 0}
+            minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
+            distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
+            isMeasuring={isMeasuring}
+          />
+          </div>
+        </div>
+      </div>
+
+      {/* 測定ブロック */}
+      <div className="mt-4 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
+          測定ブロック
+        </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="sm:max-w-xs sm:flex-1">
+            <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />
+          </div>
+          {!viewFrame && (
+            <div className="p-4 sm:pl-0">
+              <button
+                type="button"
+                onClick={handleCalculateFfr}
+                disabled={!canCalculate}
+                title={disabledReason}
+                className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                FFRを計算
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!viewFrame && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!measurement}
+            className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            仮保存
+          </button>
+        </div>
+      )}
+
+      <div className="mt-4">
         <SavedSnapshotsPanel
           savedSnapshots={savedSnapshots}
           isTableView={isTableView}
