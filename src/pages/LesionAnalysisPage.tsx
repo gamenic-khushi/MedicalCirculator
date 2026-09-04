@@ -641,7 +641,7 @@ export function LesionAnalysisPage() {
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
       })
       setSavedSnapshots((prev) => [toSavedSnapshot(row), ...prev])
-      showToast('学習データに保存しました')
+      navigate('/data/learning-content', { state: { dataRecordId } })
     } catch (error) {
       console.error(error)
       showToast('保存に失敗しました')

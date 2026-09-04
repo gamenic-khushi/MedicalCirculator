@@ -1,12 +1,25 @@
+import type { Models } from 'appwrite'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import { pickModelFile } from '@/lib/filePickerMemory'
+import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
+import { pickModelFile } from '@/lib/filePickerMemory'
+import { databaseService } from '@/services/appwrite/database'
+import type { DataRecord } from '@/types/dataRecord'
 import { createModel3DFile } from '@/types/model'
+
+type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
 
 const DEFAULT_FOLDER = '２D心弁解析'
 const DEFAULT_STUDY_NAME = '２D心弁解析'
+
+function todayDisplayDate(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}/${month}/${day}`
+}
 
 interface ThreeDAnalysisPageProps {
   viewerPath?: string
@@ -15,6 +28,7 @@ interface ThreeDAnalysisPageProps {
 export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: ThreeDAnalysisPageProps) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
   const dataRecordId = (location.state as { dataRecordId?: string } | null)?.dataRecordId
   const inputRef = useRef<HTMLInputElement>(null)
   const { model, setModel } = useModel3D()
@@ -25,24 +39,32 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, navigate, viewerPath])
 
-  function loadFile(file: File) {
-    setModel(
-      createModel3DFile(file, {
-        folder: DEFAULT_FOLDER,
-        studyName: studyName.trim() || DEFAULT_STUDY_NAME,
-      }),
-    )
-    navigate(viewerPath, { state: { dataRecordId } })
+  async function loadFile(file: File) {
+    const resolvedStudyName = studyName.trim() || DEFAULT_STUDY_NAME
+    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: resolvedStudyName }))
+
+    let resolvedDataRecordId = dataRecordId
+    if (!resolvedDataRecordId) {
+      const row = await databaseService.create<DataRecordRow>('data_records', {
+        date: todayDisplayDate(),
+        category: resolvedStudyName,
+        file: file.name,
+        owner: user?.name || user?.email || '',
+      })
+      resolvedDataRecordId = row.$id
+    }
+
+    navigate(viewerPath, { state: { dataRecordId: resolvedDataRecordId } })
   }
 
   function handleFileSelected(files: FileList | null) {
     if (!files?.length) return
-    loadFile(files[0])
+    void loadFile(files[0])
   }
 
   async function handleOpenFolder() {
     const file = await pickModelFile(() => inputRef.current?.click())
-    if (file) loadFile(file)
+    if (file) await loadFile(file)
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {

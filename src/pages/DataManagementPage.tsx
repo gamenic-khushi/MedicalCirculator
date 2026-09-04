@@ -1,21 +1,14 @@
 import type { Models } from 'appwrite'
 import { Search, Upload } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DataRecordTable } from '@/components/data/DataRecordTable'
-import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
-import { pickModelFile } from '@/lib/filePickerMemory'
 import { databaseService } from '@/services/appwrite/database'
-import { createModel3DFile } from '@/types/model'
 import type { DataRecord } from '@/types/dataRecord'
 
 type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
-
-const DEFAULT_FOLDER = '２D心弁解析'
-const DEFAULT_STUDY_NAME = '２D心弁解析'
-const VIEWER_PATH = '/data/lesion-measurement'
 
 function todayDisplayDate(): string {
   const now = new Date()
@@ -26,11 +19,9 @@ function todayDisplayDate(): string {
 
 export function DataManagementPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
   const { setModel } = useModel3D()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     databaseService.list<DataRecordRow>('data_records').then(({ rows }) => {
@@ -49,30 +40,9 @@ export function DataManagementPage() {
     )
   }, [records, query])
 
-  async function loadFile(file: File) {
-    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
-
-    const row = await databaseService.create<DataRecordRow>('data_records', {
-      date: todayDisplayDate(),
-      category: DEFAULT_STUDY_NAME,
-      file: file.name,
-      owner: user?.name || user?.email || '',
-    })
-    const { $id, ...rest } = row
-    setRecords((prev) => [{ id: $id, ...rest }, ...prev])
-
-    navigate(VIEWER_PATH, { state: { dataRecordId: $id } })
-  }
-
-  async function handleAddNew() {
+  function handleAddNew() {
     setModel(null)
-    const file = await pickModelFile(() => inputRef.current?.click())
-    if (file) await loadFile(file)
-  }
-
-  function handleFileSelected(files: FileList | null) {
-    if (!files?.length) return
-    void loadFile(files[0])
+    navigate('/data/3d-analysis')
   }
 
   function handleEditRecord(record: DataRecord) {
@@ -120,13 +90,6 @@ export function DataManagementPage() {
             <Upload className="h-4 w-4" />
             新規追加
           </button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".fbx,.stl,.obj"
-            className="hidden"
-            onChange={(event) => handleFileSelected(event.target.files)}
-          />
         </div>
 
         <div className="relative w-full sm:w-64">

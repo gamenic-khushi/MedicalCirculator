@@ -437,14 +437,43 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return true
     },
     highlightSegment: (x1Percent, y1Percent, x2Percent, y2Percent, referenceWidth) => {
+      // Walk from point 1 toward point 2 rather than sampling a straight 2D
+      // line: each step re-aims from where the vessel surface actually was
+      // hit last, so the highlighted path bends to follow a curving or
+      // branching vessel instead of cutting across the gap between them.
+      const totalDistance = Math.hypot(x2Percent - x1Percent, y2Percent - y1Percent)
+      const stepSize = totalDistance / SEGMENT_HIGHLIGHT_STEPS || 1
+
       const samples: { point: THREE.Vector3; object: THREE.Object3D }[] = []
-      for (let step = 0; step <= SEGMENT_HIGHLIGHT_STEPS; step++) {
-        const t = step / SEGMENT_HIGHLIGHT_STEPS
-        const x = x1Percent + (x2Percent - x1Percent) * t
-        const y = y1Percent + (y2Percent - y1Percent) * t
-        const hit = getHitResult(x, y)
-        if (hit) samples.push({ point: hit.point, object: hit.object })
+      let x = x1Percent
+      let y = y1Percent
+      const startHit = getHitResult(x, y)
+      if (startHit) samples.push({ point: startHit.point, object: startHit.object })
+
+      for (let step = 1; step <= SEGMENT_HIGHLIGHT_STEPS; step++) {
+        const remainingX = x2Percent - x
+        const remainingY = y2Percent - y
+        const remainingDistance = Math.hypot(remainingX, remainingY)
+        if (remainingDistance < 0.01) break
+
+        const travel = Math.min(stepSize, remainingDistance)
+        const nextX = x + (remainingX / remainingDistance) * travel
+        const nextY = y + (remainingY / remainingDistance) * travel
+
+        const found = findNearestHit(nextX, nextY)
+        if (found) {
+          x = found.x
+          y = found.y
+          samples.push({ point: found.hit.point, object: found.hit.object })
+        } else {
+          x = nextX
+          y = nextY
+        }
       }
+
+      const endHit = getHitResult(x2Percent, y2Percent)
+      if (endHit) samples.push({ point: endHit.point, object: endHit.object })
+
       const targetObject = samples[0]?.object
       if (!targetObject || !(targetObject instanceof THREE.Mesh)) return false
 
