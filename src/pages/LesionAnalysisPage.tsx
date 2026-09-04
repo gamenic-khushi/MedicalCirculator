@@ -1,7 +1,7 @@
 import { Query, type Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { MousePointerClick, Pencil, Upload, ZoomIn, ZoomOut } from 'lucide-react'
+import { Info, MousePointerClick, Pencil, Upload, X, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
@@ -13,6 +13,7 @@ import {
   type ModelCanvasHandle,
   type ViewerTool,
 } from '@/components/model-viewer/ModelCanvas'
+import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
 import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPanel'
 import {
@@ -224,6 +225,9 @@ export function LesionAnalysisPage() {
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
+  const [isInfoOpen, setIsInfoOpen] = useState(false)
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
@@ -545,6 +549,27 @@ export function LesionAnalysisPage() {
     ])
   }
 
+  function handleStartEditingTitle() {
+    setTitleDraft(validModel?.studyName ?? '')
+    setIsEditingTitle(true)
+  }
+
+  async function commitTitle() {
+    setIsEditingTitle(false)
+    const trimmed = titleDraft.trim()
+    if (!validModel || !trimmed || trimmed === validModel.studyName) return
+
+    setModel({ ...validModel, studyName: trimmed })
+    if (dataRecordId) {
+      try {
+        await databaseService.update('data_records', dataRecordId, { category: trimmed })
+      } catch (error) {
+        console.error(error)
+        showToast('タイトルの保存に失敗しました')
+      }
+    }
+  }
+
   function handleUploadNewModel() {
     setModel(null)
     navigate('/data/3d-analysis', { state: { dataRecordId } })
@@ -659,9 +684,44 @@ export function LesionAnalysisPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {validModel?.studyName ?? '保存済みキャプチャ'}
-        </h1>
+        <div className="flex items-center gap-2">
+          {validModel && isEditingTitle ? (
+            <input
+              autoFocus
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitTitle()
+                if (event.key === 'Escape') {
+                  setTitleDraft(validModel.studyName)
+                  setIsEditingTitle(false)
+                }
+              }}
+              className="rounded border border-indigo-300 px-2 py-1 text-2xl font-bold text-gray-900 outline-none focus:border-indigo-400"
+            />
+          ) : (
+            <h1
+              onClick={validModel ? handleStartEditingTitle : undefined}
+              title={validModel ? 'クリックして編集' : undefined}
+              className={`text-2xl font-bold text-gray-900 ${
+                validModel ? 'cursor-pointer rounded px-2 py-1 hover:bg-gray-50' : ''
+              }`}
+            >
+              {validModel?.studyName ?? '保存済みキャプチャ'}
+            </h1>
+          )}
+          {validModel && (
+            <button
+              type="button"
+              onClick={() => setIsInfoOpen(true)}
+              title="モデル情報"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2 self-start sm:self-auto">
           <button
             type="button"
@@ -874,6 +934,29 @@ export function LesionAnalysisPage() {
           onClose={() => setIsEditingLesion(false)}
           onSave={handleSaveSelectedLesion}
         />
+      )}
+
+      {isInfoOpen && validModel && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setIsInfoOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+            className="relative w-full max-w-xs overflow-hidden rounded-2xl bg-white shadow-xl [&>div]:border-t-0"
+          >
+            <button
+              type="button"
+              onClick={() => setIsInfoOpen(false)}
+              className="absolute -right-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm transition hover:text-gray-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+            <ModelInfoCard model={validModel} />
+          </div>
+        </div>
       )}
 
       {isMeasuring && <LoadingOverlay message="病変を計測しています..." />}

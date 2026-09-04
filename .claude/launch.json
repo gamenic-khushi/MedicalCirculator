@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5173,
       "autoPort": true
+    },
+    {
+      "name": "vtkjs-lesion-test",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "prototypes/vtkjs-lesion-test", "run", "dev", "--", "--port", "5180"],
+      "port": 5180,
+      "autoPort": true
     }
   ]
 }

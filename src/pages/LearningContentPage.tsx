@@ -66,7 +66,7 @@ export function LearningContentPage() {
 
   function loadFile(file: File) {
     setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
-    navigate('/data/lesion-measurement', { state: { dataRecordId } })
+    navigate('/data/lesion-measurement/analysis', { state: { dataRecordId } })
   }
 
   async function handleAddNew() {

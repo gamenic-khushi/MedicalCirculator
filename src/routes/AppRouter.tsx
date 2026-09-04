@@ -9,7 +9,6 @@ import { DocumentsPage } from '@/pages/DocumentsPage'
 import { FormulaSettingsPage } from '@/pages/FormulaSettingsPage'
 import { LearningContentPage } from '@/pages/LearningContentPage'
 import { LesionAnalysisPage } from '@/pages/LesionAnalysisPage'
-import { LesionMeasurementPage } from '@/pages/LesionMeasurementPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { ModelViewerErrorPage } from '@/pages/ModelViewerErrorPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -58,7 +57,7 @@ const router = createBrowserRouter([
         path: 'data/3d-analysis',
         element: (
           <AdminRoute>
-            <ThreeDAnalysisPage viewerPath="/data/lesion-measurement" />
+            <ThreeDAnalysisPage viewerPath="/data/lesion-measurement/analysis" />
           </AdminRoute>
         ),
       },
@@ -67,14 +66,6 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <LearningContentPage />
-          </AdminRoute>
-        ),
-      },
-      {
-        path: 'data/lesion-measurement',
-        element: (
-          <AdminRoute>
-            <LesionMeasurementPage />
           </AdminRoute>
         ),
       },
