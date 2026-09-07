@@ -81,7 +81,7 @@ export function DataManagementPage() {
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">学習データ管理</h1>
+          <h1 className="text-2xl font-bold text-gray-900">3D解析</h1>
           <button
             type="button"
             onClick={handleAddNew}
