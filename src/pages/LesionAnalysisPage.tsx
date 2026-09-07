@@ -1,7 +1,7 @@
 import { Query, type Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Info, MousePointerClick, Pencil, Upload, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
@@ -187,7 +187,6 @@ export function LesionAnalysisPage() {
   const { model, setModel } = useModel3D()
   const validModel = model && model.file instanceof File ? model : null
   const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshot[]>([])
-  const [isTableView, setIsTableView] = useState(false)
   const location = useLocation()
   const navigationState = location.state as {
     bloodPressure?: string
@@ -570,11 +569,6 @@ export function LesionAnalysisPage() {
     }
   }
 
-  function handleUploadNewModel() {
-    setModel(null)
-    navigate('/data/3d-analysis', { state: { dataRecordId } })
-  }
-
   function handleDownloadPdf() {
     if (!validModel && !viewFrame) return
     const image = snapshotImage ?? canvasRef.current?.capture() ?? null
@@ -683,8 +677,7 @@ export function LesionAnalysisPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
           {validModel && isEditingTitle ? (
             <input
               autoFocus
@@ -721,34 +714,6 @@ export function LesionAnalysisPage() {
               <Info className="h-4 w-4" />
             </button>
           )}
-        </div>
-        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={handleUploadNewModel}
-            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-          >
-            <Upload className="h-4 w-4" />
-            新しいモデルをアップロード
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-          >
-            PDFダウンロード
-          </button>
-          {isAdmin && !viewFrame && (
-            <button
-              type="button"
-              onClick={handleSaveToLearningData}
-              disabled={!measurement}
-              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              学習データに保存
-            </button>
-          )}
-        </div>
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -947,9 +912,10 @@ export function LesionAnalysisPage() {
       <div className="mt-4">
         <SavedSnapshotsPanel
           savedSnapshots={savedSnapshots}
-          isTableView={isTableView}
-          onSetTableView={setIsTableView}
           onDelete={handleDeleteSnapshot}
+          onDownloadPdf={handleDownloadPdf}
+          onSaveToHistory={isAdmin && !viewFrame ? handleSaveToLearningData : undefined}
+          canSaveToHistory={!!measurement}
         />
       </div>
 

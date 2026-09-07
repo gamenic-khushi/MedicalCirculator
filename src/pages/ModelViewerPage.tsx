@@ -79,7 +79,6 @@ export function ModelViewerPage() {
     savedSnapshots,
     setSavedSnapshots,
     isTableView,
-    setIsTableView,
     resetForNewModel,
   } = useViewerState()
 
@@ -592,12 +591,7 @@ export function ModelViewerPage() {
           </div>
         </div>
 
-        <SavedSnapshotsPanel
-          savedSnapshots={savedSnapshots}
-          isTableView={isTableView}
-          onSetTableView={setIsTableView}
-          onDelete={handleDeleteSnapshot}
-        />
+        <SavedSnapshotsPanel savedSnapshots={savedSnapshots} onDelete={handleDeleteSnapshot} />
       </div>
 
       {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
