@@ -1,2 +1,5 @@
 # Regenerable via `npm run convert -- <path-to-fbx>` — large binary, no need to version it
 model.stl
+
+# Client-provided test files (Aki-san's Dropbox share) — large binaries, not ours to version
+aki_test_files/

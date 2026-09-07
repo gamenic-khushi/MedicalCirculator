@@ -7,22 +7,27 @@
 // are manual there: (1) picking the proximal/distal points, and (2)
 // measuring the local vessel width at each sample.
 //
-// Path tracing mirrors the production highlightSegment
-// (src/components/model-viewer/ModelCanvas.tsx): walk step by step from the
-// start point toward the target, re-aiming from wherever we actually
-// snapped to last time, instead of trusting a straight line between two
-// endpoints. A straight line cuts across curved/branching vessels and
-// lands in empty space — walk-and-snap keeps every sample point on the
-// real mesh surface.
+// Path tracing follows the LOCAL direction of travel (like tracing a wire
+// with your finger) rather than aiming at one fixed distant target. An
+// earlier version aimed each step at the single mesh point farthest from
+// the centroid in straight-line distance — that breaks on a COILED vessel,
+// where the true tip can be geometrically close to the centroid despite
+// being far away along the curving path, so the walk aimed at the wrong
+// place entirely and stalled at the first junction. Tangent-following
+// doesn't care where the tip ends up in space; it just keeps advancing
+// along whatever surface is locally ahead, so it follows a curl correctly.
+//
+// Since we don't know up front which of possibly several branches is the
+// one worth analyzing, several candidate starting directions are tried
+// (via farthest-point sampling from the body) and whichever walk covers
+// the most real distance before getting stuck is kept as "the" branch.
 //
 // This is still a ROUGH ESTIMATE by design (per Aki-san's stated
 // requirement), not a clinical-grade centerline extraction:
 //
-//  - Point selection: takes the single mesh point farthest from the overall
-//    centroid as the "distal tip" of one branch, then walks back toward the
-//    centroid. It does not distinguish between separate arteries — on a
-//    tree with multiple similar-length branches it will simply follow
-//    whichever one happens to have the single farthest point.
+//  - It does not distinguish between separate arteries — on a tree with
+//    multiple long branches it follows whichever one the winning candidate
+//    direction happened to reach.
 //  - Snapping to "nearest mesh point" isn't the same as snapping to the
 //    centerline — it can drift toward whichever side of the tube is
 //    nearest, especially at sharp bends.
@@ -34,13 +39,17 @@
 // (e.g. voxelize + distance-transform ridge tracing) and per-branch
 // segmentation — out of scope for this feasibility prototype.
 
-const SCAN_STEPS = 30
 const WALK_STEP_FRACTION_OF_DIAG = 0.006
-const WALK_MAX_STEPS = 400
+const WALK_MAX_STEPS = 600
 const STUCK_STREAK_LIMIT = 5
+const DIRECTION_SMOOTHING = 0.65 // weight kept from the previous direction each step
+const NUM_CANDIDATE_DIRECTIONS = 8
 const SKIP_FRACTION = 0.35
 const NEIGHBOR_TARGET_MIN = 8
 const MAX_RADIUS_ITERATIONS = 12
+const WIDTH_SAMPLE_COUNT = 80 // width profile points per candidate branch
+const LOCAL_WINDOW = 8 // samples each side, for "how much narrower than its own neighborhood"
+const SEGMENT_HALF_WIDTH = 10 // samples each side of the narrowest point, for the reported segment
 
 function boundsDiagonal(bounds) {
   const dx = bounds[1] - bounds[0]
@@ -60,26 +69,6 @@ function computeCentroid(coords) {
     sz += coords[i * 3 + 2]
   }
   return [sx / n, sy / n, sz / n]
-}
-
-function findFarthestPoint(coords, from) {
-  const n = coords.length / 3
-  let maxDist2 = -1
-  let best = [from[0], from[1], from[2]]
-  for (let i = 0; i < n; i++) {
-    const x = coords[i * 3]
-    const y = coords[i * 3 + 1]
-    const z = coords[i * 3 + 2]
-    const dx = x - from[0]
-    const dy = y - from[1]
-    const dz = z - from[2]
-    const d2 = dx * dx + dy * dy + dz * dz
-    if (d2 > maxDist2) {
-      maxDist2 = d2
-      best = [x, y, z]
-    }
-  }
-  return best
 }
 
 function findNearestMeshPoint(coords, from) {
@@ -102,8 +91,44 @@ function findNearestMeshPoint(coords, from) {
   return best
 }
 
-function lerp3(a, b, t) {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+// Picks `k` mesh points spread across the model's extremities: repeatedly
+// choose whichever point is farthest from every point picked so far. Unlike
+// a single "farthest from centroid" point, this reliably lands near the tip
+// of several different branches even when some of those branches coil back
+// close to the body — each candidate becomes a starting direction to try.
+function farthestPointSample(coords, seed, k) {
+  const n = coords.length / 3
+  const picked = [seed]
+  for (let iteration = 0; iteration < k; iteration++) {
+    let bestDist2 = -1
+    let bestPoint = null
+    for (let i = 0; i < n; i++) {
+      const x = coords[i * 3]
+      const y = coords[i * 3 + 1]
+      const z = coords[i * 3 + 2]
+      let minDist2ToPicked = Infinity
+      for (const p of picked) {
+        const dx = x - p[0]
+        const dy = y - p[1]
+        const dz = z - p[2]
+        const d2 = dx * dx + dy * dy + dz * dz
+        if (d2 < minDist2ToPicked) minDist2ToPicked = d2
+      }
+      if (minDist2ToPicked > bestDist2) {
+        bestDist2 = minDist2ToPicked
+        bestPoint = [x, y, z]
+      }
+    }
+    if (!bestPoint) break
+    picked.push(bestPoint)
+  }
+  return picked.slice(1)
+}
+
+function normalize3(v) {
+  const len = Math.hypot(v[0], v[1], v[2])
+  if (len < 1e-9) return [0, 0, 0]
+  return [v[0] / len, v[1] / len, v[2] / len]
 }
 
 function distance3(a, b) {
@@ -119,45 +144,40 @@ function pathLength(path) {
   return total
 }
 
-// Walk from `start` toward `target`, re-aiming from the actual current
-// position each time and snapping every step to the nearest real mesh
-// vertex — same idea as the production highlightSegment. Unlike
-// highlightSegment (a short, already-adjacent two-point case), this walk
-// can span a large chamber-to-branch-tip distance, so it uses a small
-// FIXED physical step size and iterates until it's close to the target or
-// hits maxSteps, rather than dividing the total distance by a fixed step
-// count — dividing by count means long walks take tiny, unreliable steps
-// whenever real per-step progress falls short of the naive geometric
-// distance (e.g. while still crossing a wide chamber).
-function walkAndSnap(coords, start, target, stepSize, maxSteps) {
+// Walk from `start`, continuing in whatever direction the path has been
+// heading — re-derived from the last real step, not aimed at a fixed
+// target — so it follows a curving or coiled vessel instead of cutting
+// toward a point that may not even be the true tip.
+function walkFollowingTangent(coords, start, initialDirection, stepSize, maxSteps) {
   const path = [findNearestMeshPoint(coords, start)]
   let current = path[0]
+  let direction = normalize3(initialDirection)
   let stuckStreak = 0
 
   for (let step = 0; step < maxSteps; step++) {
-    const remaining = [target[0] - current[0], target[1] - current[1], target[2] - current[2]]
-    const remainingDistance = Math.hypot(remaining[0], remaining[1], remaining[2])
-    if (remainingDistance < stepSize) break
+    if (direction[0] === 0 && direction[1] === 0 && direction[2] === 0) break
 
     const guess = [
-      current[0] + (remaining[0] / remainingDistance) * stepSize,
-      current[1] + (remaining[1] / remainingDistance) * stepSize,
-      current[2] + (remaining[2] / remainingDistance) * stepSize,
+      current[0] + direction[0] * stepSize,
+      current[1] + direction[1] * stepSize,
+      current[2] + direction[2] * stepSize,
     ]
     const next = findNearestMeshPoint(coords, guess)
+    const moved = distance3(next, current)
 
-    // Nearest-vertex snapping can trap the walk oscillating around the
-    // same spot with no net progress (common on a sparse or awkwardly
-    // triangulated patch). Stop instead of burning the rest of the step
-    // budget going nowhere, which used to pad the tail with duplicate
-    // points and collapse the analyzed segment to zero length.
-    if (distance3(next, current) < stepSize * 0.2) {
+    if (moved < stepSize * 0.2) {
       stuckStreak++
       if (stuckStreak >= STUCK_STREAK_LIMIT) break
-    } else {
-      stuckStreak = 0
+      continue
     }
+    stuckStreak = 0
 
+    const newDirection = normalize3([next[0] - current[0], next[1] - current[1], next[2] - current[2]])
+    direction = normalize3([
+      direction[0] * DIRECTION_SMOOTHING + newDirection[0] * (1 - DIRECTION_SMOOTHING),
+      direction[1] * DIRECTION_SMOOTHING + newDirection[1] * (1 - DIRECTION_SMOOTHING),
+      direction[2] * DIRECTION_SMOOTHING + newDirection[2] * (1 - DIRECTION_SMOOTHING),
+    ])
     current = next
     path.push(current)
   }
@@ -231,80 +251,93 @@ export function measureLesionAutomatically(polyData) {
   const diag = boundsDiagonal(bounds)
 
   const centroid = computeCentroid(coords)
-  const tip = findFarthestPoint(coords, centroid)
-
-  // Pull in 5% from the very tip to avoid the degenerate zero-width point
-  // right at the branch end.
-  const target = lerp3(centroid, tip, 0.95)
+  const bodyStart = findNearestMeshPoint(coords, centroid)
   const walkStepSize = diag * WALK_STEP_FRACTION_OF_DIAG
-
-  // Two different guesses for where to start the walk both turn out to
-  // work only some of the time, depending on this particular mesh's
-  // proportions: (a) a point already inside the vessel-ish region (30% of
-  // the way from centroid to tip, snapped onto the surface) can trap the
-  // walk near its start if it's actually still inside the wide chamber;
-  // (b) starting from the surface point nearest the centroid guarantees a
-  // real surface start, but can trap the walk wandering the chamber's own
-  // outer skin if the aim direction cuts through solid geometry. Run both
-  // and keep whichever one actually travelled farther — a stuck walk's
-  // total travelled distance stays small, so this is a simple, robust way
-  // to tell which start worked for this particular model.
-  const candidateStarts = [lerp3(centroid, tip, 0.3), centroid]
-  const candidatePaths = candidateStarts.map((start) =>
-    walkAndSnap(coords, start, target, walkStepSize, WALK_MAX_STEPS),
-  )
-  const fullPath = candidatePaths.reduce((best, candidate) =>
-    pathLength(candidate) > pathLength(best) ? candidate : best,
-  )
-
   const initialRadius = diag * 0.01
-  const fullWidths = fullPath.map((p) => estimateLocalDiameter(coords, p, initialRadius))
 
-  // Skip the first fraction of the walk — it's still crossing the wide
-  // main chamber, not the vessel itself. (An attempt at detecting the
-  // chamber/vessel boundary from the width profile directly turned out
-  // less reliable than this fixed fraction across different meshes, so
-  // this stays deliberately simple.)
-  const entryIndex = Math.min(Math.floor(fullPath.length * SKIP_FRACTION), fullPath.length - 2)
+  // Try several different starting directions (toward several well-spread
+  // extremities of the mesh, not just the single farthest point) — a real
+  // vessel tree has multiple branches, and the induced lesion in a test
+  // file could be on any of them.
+  const candidateTargets = farthestPointSample(coords, centroid, NUM_CANDIDATE_DIRECTIONS)
 
-  // The walk takes many small fixed-size steps, so the vessel segment from
-  // entryIndex to the end of the walk can hold far more than SCAN_STEPS
-  // points — downsample it to SCAN_STEPS+1 evenly spaced points so the
-  // analysis covers the whole detected vessel length, not just the first
-  // few fine-grained steps after entry.
-  const vesselPath = fullPath.slice(entryIndex)
-  const vesselWidths = fullWidths.slice(entryIndex)
-  const lastIndex = vesselPath.length - 1
-  const path = []
-  const widths = []
-  for (let i = 0; i <= SCAN_STEPS; i++) {
-    const idx = lastIndex > 0 ? Math.round((i / SCAN_STEPS) * lastIndex) : 0
-    path.push(vesselPath[idx])
-    widths.push(vesselWidths[idx])
+  // For each branch, walk it, skip the part still crossing the main
+  // chamber, then sample its width profile. Instead of just reporting
+  // "whatever's narrowest along the branch we happened to walk farthest
+  // on" (which tends to land on incidental anatomy, not the actual
+  // lesion), score every sampled point by how much narrower it is than
+  // its OWN local neighborhood — a real stenosis is a local dip, not
+  // just the thinnest point on an arbitrarily long walk. The best local
+  // dip found across every branch is taken as the lesion.
+  let best = null
+  const branchDebug = []
+
+  candidateTargets.forEach((target, branchIndex) => {
+    const fullPath = walkFollowingTangent(
+      coords,
+      bodyStart,
+      [target[0] - bodyStart[0], target[1] - bodyStart[1], target[2] - bodyStart[2]],
+      walkStepSize,
+      WALK_MAX_STEPS,
+    )
+    const entryIndex = Math.min(Math.floor(fullPath.length * SKIP_FRACTION), Math.max(fullPath.length - 2, 0))
+    const vesselPath = fullPath.slice(entryIndex)
+    branchDebug.push({ branchIndex, fullPathLength: fullPath.length, vesselPathLength: vesselPath.length })
+    if (vesselPath.length < LOCAL_WINDOW * 2) return
+
+    const sampleCount = Math.min(WIDTH_SAMPLE_COUNT, vesselPath.length)
+    const samplePath = []
+    for (let i = 0; i < sampleCount; i++) {
+      const idx = sampleCount > 1 ? Math.round((i / (sampleCount - 1)) * (vesselPath.length - 1)) : 0
+      samplePath.push(vesselPath[idx])
+    }
+    const sampleWidths = samplePath.map((p) => estimateLocalDiameter(coords, p, initialRadius).diameter)
+
+    for (let j = 0; j < sampleWidths.length; j++) {
+      const d = sampleWidths[j]
+      if (!d) continue
+      const lo = Math.max(0, j - LOCAL_WINDOW)
+      const hi = Math.min(sampleWidths.length - 1, j + LOCAL_WINDOW)
+      let localMax = 0
+      for (let k = lo; k <= hi; k++) {
+        if (sampleWidths[k] && sampleWidths[k] > localMax) localMax = sampleWidths[k]
+      }
+      if (localMax <= 0) continue
+      const score = 1 - d / localMax
+      if (!best || score > best.score) {
+        best = { branchIndex, samplePath, sampleWidths, narrowIndex: j, score, localMax }
+      }
+    }
+  })
+
+  if (!best) {
+    return {
+      ok: false,
+      reason: '血管の幅を推定できませんでした（有効な分岐が見つかりません）',
+      debug: { centroid, bodyStart, branchDebug },
+    }
   }
+
+  const { samplePath, sampleWidths, narrowIndex, branchIndex, score } = best
+  const proxIdx = Math.max(0, narrowIndex - SEGMENT_HALF_WIDTH)
+  const distIdx = Math.min(sampleWidths.length - 1, narrowIndex + SEGMENT_HALF_WIDTH)
+
+  const path = samplePath.slice(proxIdx, distIdx + 1)
+  const widths = sampleWidths.slice(proxIdx, distIdx + 1)
   const proximal = path[0]
   const distal = path[path.length - 1]
-  const proximalWidth = widths[0].diameter
-  const distalWidth = widths[widths.length - 1].diameter
+  const proximalWidth = widths[0]
+  const distalWidth = widths[widths.length - 1]
+  const narrowestWidth = sampleWidths[narrowIndex]
+  const narrowestPoint = samplePath[narrowIndex]
 
-  if (!proximalWidth || !distalWidth) {
+  if (!proximalWidth || !distalWidth || !narrowestWidth) {
     return {
       ok: false,
       reason: '血管の幅を推定できませんでした（近位・遠位点で近傍点が見つかりません）',
-      debug: { centroid, tip, proximal, distal, initialRadius, widths },
+      debug: { centroid, bodyStart, proximal, distal, branchIndex, branchDebug },
     }
   }
-
-  let narrowestWidth = proximalWidth
-  let narrowestPoint = proximal
-  let narrowestStep = 0
-  widths.forEach((w, step) => {
-    if (w.diameter && w.diameter < narrowestWidth) {
-      narrowestWidth = w.diameter
-      narrowestPoint = path[step]
-      narrowestStep = step
-    }
-  })
 
   const segmentLength = distance3(proximal, distal)
   const referenceDiameter = (proximalWidth + distalWidth) / 2
@@ -313,13 +346,15 @@ export function measureLesionAutomatically(polyData) {
   const mld = referenceDiameter * (1 - stenosisRate / 100)
   const mla = Math.PI * (mld / 2) ** 2
 
-  const ratio = narrowestStep / SCAN_STEPS
+  const narrowestStep = narrowIndex - proxIdx
+  const totalSteps = distIdx - proxIdx
+  const ratio = totalSteps > 0 ? narrowestStep / totalSteps : 0.5
   const lesionPosition = ratio < 1 / 3 ? '近位' : ratio > 2 / 3 ? '遠位' : '中間'
 
   return {
     ok: true,
     centroid,
-    tip,
+    bodyStart,
     proximal,
     distal,
     proximalWidth,
@@ -332,12 +367,11 @@ export function measureLesionAutomatically(polyData) {
     mla,
     lesionPosition,
     path,
-    widths: widths.map((w) => w.diameter),
+    widths,
     debug: {
-      fullPathLength: fullPath.length,
-      entryIndex,
-      target,
-      candidatePathLengths: candidatePaths.map(pathLength),
+      winningBranch: branchIndex,
+      narrowingScore: score,
+      branchDebug,
     },
   }
 }

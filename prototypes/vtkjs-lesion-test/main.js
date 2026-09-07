@@ -15,6 +15,18 @@ import { measureLesionAutomatically } from './autoLesionMeasurement.js'
 
 const info = document.getElementById('info')
 
+// Test files come in different unit scales (mm-ish vs. meters), so a fixed
+// decimal count either shows garbage precision or rounds everything to
+// "0.0" — pick precision from the magnitude instead.
+function fmt(value) {
+  const abs = Math.abs(value)
+  if (abs === 0) return '0'
+  if (abs < 0.01) return value.toFixed(6)
+  if (abs < 1) return value.toFixed(4)
+  if (abs < 100) return value.toFixed(2)
+  return value.toFixed(1)
+}
+
 const fullScreenRenderer = vtkFullScreenRenderWindow.newInstance({ background: [0.12, 0.12, 0.12] })
 const renderer = fullScreenRenderer.getRenderer()
 const renderWindow = fullScreenRenderer.getRenderWindow()
@@ -33,7 +45,7 @@ function addMarker(position, color, radius) {
 }
 
 reader
-  .setUrl('./model.stl', { binary: true })
+  .setUrl(`./model.stl?t=${Date.now()}`, { binary: true })
   .then(() => {
     const polyData = reader.getOutputData(0)
     const points = polyData.getPoints()
@@ -79,13 +91,13 @@ reader
       `points: ${numPoints.toLocaleString()}  triangles: ${numCells.toLocaleString()}`,
       '',
       '-- automatic lesion measurement (rough estimate) --',
-      `proximal diameter:  ${result.proximalWidth.toFixed(1)}`,
-      `distal diameter:    ${result.distalWidth.toFixed(1)}`,
-      `narrowest diameter: ${result.narrowestWidth.toFixed(1)}`,
+      `proximal diameter:  ${fmt(result.proximalWidth)}`,
+      `distal diameter:    ${fmt(result.distalWidth)}`,
+      `narrowest diameter: ${fmt(result.narrowestWidth)}`,
       `stenosis rate:      ${result.stenosisRate.toFixed(0)} %`,
-      `MLD:                ${result.mld.toFixed(1)}`,
-      `MLA:                ${result.mla.toFixed(1)}`,
-      `segment length:     ${result.segmentLength.toFixed(1)}`,
+      `MLD:                ${fmt(result.mld)}`,
+      `MLA:                ${fmt(result.mla)}`,
+      `segment length:     ${fmt(result.segmentLength)}`,
       `lesion position:    ${result.lesionPosition}`,
       '',
       'green=proximal  blue=distal  red=narrowest point',
