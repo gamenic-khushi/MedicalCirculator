@@ -69,6 +69,22 @@ function stripUnit(value: string | undefined): string {
   return value.split(' ')[0]
 }
 
+// Most uploaded models are authored in mm, where a fixed 1-2 decimal places
+// reads fine. Some source files (e.g. CAD-derived test models) are authored
+// in meters instead, where the same measurement is ~1000x smaller — a fixed
+// .toFixed(1) rounds it to "0.0", which reads as broken and, worse, makes
+// Number(value) === 0 further downstream (e.g. the reference-diameter check
+// before highlighting the measured segment), silently skipping real
+// behavior. Scale the decimal count to the value's own magnitude instead.
+function formatMeasurement(value: number): string {
+  const abs = Math.abs(value)
+  if (abs === 0) return '0'
+  if (abs < 0.01) return value.toFixed(6)
+  if (abs < 1) return value.toFixed(4)
+  if (abs < 100) return value.toFixed(2)
+  return value.toFixed(1)
+}
+
 function buildParamsFromFrame(frame: LearningContentFrame): Record<ParamKey, string> {
   return {
     upstreamSize: stripUnit(frame.upstreamSize),
@@ -428,23 +444,23 @@ export function LesionAnalysisPage() {
 
       setParams((prev) => ({
         ...prev,
-        upstreamSize: proximalWidth.toFixed(1),
-        downstreamSize: distalWidth.toFixed(1),
-        mld: mldValue.toFixed(1),
-        mla: mlaValue.toFixed(2),
+        upstreamSize: formatMeasurement(proximalWidth),
+        downstreamSize: formatMeasurement(distalWidth),
+        mld: formatMeasurement(mldValue),
+        mla: formatMeasurement(mlaValue),
         stenosisRate: String(Math.round(stenosisRate)),
-        avgDiameter: referenceDiameter.toFixed(1),
-        lumenVolume: lumenVolumeValue !== null ? lumenVolumeValue.toFixed(1) : '',
+        avgDiameter: formatMeasurement(referenceDiameter),
+        lumenVolume: lumenVolumeValue !== null ? formatMeasurement(lumenVolumeValue) : '',
         bifurcationAngle: bifurcationAngleDeg ? bifurcationAngleDeg.toFixed(0) : '',
       }))
 
       setSelectedLesion({
-        lesionProximalDiameter: proximalWidth.toFixed(2),
-        minVesselDiameter: mldValue.toFixed(2),
-        lesionDistalDiameter: distalWidth.toFixed(2),
-        minCrossSectionArea: mlaValue.toFixed(2),
+        lesionProximalDiameter: formatMeasurement(proximalWidth),
+        minVesselDiameter: formatMeasurement(mldValue),
+        lesionDistalDiameter: formatMeasurement(distalWidth),
+        minCrossSectionArea: formatMeasurement(mlaValue),
         stenosisRate: String(Math.round(stenosisRate)),
-        stenosisLength: segmentLength ? segmentLength.toFixed(1) : '',
+        stenosisLength: segmentLength ? formatMeasurement(segmentLength) : '',
         lesionPosition,
       })
 
