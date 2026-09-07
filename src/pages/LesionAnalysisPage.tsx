@@ -147,11 +147,13 @@ function LesionSnapshotPanel({
   minDiameter,
   distalDiameter,
   isMeasuring,
+  awaitingConfirm,
 }: {
   proximalDiameter: number
   minDiameter: number
   distalDiameter: number
   isMeasuring: boolean
+  awaitingConfirm: boolean
 }) {
   const hasShape = proximalDiameter > 0 && minDiameter > 0 && distalDiameter > 0
   return (
@@ -172,8 +174,10 @@ function LesionSnapshotPanel({
           />
         </div>
       ) : (
-        <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400">
-          2点をクリックして選択してください
+        <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 p-2 text-center text-xs text-gray-400">
+          {awaitingConfirm
+            ? '点をドラッグして位置を調整し、「測定範囲を更新」をクリックしてください'
+            : '2点をクリックして選択してください'}
         </div>
       )}
     </div>
@@ -381,13 +385,18 @@ export function LesionAnalysisPage() {
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
     const next = [...annotations, { id: generateId(), x, y }]
     if (next.length === 2) {
-      const sorted = sortByProximity(next)
-      setAnnotations(sorted)
+      // Don't measure yet — let the user drag either point to fine-tune the
+      // selected area first; 測定範囲を更新 below the viewer runs the
+      // actual measurement once they're happy with the placement.
+      setAnnotations(sortByProximity(next))
       setIsAnnotating(false)
-      measureLesion(sorted[0], sorted[1])
     } else {
       setAnnotations(next)
     }
+  }
+
+  function handleDragAnnotation(id: string, x: number, y: number) {
+    setAnnotations((prev) => prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y } : annotation)))
   }
 
   function measureLesion(proximal: PercentPoint, distal: PercentPoint) {
@@ -521,6 +530,10 @@ export function LesionAnalysisPage() {
   }
 
   function handleUpdateSelectedLesion() {
+    if (annotations.length === 2 && selectedLesion.stenosisRate === '') {
+      measureLesion(annotations[0], annotations[1])
+      return
+    }
     applySelectedLesion(selectedLesion)
     showToast('選択病変を更新しました')
   }
@@ -756,7 +769,11 @@ export function LesionAnalysisPage() {
                   onCameraChange={setCameraState}
                 />
 
-                <TwoPointMarkers points={annotations} />
+                <TwoPointMarkers
+                  points={annotations}
+                  draggable={annotations.length === 2 && selectedLesion.stenosisRate === ''}
+                  onDragPoint={handleDragAnnotation}
+                />
 
                 <div className="absolute left-4 top-4 flex flex-col gap-2">
                   <button
@@ -866,6 +883,7 @@ export function LesionAnalysisPage() {
             minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
             distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
             isMeasuring={isMeasuring}
+            awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />
           </div>
         </div>
