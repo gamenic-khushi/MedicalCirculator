@@ -114,7 +114,7 @@ export function Header() {
           <button
             type="button"
             onClick={() => setIsMenuOpen((value) => !value)}
-            className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/20 sm:inline-flex"
+            className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/20 lg:inline-flex"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-blue-600">
               <User className="h-4 w-4" />
@@ -123,17 +123,8 @@ export function Header() {
             <ChevronDown className="h-4 w-4" />
           </button>
 
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white sm:hidden"
-            onClick={() => setIsMenuOpen((value) => !value)}
-            title="ユーザーメニュー"
-          >
-            <User className="h-5 w-5" />
-          </button>
-
           {isMenuOpen && (
-            <div className="absolute right-0 top-14 z-10 w-48 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10">
+            <div className="absolute right-0 top-14 z-10 hidden w-48 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10 lg:block">
               {isAdmin && (
                 <>
                   <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-gray-400">設定</p>

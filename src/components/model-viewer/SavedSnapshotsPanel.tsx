@@ -1,5 +1,7 @@
 import { Table2, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 
+import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import type { SavedSnapshot } from '@/types/viewerState'
 
 interface SavedSnapshotsPanelProps {
@@ -17,6 +19,8 @@ export function SavedSnapshotsPanel({
   onSaveToHistory,
   canSaveToHistory,
 }: SavedSnapshotsPanelProps) {
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
   const headerActions = (
     <div className="flex items-center gap-2">
       {onDownloadPdf && (
@@ -94,7 +98,7 @@ export function SavedSnapshotsPanel({
                 <td className="px-3 py-4 text-center">
                   <button
                     type="button"
-                    onClick={() => onDelete(snapshot.id)}
+                    onClick={() => setPendingDeleteId(snapshot.id)}
                     className="rounded p-1 text-red-500 transition hover:bg-red-50"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -105,6 +109,17 @@ export function SavedSnapshotsPanel({
           </tbody>
         </table>
       </div>
+
+      {pendingDeleteId && (
+        <ConfirmDialog
+          message="本当に削除しますか？"
+          onCancel={() => setPendingDeleteId(null)}
+          onConfirm={() => {
+            onDelete(pendingDeleteId)
+            setPendingDeleteId(null)
+          }}
+        />
+      )}
     </div>
   )
 }
