@@ -48,18 +48,20 @@ function interpolatePoints(
 
 /**
  * Given two user-picked boundary points, finds the narrowest point of the vessel
- * between them by sampling along the line connecting them. Point order doesn't
- * matter — whichever point has the smaller y (higher on screen) is treated as
- * proximal, matching this app's convention that vessels run from the heart
- * (top) outward (downward).
+ * between them by sampling along the line connecting them. Point order matters:
+ * pointA is always treated as proximal (①, near-heart) and pointB as distal (②)
+ * — the caller (LesionAnalysisPage) is responsible for ordering them by which
+ * one sits on the wider part of the vessel, since screen position alone isn't
+ * a reliable proxy for heart-proximity once the vessel curves or the camera
+ * rotates.
  */
 export function measureTwoPointLesion(
   canvas: LesionMeasurementCanvas,
   pointA: PercentPoint,
   pointB: PercentPoint,
 ): TwoPointLesionResult | null {
-  const proximal = pointA.y <= pointB.y ? pointA : pointB
-  const distal = pointA.y <= pointB.y ? pointB : pointA
+  const proximal = pointA
+  const distal = pointB
 
   const proximalWidth = canvas.measureVesselWidth(proximal.x, proximal.y)
   const distalWidth = canvas.measureVesselWidth(distal.x, distal.y)

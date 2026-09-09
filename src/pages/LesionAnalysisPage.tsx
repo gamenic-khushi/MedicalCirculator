@@ -41,10 +41,6 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
 
-function sortByProximity(points: Annotation[]): Annotation[] {
-  return [...points].sort((a, b) => a.y - b.y)
-}
-
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
   return {
     id: row.$id,
@@ -392,6 +388,22 @@ export function LesionAnalysisPage() {
     })
   }
 
+  // ① must always be the near-heart side and ② the far side. Screen position
+  // (e.g. whichever point is higher on screen) isn't a reliable stand-in for
+  // that — it flips as soon as the vessel curves or the camera rotates.
+  // Vessel diameter is: arteries taper as they run away from the heart, so
+  // whichever of the two points sits on the wider cross-section is proximal.
+  function orderByHeartProximity(points: Annotation[]): Annotation[] {
+    if (points.length !== 2) return points
+    const canvas = canvasRef.current
+    if (!canvas) return points
+    const [first, second] = points
+    const firstWidth = canvas.measureVesselWidth(first.x, first.y)
+    const secondWidth = canvas.measureVesselWidth(second.x, second.y)
+    if (firstWidth == null || secondWidth == null) return points
+    return firstWidth >= secondWidth ? points : [second, first]
+  }
+
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
     if (!isAnnotating) return
     if (annotations.length >= 2) return
@@ -404,7 +416,7 @@ export function LesionAnalysisPage() {
       // Don't measure yet — let the user drag either point to fine-tune the
       // selected area first; 測定範囲を更新 below the viewer runs the
       // actual measurement once they're happy with the placement.
-      setAnnotations(sortByProximity(next))
+      setAnnotations(orderByHeartProximity(next))
       setIsAnnotating(false)
     } else {
       setAnnotations(next)
@@ -412,7 +424,11 @@ export function LesionAnalysisPage() {
   }
 
   function handleDragAnnotation(id: string, x: number, y: number) {
-    setAnnotations((prev) => prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y } : annotation)))
+    setAnnotations((prev) =>
+      orderByHeartProximity(
+        prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y } : annotation)),
+      ),
+    )
   }
 
   function measureLesion(proximal: PercentPoint, distal: PercentPoint) {
