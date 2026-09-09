@@ -240,6 +240,24 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return worldHeightAtDistance / canvasElement.clientHeight
   }
 
+  // Scanning strictly left-right only measures a true cross-section when the
+  // vessel happens to run vertically on screen — anywhere else it cuts the
+  // vessel wall obliquely and over-measures the diameter. Estimate the local
+  // vessel direction from two nearby hits and scan perpendicular to that
+  // instead, so the measurement holds regardless of camera angle.
+  function estimateLocalDirectionPx(xPercent: number, yPercent: number, width: number, height: number) {
+    const probeStep = 1
+    const up = findNearestHit(xPercent, yPercent - probeStep)
+    const down = findNearestHit(xPercent, yPercent + probeStep)
+    if (up && down) {
+      const dxPx = ((down.x - up.x) / 100) * width
+      const dyPx = ((down.y - up.y) / 100) * height
+      const len = Math.hypot(dxPx, dyPx)
+      if (len > 1e-6) return { x: dxPx / len, y: dyPx / len }
+    }
+    return { x: 0, y: 1 }
+  }
+
   function computeVesselWidth(xPercent: number, yPercent: number) {
     const canvasElement = containerRef.current?.querySelector('canvas')
     const camera = threeStateRef.current?.camera
@@ -247,23 +265,40 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return null
     }
 
+    const width = canvasElement.clientWidth
+    const height = canvasElement.clientHeight
+
     const center = findNearestHit(xPercent, yPercent)
     if (!center) return null
 
-    let leftEdge = center.x
-    for (let d = EDGE_SCAN_STEP_PERCENT; d <= EDGE_SCAN_MAX_PERCENT; d += EDGE_SCAN_STEP_PERCENT) {
-      if (!hitAt(center.x - d, center.y)) break
-      leftEdge = center.x - d
+    const tangent = estimateLocalDirectionPx(center.x, center.y, width, height)
+    const perpX = -tangent.y
+    const perpY = tangent.x
+    const stepPx = (EDGE_SCAN_STEP_PERCENT / 100) * width
+    const maxPx = (EDGE_SCAN_MAX_PERCENT / 100) * width
+
+    function offsetPercent(pixelDistance: number, sign: 1 | -1) {
+      return {
+        x: center.x + sign * (perpX * pixelDistance) * (100 / width),
+        y: center.y + sign * (perpY * pixelDistance) * (100 / height),
+      }
     }
 
-    let rightEdge = center.x
-    for (let d = EDGE_SCAN_STEP_PERCENT; d <= EDGE_SCAN_MAX_PERCENT; d += EDGE_SCAN_STEP_PERCENT) {
-      if (!hitAt(center.x + d, center.y)) break
-      rightEdge = center.x + d
+    let nearEdgePx = 0
+    for (let d = stepPx; d <= maxPx; d += stepPx) {
+      const p = offsetPercent(d, -1)
+      if (!hitAt(p.x, p.y)) break
+      nearEdgePx = d
     }
 
-    const widthPercent = rightEdge - leftEdge
-    const widthPx = (widthPercent / 100) * canvasElement.clientWidth
+    let farEdgePx = 0
+    for (let d = stepPx; d <= maxPx; d += stepPx) {
+      const p = offsetPercent(d, 1)
+      if (!hitAt(p.x, p.y)) break
+      farEdgePx = d
+    }
+
+    const widthPx = nearEdgePx + farEdgePx
 
     const worldUnitsPerPixel = worldUnitsPerPixelAtDistance(center.hit.distance)
     if (!worldUnitsPerPixel) return null
