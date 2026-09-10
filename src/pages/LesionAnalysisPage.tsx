@@ -95,6 +95,8 @@ function buildParamsFromFrame(frame: LearningContentFrame): Record<ParamKey, str
     lumenVolume: stripUnit(frame.lumenVolume),
     calcificationVolume: frame.calcificationVolume === '—' ? '' : (frame.calcificationVolume ?? ''),
     bifurcationAngle: stripUnit(frame.bifurcationAngle),
+    segmentLength: stripUnit(frame.segmentLength),
+    lesionPosition: frame.lesionPosition === '—' ? '' : (frame.lesionPosition ?? ''),
   }
 }
 
@@ -128,6 +130,8 @@ const EMPTY_PARAMS: Record<ParamKey, string> = {
   lumenVolume: '',
   calcificationVolume: '',
   bifurcationAngle: '',
+  segmentLength: '',
+  lesionPosition: '',
 }
 
 const EMPTY_SELECTED_LESION: SelectedLesionFormData = {

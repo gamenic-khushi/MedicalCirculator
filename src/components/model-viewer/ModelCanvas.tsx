@@ -271,6 +271,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const center = findNearestHit(xPercent, yPercent)
     if (!center) return null
 
+    const centerX = center.x
+    const centerY = center.y
     const tangent = estimateLocalDirectionPx(center.x, center.y, width, height)
     const perpX = -tangent.y
     const perpY = tangent.x
@@ -279,8 +281,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
 
     function offsetPercent(pixelDistance: number, sign: 1 | -1) {
       return {
-        x: center.x + sign * (perpX * pixelDistance) * (100 / width),
-        y: center.y + sign * (perpY * pixelDistance) * (100 / height),
+        x: centerX + sign * (perpX * pixelDistance) * (100 / width),
+        y: centerY + sign * (perpY * pixelDistance) * (100 / height),
       }
     }
 
