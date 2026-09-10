@@ -40,6 +40,8 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
 const TOAST_DURATION_MS = 1800
+const PROXIMITY_PATH_STEPS = 10
+const PROXIMITY_SAMPLE_COUNT = 3
 
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
   return {
@@ -392,18 +394,37 @@ export function LesionAnalysisPage() {
     })
   }
 
+  // Raycasting a single pixel is noisy — it can snap onto a thin nearby
+  // structure instead of the intended vessel wall, reading a fraction of the
+  // real width a few pixels away (confirmed by sweeping measureVesselWidth
+  // along a branch: 0.032 at one pixel row, 0.008 one row down). Average
+  // several samples near the point instead of trusting a single one.
+  function averageVesselWidth(canvas: ModelCanvasHandle, points: PercentPoint[]): number | null {
+    const widths = points
+      .map((point) => canvas.measureVesselWidth(point.x, point.y))
+      .filter((width): width is number => width != null)
+    if (widths.length === 0) return null
+    return widths.reduce((sum, width) => sum + width, 0) / widths.length
+  }
+
   // ① must always be the near-heart side and ② the far side. Screen position
   // (e.g. whichever point is higher on screen) isn't a reliable stand-in for
   // that — it flips as soon as the vessel curves or the camera rotates.
   // Vessel diameter is: arteries taper as they run away from the heart, so
-  // whichever of the two points sits on the wider cross-section is proximal.
+  // whichever of the two points sits on the wider cross-section is proximal
+  // — sampled from the run of points nearest each end of the segment, not
+  // just the single raw click, so one noisy raycast can't flip the answer.
   function orderByHeartProximity(points: Annotation[]): Annotation[] {
     if (points.length !== 2) return points
     const canvas = canvasRef.current
     if (!canvas) return points
     const [first, second] = points
-    const firstWidth = canvas.measureVesselWidth(first.x, first.y)
-    const secondWidth = canvas.measureVesselWidth(second.x, second.y)
+    const path = Array.from({ length: PROXIMITY_PATH_STEPS + 1 }, (_, step) => {
+      const t = step / PROXIMITY_PATH_STEPS
+      return { x: first.x + (second.x - first.x) * t, y: first.y + (second.y - first.y) * t }
+    })
+    const firstWidth = averageVesselWidth(canvas, path.slice(0, PROXIMITY_SAMPLE_COUNT))
+    const secondWidth = averageVesselWidth(canvas, path.slice(-PROXIMITY_SAMPLE_COUNT))
     if (firstWidth == null || secondWidth == null) return points
     return firstWidth >= secondWidth ? points : [second, first]
   }
