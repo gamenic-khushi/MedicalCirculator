@@ -582,8 +582,34 @@ export function LesionAnalysisPage() {
     applySelectedLesion(data)
   }
 
+  // Editing 狭窄率 directly already flows into FFR correctly (handleCalculateFfr
+  // reads it fresh). But editing one of the three diameters instead left 狭窄率
+  // — and therefore FFR — pinned to whatever the original auto-measurement
+  // computed, silently ignoring the correction. Recompute it the same way
+  // measureLesion does whenever a diameter changes, so a manually corrected
+  // width actually changes what FFRを計算 uses.
   function handleSelectedLesionFieldChange(key: keyof SelectedLesionFormData, value: string) {
-    setSelectedLesion((prev) => ({ ...prev, [key]: value }))
+    setSelectedLesion((prev) => {
+      const next = { ...prev, [key]: value }
+      const isDiameterField =
+        key === 'lesionProximalDiameter' ||
+        key === 'lesionDistalDiameter' ||
+        key === 'minVesselDiameter'
+      if (!isDiameterField) return next
+
+      const proximal = Number(next.lesionProximalDiameter)
+      const distal = Number(next.lesionDistalDiameter)
+      const minVessel = Number(next.minVesselDiameter)
+      const referenceDiameter = (proximal + distal) / 2
+      if (!(proximal > 0) || !(distal > 0) || !(minVessel >= 0) || !(referenceDiameter > 0)) {
+        return next
+      }
+
+      const stenosisRate = Math.min(Math.max((1 - minVessel / referenceDiameter) * 100, 0), 99)
+      next.stenosisRate = String(Math.round(stenosisRate))
+      next.minCrossSectionArea = formatMeasurement(Math.PI * (minVessel / 2) ** 2)
+      return next
+    })
   }
 
   function handleUpdateSelectedLesion() {
