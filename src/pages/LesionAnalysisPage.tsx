@@ -941,7 +941,7 @@ export function LesionAnalysisPage() {
           <div className="flex-1">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">選択病変</p>
-              <p className="text-[11px] text-gray-400">自動計測値（修正前）</p>
+              <p className="text-[11px] text-gray-400">自動計測値</p>
             </div>
             <div className="mt-3 flex flex-col gap-2">
               {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
