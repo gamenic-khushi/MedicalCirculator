@@ -16,4 +16,6 @@ export interface LearningContentFrame {
   lumenVolume?: string
   calcificationVolume?: string
   bifurcationAngle?: string
+  segmentLength?: string
+  lesionPosition?: string
 }

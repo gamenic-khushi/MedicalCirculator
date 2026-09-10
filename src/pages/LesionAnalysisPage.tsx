@@ -105,8 +105,8 @@ function buildSelectedLesionFromFrame(frame: LearningContentFrame): SelectedLesi
     lesionDistalDiameter: stripUnit(frame.downstreamSize),
     minCrossSectionArea: stripUnit(frame.mla),
     stenosisRate: stripUnit(frame.stenosisRate),
-    stenosisLength: '',
-    lesionPosition: '',
+    stenosisLength: stripUnit(frame.segmentLength),
+    lesionPosition: frame.lesionPosition === '—' ? '' : (frame.lesionPosition ?? ''),
   }
 }
 
@@ -703,6 +703,8 @@ export function LesionAnalysisPage() {
         lumenVolume: params.lumenVolume ? `${params.lumenVolume} mm³` : '—',
         calcificationVolume: params.calcificationVolume || '—',
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
+        segmentLength: selectedLesion.stenosisLength ? `${selectedLesion.stenosisLength} mm` : '—',
+        lesionPosition: selectedLesion.lesionPosition || '—',
       })
       setSavedSnapshots((prev) => [toSavedSnapshot(row), ...prev])
       navigate('/data/learning-content', { state: { dataRecordId } })
