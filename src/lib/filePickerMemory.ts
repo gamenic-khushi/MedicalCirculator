@@ -63,6 +63,18 @@ const MODEL_FILE_PICKER_OPTIONS: OpenFilePickerOptions = {
   ],
 }
 
+// showOpenFilePicker() must run inside the same user gesture as the click
+// that triggers it — awaiting anything (even a ~1ms IndexedDB read) first
+// can burn through that gesture, at which point the browser throws
+// (not AbortError) and the picker never opens, with nothing visible to the
+// user. Warm this cache in the background at load time instead of reading
+// it inside the click handler, so "start in the last folder" doesn't cost
+// an await on the critical path.
+let cachedLastFileHandle: FileSystemFileHandleLike | null | undefined
+void getLastFileHandle().then((handle) => {
+  cachedLastFileHandle = handle
+})
+
 /**
  * Opens the native file picker starting in the folder the last model file was
  * picked from, when the browser supports the File System Access API. Falls
@@ -75,14 +87,13 @@ export async function pickModelFile(onFallback: () => void): Promise<File | null
     return null
   }
 
-  const startIn = await getLastFileHandle()
-
   try {
     const [handle] = await window.showOpenFilePicker({
       ...MODEL_FILE_PICKER_OPTIONS,
-      ...(startIn ? { startIn } : {}),
+      ...(cachedLastFileHandle ? { startIn: cachedLastFileHandle } : {}),
     })
     await setLastFileHandle(handle)
+    cachedLastFileHandle = handle
     return await handle.getFile()
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') return null
