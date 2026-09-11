@@ -1,19 +1,17 @@
 import { Query, type Models } from 'appwrite'
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import { Toast } from '@/components/common/Toast'
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useModel3D } from '@/hooks/useModel3D'
+import { pickModelFile } from '@/lib/filePickerMemory'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
 import { storageService } from '@/services/appwrite/storage'
 import type { DataRecord } from '@/types/dataRecord'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { createModel3DFile } from '@/types/model'
-
-const TOAST_DURATION_MS = 2400
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
@@ -50,7 +48,7 @@ export function LearningContentPage() {
   const { setModel } = useModel3D()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
   const [record, setRecord] = useState<DataRecord | null>(null)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchFrames()
@@ -74,10 +72,25 @@ export function LearningContentPage() {
     navigate('/data/lesion-measurement/analysis', { state: { dataRecordId } })
   }
 
+  // A folder created before model files were persisted to Storage has no
+  // modelFileId to reuse. Rather than leaving the user stuck, let them pick
+  // a file this one time and register it as the folder's model — every "+"
+  // after that reuses it like normal, same as a folder created going forward.
+  async function registerAndLoadFile(file: File) {
+    if (dataRecordId) {
+      const uploadedFile = await storageService.upload(appwriteConfig.bucketId, file)
+      await databaseService.update<DataRecordRow>('data_records', dataRecordId, {
+        modelFileId: uploadedFile.$id,
+      })
+      setRecord((prev) => (prev ? { ...prev, modelFileId: uploadedFile.$id } : prev))
+    }
+    loadFile(file)
+  }
+
   async function handleAddNew() {
     if (!record?.modelFileId) {
-      setToastMessage('このフォルダにはモデルファイルが登録されていません')
-      setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
+      const file = await pickModelFile(() => inputRef.current?.click())
+      if (file) await registerAndLoadFile(file)
       return
     }
 
@@ -86,6 +99,11 @@ export function LearningContentPage() {
     const blob = await response.blob()
     const file = new File([blob], record.file, { type: blob.type })
     loadFile(file)
+  }
+
+  function handleFileSelected(files: FileList | null) {
+    if (!files?.length) return
+    void registerAndLoadFile(files[0])
   }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
@@ -114,6 +132,13 @@ export function LearningContentPage() {
         >
           <Plus className="h-4 w-4" />
         </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".fbx,.stl,.obj"
+          className="hidden"
+          onChange={(event) => handleFileSelected(event.target.files)}
+        />
       </div>
       {record && (
         <p className="mt-1 text-sm text-gray-400">
@@ -129,8 +154,6 @@ export function LearningContentPage() {
           onDelete={handleDelete}
         />
       </div>
-
-      {toastMessage && <Toast message={toastMessage} />}
     </div>
   )
 }
