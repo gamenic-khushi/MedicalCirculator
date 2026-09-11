@@ -512,7 +512,10 @@ export function LesionAnalysisPage() {
   function handleCalculateFfr() {
     const target =
       annotations.length === 2
-        ? { x: (annotations[0].x + annotations[1].x) / 2, y: (annotations[0].y + annotations[1].y) / 2 }
+        ? {
+            x: (annotations[0].x + annotations[1].x) / 2,
+            y: (annotations[0].y + annotations[1].y) / 2,
+          }
         : null
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
     if (!target || !bounds || !bloodPressure.trim() || !selectedLesion.stenosisRate) return
@@ -776,250 +779,262 @@ export function LesionAnalysisPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="flex items-center gap-2">
-          {validModel && isEditingTitle ? (
-            <input
-              autoFocus
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={commitTitle}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') commitTitle()
-                if (event.key === 'Escape') {
-                  setTitleDraft(validModel.studyName)
-                  setIsEditingTitle(false)
-                }
-              }}
-              className="rounded border border-indigo-300 px-2 py-1 text-2xl font-bold text-gray-900 outline-none focus:border-indigo-400"
-            />
-          ) : (
-            <h1
-              onClick={validModel ? handleStartEditingTitle : undefined}
-              title={validModel ? 'クリックして編集' : undefined}
-              className={`text-2xl font-bold text-gray-900 ${
-                validModel ? 'cursor-pointer rounded px-2 py-1 hover:bg-gray-50' : ''
-              }`}
-            >
-              {validModel?.studyName ?? '保存済みキャプチャ'}
-            </h1>
-          )}
-          {validModel && (
-            <button
-              type="button"
-              onClick={() => setIsInfoOpen(true)}
-              title="モデル情報"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50"
-            >
-              <Info className="h-4 w-4" />
-            </button>
-          )}
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* 3Dブロック */}
-        <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
-            3Dブロック
-          </p>
-          <div
-            ref={canvasAreaRef}
-            onClick={handleViewerClick}
-            style={{
-              backgroundColor: '#737373',
-              backgroundImage:
-                'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
+        {validModel && isEditingTitle ? (
+          <input
+            autoFocus
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitTitle()
+              if (event.key === 'Escape') {
+                setTitleDraft(validModel.studyName)
+                setIsEditingTitle(false)
+              }
             }}
-            className={`relative h-[360px] overflow-hidden sm:h-[420px] lg:h-[480px] ${
-              isAnnotating ? 'cursor-crosshair' : ''
+            className="rounded border border-indigo-300 px-2 py-1 text-2xl font-bold text-gray-900 outline-none focus:border-indigo-400"
+          />
+        ) : (
+          <h1
+            onClick={validModel ? handleStartEditingTitle : undefined}
+            title={validModel ? 'クリックして編集' : undefined}
+            className={`text-2xl font-bold text-gray-900 ${
+              validModel ? 'cursor-pointer rounded px-2 py-1 hover:bg-gray-50' : ''
             }`}
           >
-            {viewFrame ? (
-              <>
-                <img
-                  src={viewFrame.image}
-                  alt="保存されたキャプチャ"
-                  className="h-full w-full object-contain"
-                />
-                <PressurePointsPanel pa={params.pa} pd={params.pd} />
-                <AnatomyGuideThumbnail />
-              </>
-            ) : (
-              <>
-                <ModelCanvas
-                  ref={canvasRef}
-                  url={validModel!.objectUrl}
-                  extension={validModel!.extension}
-                  color={MODEL_COLOR}
-                  controlsEnabled={!isAnnotating && annotations.length < 2}
-                  initialCamera={cameraState}
-                  onCameraChange={setCameraState}
-                />
-
-                <TwoPointMarkers
-                  points={annotations}
-                  draggable={annotations.length === 2 && selectedLesion.stenosisRate === ''}
-                  onDragPoint={handleDragAnnotation}
-                />
-
-                <div className="absolute left-4 top-4 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAnnotating((value) => !value)}
-                    className={`rounded-full border p-2 shadow-sm transition ${
-                      isAnnotating
-                        ? 'border-red-200 bg-red-50 text-red-500'
-                        : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                    title="2点をクリックして選択（①心臓に近い側 → ②遠い側）"
-                  >
-                    <MousePointerClick className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="absolute right-4 top-4 flex flex-col gap-2">
-                  {measurement && (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingLesion(true)}
-                      className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                      title="選択病変を修正"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => canvasRef.current?.zoomIn()}
-                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => canvasRef.current?.zoomOut()}
-                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {measurement && <FfrResultOverlay {...measurement} />}
-
-                <PressurePointsPanel
-                  pa={measurement ? params.pa : ''}
-                  pd={measurement ? params.pd : ''}
-                />
-                <AnatomyGuideThumbnail />
-                <ViewerToolbar
-                  activeTool={activeTool}
-                  onToolChange={handleToolChange}
-                  onToggleFullscreen={() => {}}
-                  onReset={handleResetAnnotations}
-                />
-              </>
-            )}
-          </div>
-
-          {!viewFrame && (
-            <div className="flex items-center justify-center border-t border-gray-100 p-4">
-              <button
-                type="button"
-                onClick={handleUpdateSelectedLesion}
-                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-              >
-                測定範囲を更新
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 形状ブロック */}
-        <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
-            形状ブロック
-          </p>
-          <div className="flex flex-col gap-4 p-4 sm:flex-row">
-          <div className="flex-1">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900">選択病変</p>
-              <p className="text-[11px] text-gray-400">自動計測値</p>
-            </div>
-            <div className="mt-3 flex flex-col gap-2">
-              {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
-                <div key={key} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-gray-500">{label}</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={selectedLesion[key]}
-                      onChange={(event) => handleSelectedLesionFieldChange(key, event.target.value)}
-                      className={`w-16 rounded border border-gray-200 px-1.5 py-1 text-right outline-none focus:border-indigo-400 ${
-                        key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
-                      }`}
-                    />
-                    <span className="w-6 shrink-0 text-gray-400">{unit}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <LesionSnapshotPanel
-            proximalDiameter={Number(selectedLesion.lesionProximalDiameter) || 0}
-            minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
-            distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
-            isMeasuring={isMeasuring}
-            awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
-          />
-          </div>
-        </div>
-      </div>
-
-      {/* 測定ブロック */}
-      <div className="mt-4 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
-          測定ブロック
-        </p>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="sm:max-w-xs sm:flex-1">
-            <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />
-          </div>
-          {!viewFrame && (
-            <div className="p-4 sm:pl-0">
-              <button
-                type="button"
-                onClick={handleCalculateFfr}
-                disabled={!canCalculate}
-                title={disabledReason}
-                className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-              >
-                FFRを計算
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {!viewFrame && (
-        <div className="mt-4 flex justify-center">
+            {validModel?.studyName ?? '保存済みキャプチャ'}
+          </h1>
+        )}
+        {validModel && (
           <button
             type="button"
-            onClick={handleSave}
-            disabled={!measurement}
-            className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setIsInfoOpen(true)}
+            title="モデル情報"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm transition hover:bg-gray-50"
           >
-            仮保存
+            <Info className="h-4 w-4" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="mt-4">
-        <SavedSnapshotsPanel
-          savedSnapshots={savedSnapshots}
-          onDelete={handleDeleteSnapshot}
-          onDownloadPdf={handleDownloadPdf}
-          onSaveToHistory={isAdmin && !viewFrame ? handleSaveToLearningData : undefined}
-          canSaveToHistory={!!measurement}
-        />
+      <div
+        className={`mt-6 grid grid-cols-1 gap-4 ${!viewFrame ? 'xl:grid-cols-[minmax(0,1fr)_380px]' : ''}`}
+      >
+        {/* Left: the active 3D/measurement workflow */}
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* 3Dブロック */}
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
+                3Dブロック
+              </p>
+              <div
+                ref={canvasAreaRef}
+                onClick={handleViewerClick}
+                style={{
+                  backgroundColor: '#737373',
+                  backgroundImage:
+                    'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
+                }}
+                className={`relative h-[360px] overflow-hidden sm:h-[420px] lg:h-[480px] ${
+                  isAnnotating ? 'cursor-crosshair' : ''
+                }`}
+              >
+                {viewFrame ? (
+                  <>
+                    <img
+                      src={viewFrame.image}
+                      alt="保存されたキャプチャ"
+                      className="h-full w-full object-contain"
+                    />
+                    <PressurePointsPanel pa={params.pa} pd={params.pd} />
+                    <AnatomyGuideThumbnail />
+                  </>
+                ) : (
+                  <>
+                    <ModelCanvas
+                      ref={canvasRef}
+                      url={validModel!.objectUrl}
+                      extension={validModel!.extension}
+                      color={MODEL_COLOR}
+                      controlsEnabled={!isAnnotating && annotations.length < 2}
+                      initialCamera={cameraState}
+                      onCameraChange={setCameraState}
+                    />
+
+                    <TwoPointMarkers
+                      points={annotations}
+                      draggable={annotations.length === 2 && selectedLesion.stenosisRate === ''}
+                      onDragPoint={handleDragAnnotation}
+                    />
+
+                    <div className="absolute left-4 top-4 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsAnnotating((value) => !value)}
+                        className={`rounded-full border p-2 shadow-sm transition ${
+                          isAnnotating
+                            ? 'border-red-200 bg-red-50 text-red-500'
+                            : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                        title="2点をクリックして選択（①心臓に近い側 → ②遠い側）"
+                      >
+                        <MousePointerClick className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="absolute right-4 top-4 flex flex-col gap-2">
+                      {measurement && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingLesion(true)}
+                          className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                          title="選択病変を修正"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => canvasRef.current?.zoomIn()}
+                        className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => canvasRef.current?.zoomOut()}
+                        className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                      >
+                        <ZoomOut className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {measurement && <FfrResultOverlay {...measurement} />}
+
+                    <PressurePointsPanel
+                      pa={measurement ? params.pa : ''}
+                      pd={measurement ? params.pd : ''}
+                    />
+                    <AnatomyGuideThumbnail />
+                    <ViewerToolbar
+                      activeTool={activeTool}
+                      onToolChange={handleToolChange}
+                      onToggleFullscreen={() => {}}
+                      onReset={handleResetAnnotations}
+                    />
+                  </>
+                )}
+              </div>
+
+              {!viewFrame && (
+                <div className="flex items-center justify-center border-t border-gray-100 p-4">
+                  <button
+                    type="button"
+                    onClick={handleUpdateSelectedLesion}
+                    className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
+                  >
+                    測定範囲を更新
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 形状ブロック */}
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
+                形状ブロック
+              </p>
+              <div className="flex flex-col gap-4 p-4 sm:flex-row">
+                <div className="flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold text-gray-900">選択病変</p>
+                    <p className="text-[11px] text-gray-400">自動計測値</p>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
+                      <div key={key} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="text-gray-500">{label}</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={selectedLesion[key]}
+                            onChange={(event) =>
+                              handleSelectedLesionFieldChange(key, event.target.value)
+                            }
+                            className={`w-16 rounded border border-gray-200 px-1.5 py-1 text-right outline-none focus:border-indigo-400 ${
+                              key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
+                            }`}
+                          />
+                          <span className="w-6 shrink-0 text-gray-400">{unit}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <LesionSnapshotPanel
+                  proximalDiameter={Number(selectedLesion.lesionProximalDiameter) || 0}
+                  minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
+                  distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
+                  isMeasuring={isMeasuring}
+                  awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 測定ブロック */}
+          <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
+              測定ブロック
+            </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sm:max-w-xs sm:flex-1">
+                <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />
+              </div>
+              {!viewFrame && (
+                <div className="p-4 sm:pl-0">
+                  <button
+                    type="button"
+                    onClick={handleCalculateFfr}
+                    disabled={!canCalculate}
+                    title={disabledReason}
+                    className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  >
+                    FFRを計算
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {!viewFrame && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!measurement}
+                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                仮保存
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right: every capture saved for this folder so far. Renders even
+            while viewing a past capture (viewFrame) — only the layout split
+            is new/1-column then, since there's no active workflow beside it. */}
+        <div>
+          <SavedSnapshotsPanel
+            savedSnapshots={savedSnapshots}
+            onDelete={handleDeleteSnapshot}
+            onDownloadPdf={handleDownloadPdf}
+            onSaveToHistory={isAdmin && !viewFrame ? handleSaveToLearningData : undefined}
+            canSaveToHistory={!!measurement}
+          />
+        </div>
       </div>
 
       {isEditingLesion && measurement && (
