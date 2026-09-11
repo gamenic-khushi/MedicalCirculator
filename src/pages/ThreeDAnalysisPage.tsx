@@ -5,7 +5,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { pickModelFile } from '@/lib/filePickerMemory'
+import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
+import { storageService } from '@/services/appwrite/storage'
 import type { DataRecord } from '@/types/dataRecord'
 import { createModel3DFile } from '@/types/model'
 
@@ -45,11 +47,13 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
 
     let resolvedDataRecordId = dataRecordId
     if (!resolvedDataRecordId) {
+      const uploadedFile = await storageService.upload(appwriteConfig.bucketId, file)
       const row = await databaseService.create<DataRecordRow>('data_records', {
         date: todayDisplayDate(),
         category: resolvedStudyName,
         file: file.name,
         owner: user?.name || user?.email || '',
+        modelFileId: uploadedFile.$id,
       })
       resolvedDataRecordId = row.$id
     }

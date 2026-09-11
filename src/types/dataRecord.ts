@@ -4,4 +4,5 @@ export interface DataRecord {
   category: string
   file: string
   owner: string
+  modelFileId?: string
 }
