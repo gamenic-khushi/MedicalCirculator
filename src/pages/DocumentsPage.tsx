@@ -6,12 +6,15 @@ import { Toast } from '@/components/common/Toast'
 import { DocumentFileTable } from '@/components/documents/DocumentFileTable'
 import { DocumentNameModal } from '@/components/documents/DocumentNameModal'
 import { DocumentUploadModal } from '@/components/documents/DocumentUploadModal'
+import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
+import { storageService } from '@/services/appwrite/storage'
 import type { DocumentFile } from '@/types/documentFile'
 
 const TOAST_DURATION_MS = 1800
 
 type DocumentRow = Models.Row & Omit<DocumentFile, 'id'>
+type DocumentFolderRow = Models.Row & { name: string }
 
 function todayDisplayDate(): string {
   const now = new Date()
@@ -37,6 +40,9 @@ export function DocumentsPage() {
         return Array.from(new Set([...prev, ...loadedFolders])) as string[]
       })
     })
+    databaseService.list<DocumentFolderRow>('document_folders').then(({ rows }) => {
+      setFolders((prev) => Array.from(new Set([...prev, ...rows.map((row) => row.name)])))
+    })
   }, [])
 
   const filteredDocuments = useMemo(() => {
@@ -45,7 +51,8 @@ export function DocumentsPage() {
     return documents.filter((document) => document.fileName.toLowerCase().includes(normalized))
   }, [documents, query])
 
-  function handleAddFolder(folderName: string) {
+  async function handleAddFolder(folderName: string) {
+    await databaseService.create<DocumentFolderRow>('document_folders', { name: folderName })
     setFolders((prev) => [...prev, folderName])
     setToastMessage('登録完了')
     setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
@@ -82,12 +89,18 @@ export function DocumentsPage() {
   async function handleSaveUpload({
     folder,
     fileName,
-    imageUrl,
+    imageFile,
   }: {
     folder: string
     fileName: string
-    imageUrl?: string
+    imageFile?: File
   }) {
+    let imageUrl: string | undefined
+    if (imageFile) {
+      const uploaded = await storageService.upload(appwriteConfig.documentsBucketId, imageFile)
+      imageUrl = storageService.getViewUrl(appwriteConfig.documentsBucketId, uploaded.$id).toString()
+    }
+
     const row = await databaseService.create<DocumentRow>('documents', {
       date: todayDisplayDate(),
       fileName,

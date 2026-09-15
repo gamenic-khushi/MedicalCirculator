@@ -8,13 +8,14 @@ import { FolderSelect } from './FolderSelect'
 interface DocumentUploadModalProps {
   folders: string[]
   onClose: () => void
-  onSave: (data: { folder: string; fileName: string; imageUrl?: string }) => void
+  onSave: (data: { folder: string; fileName: string; imageFile?: File }) => void
 }
 
 export function DocumentUploadModal({ folders, onClose, onSave }: DocumentUploadModalProps) {
   const [folder, setFolder] = useState(folders[0] ?? '')
   const [fileName, setFileName] = useState('')
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!folder && folders.length > 0) {
@@ -26,13 +27,16 @@ export function DocumentUploadModal({ folders, onClose, onSave }: DocumentUpload
     const file = files[0]
     if (!file) return
     if (!fileName) setFileName(file.name)
-    if (file.type.startsWith('image/')) setImageUrl(URL.createObjectURL(file))
+    if (file.type.startsWith('image/')) {
+      setImageFile(file)
+      setPreviewUrl(URL.createObjectURL(file))
+    }
   }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!fileName.trim()) return
-    onSave({ folder, fileName: fileName.trim(), imageUrl: imageUrl ?? undefined })
+    onSave({ folder, fileName: fileName.trim(), imageFile: imageFile ?? undefined })
     onClose()
   }
 
@@ -55,12 +59,15 @@ export function DocumentUploadModal({ folders, onClose, onSave }: DocumentUpload
           />
         </label>
 
-        {imageUrl ? (
+        {previewUrl ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/40 p-4">
-            <img src={imageUrl} alt={fileName} className="h-28 w-full rounded-lg object-cover" />
+            <img src={previewUrl} alt={fileName} className="h-28 w-full rounded-lg object-cover" />
             <button
               type="button"
-              onClick={() => setImageUrl(null)}
+              onClick={() => {
+                setImageFile(null)
+                setPreviewUrl(null)
+              }}
               className="text-xs font-medium text-indigo-600 hover:underline"
             >
               画像を変更する
