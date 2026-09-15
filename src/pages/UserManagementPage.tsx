@@ -2,8 +2,11 @@ import type { Models } from 'appwrite'
 import { Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { Toast } from '@/components/common/Toast'
 import { UserFormModal } from '@/components/users/UserFormModal'
 import { UserTable } from '@/components/users/UserTable'
+import { useToast } from '@/hooks/useToast'
+import { DELETE_FAILED, LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
 import { authService } from '@/services/appwrite/auth'
 import { databaseService } from '@/services/appwrite/database'
 import type { AppUser, UserCategory } from '@/types/user'
@@ -28,11 +31,19 @@ export function UserManagementPage() {
   const [users, setUsers] = useState<AppUser[]>([])
   const [query, setQuery] = useState('')
   const [isAdding, setIsAdding] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const { toast, showToast } = useToast()
 
   useEffect(() => {
-    databaseService.list<UserRow>('users').then(({ rows }) => {
-      setUsers(rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })))
-    })
+    databaseService
+      .list<UserRow>('users')
+      .then(({ rows }) => {
+        setUsers(rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })))
+      })
+      .catch((error) => {
+        console.error(error)
+        setLoadError(true)
+      })
   }, [])
 
   const filteredUsers = useMemo(() => {
@@ -76,25 +87,35 @@ export function UserManagementPage() {
   }
 
   async function handleDelete(id: string) {
-    await databaseService.remove('users', id)
-    setUsers((prev) => prev.filter((user) => user.id !== id))
+    try {
+      await databaseService.remove('users', id)
+      setUsers((prev) => prev.filter((user) => user.id !== id))
+    } catch (error) {
+      console.error(error)
+      showToast(DELETE_FAILED, 'error')
+    }
   }
 
   async function handleDuplicate(user: AppUser) {
-    const row = await databaseService.create<UserRow>('users', {
-      date: todayDisplayDate(),
-      category: user.category,
-      organization: user.organization,
-      name: user.name,
-      email: user.email,
-    })
-    const { $id, ...rest } = row
-    setUsers((prev) => {
-      const index = prev.findIndex((item) => item.id === user.id)
-      const next = [...prev]
-      next.splice(index + 1, 0, { id: $id, ...rest })
-      return next
-    })
+    try {
+      const row = await databaseService.create<UserRow>('users', {
+        date: todayDisplayDate(),
+        category: user.category,
+        organization: user.organization,
+        name: user.name,
+        email: user.email,
+      })
+      const { $id, ...rest } = row
+      setUsers((prev) => {
+        const index = prev.findIndex((item) => item.id === user.id)
+        const next = [...prev]
+        next.splice(index + 1, 0, { id: $id, ...rest })
+        return next
+      })
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   return (
@@ -124,15 +145,19 @@ export function UserManagementPage() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <UserTable
-          users={filteredUsers}
-          organizations={organizations}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-        />
-      </div>
+      {loadError ? (
+        <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : (
+        <div className="mt-6">
+          <UserTable
+            users={filteredUsers}
+            organizations={organizations}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onDuplicate={handleDuplicate}
+          />
+        </div>
+      )}
 
       {isAdding && (
         <UserFormModal
@@ -142,6 +167,8 @@ export function UserManagementPage() {
           onSave={handleAdd}
         />
       )}
+
+      {toast && <Toast message={toast.message} variant={toast.variant} />}
     </div>
   )
 }

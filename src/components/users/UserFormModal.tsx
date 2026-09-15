@@ -63,9 +63,8 @@ export function UserFormModal({
       await onSave(data)
       onClose()
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'アカウントの作成に失敗しました。',
-      )
+      console.error(err)
+      setError('ユーザーの登録に失敗しました。メールアドレスが既に使用されている可能性があります。')
     } finally {
       setIsSubmitting(false)
     }

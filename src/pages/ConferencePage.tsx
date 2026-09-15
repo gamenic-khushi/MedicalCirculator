@@ -2,8 +2,11 @@ import type { Models } from 'appwrite'
 import { Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { Toast } from '@/components/common/Toast'
 import { AddPaperModal } from '@/components/conference/AddPaperModal'
 import { ConferencePaperTable } from '@/components/conference/ConferencePaperTable'
+import { useToast } from '@/hooks/useToast'
+import { DELETE_FAILED, LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
 import { databaseService } from '@/services/appwrite/database'
 import type { ConferencePaper } from '@/types/conferencePaper'
 
@@ -13,11 +16,19 @@ export function ConferencePage() {
   const [papers, setPapers] = useState<ConferencePaper[]>([])
   const [query, setQuery] = useState('')
   const [isAdding, setIsAdding] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const { toast, showToast } = useToast()
 
   useEffect(() => {
-    databaseService.list<ConferencePaperRow>('conference_papers').then(({ rows }) => {
-      setPapers(rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })))
-    })
+    databaseService
+      .list<ConferencePaperRow>('conference_papers')
+      .then(({ rows }) => {
+        setPapers(rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })))
+      })
+      .catch((error) => {
+        console.error(error)
+        setLoadError(true)
+      })
   }, [])
 
   const filteredPapers = useMemo(() => {
@@ -31,14 +42,24 @@ export function ConferencePage() {
   }, [papers, query])
 
   async function handleAdd(paper: Omit<ConferencePaper, 'id'>) {
-    const row = await databaseService.create<ConferencePaperRow>('conference_papers', paper)
-    const { $id, ...rest } = row
-    setPapers((prev) => [{ id: $id, ...rest }, ...prev])
+    try {
+      const row = await databaseService.create<ConferencePaperRow>('conference_papers', paper)
+      const { $id, ...rest } = row
+      setPapers((prev) => [{ id: $id, ...rest }, ...prev])
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   async function handleDelete(id: string) {
-    await databaseService.remove('conference_papers', id)
-    setPapers((prev) => prev.filter((paper) => paper.id !== id))
+    try {
+      await databaseService.remove('conference_papers', id)
+      setPapers((prev) => prev.filter((paper) => paper.id !== id))
+    } catch (error) {
+      console.error(error)
+      showToast(DELETE_FAILED, 'error')
+    }
   }
 
   return (
@@ -68,11 +89,17 @@ export function ConferencePage() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <ConferencePaperTable papers={filteredPapers} onDelete={handleDelete} />
-      </div>
+      {loadError ? (
+        <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : (
+        <div className="mt-6">
+          <ConferencePaperTable papers={filteredPapers} onDelete={handleDelete} />
+        </div>
+      )}
 
       {isAdding && <AddPaperModal onClose={() => setIsAdding(false)} onAdd={handleAdd} />}
+
+      {toast && <Toast message={toast.message} variant={toast.variant} />}
     </div>
   )
 }

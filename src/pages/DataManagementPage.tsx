@@ -3,8 +3,11 @@ import { Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { Toast } from '@/components/common/Toast'
 import { DataRecordTable } from '@/components/data/DataRecordTable'
 import { useModel3D } from '@/hooks/useModel3D'
+import { useToast } from '@/hooks/useToast'
+import { DELETE_FAILED, LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
 import { storageService } from '@/services/appwrite/storage'
@@ -24,12 +27,20 @@ export function DataManagementPage() {
   const { setModel } = useModel3D()
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
+  const [loadError, setLoadError] = useState(false)
+  const { toast, showToast } = useToast()
 
   useEffect(() => {
-    databaseService.list<DataRecordRow>('data_records').then(({ rows }) => {
-      const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
-      setRecords(loaded)
-    })
+    databaseService
+      .list<DataRecordRow>('data_records')
+      .then(({ rows }) => {
+        const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
+        setRecords(loaded)
+      })
+      .catch((error) => {
+        console.error(error)
+        setLoadError(true)
+      })
   }, [])
 
   const filteredRecords = useMemo(() => {
@@ -52,39 +63,54 @@ export function DataManagementPage() {
   }
 
   async function handleDelete(id: string) {
-    const modelFileId = records.find((record) => record.id === id)?.modelFileId
-    await databaseService.remove('data_records', id)
-    if (modelFileId) {
-      try {
-        await storageService.remove(appwriteConfig.bucketId, modelFileId)
-      } catch (error) {
-        console.error(error)
+    try {
+      const modelFileId = records.find((record) => record.id === id)?.modelFileId
+      await databaseService.remove('data_records', id)
+      if (modelFileId) {
+        try {
+          await storageService.remove(appwriteConfig.bucketId, modelFileId)
+        } catch (error) {
+          console.error(error)
+        }
       }
+      setRecords((prev) => prev.filter((record) => record.id !== id))
+    } catch (error) {
+      console.error(error)
+      showToast(DELETE_FAILED, 'error')
     }
-    setRecords((prev) => prev.filter((record) => record.id !== id))
   }
 
   async function handleUpdateCategory(id: string, category: string) {
-    await databaseService.update<DataRecordRow>('data_records', id, { category })
-    setRecords((prev) =>
-      prev.map((record) => (record.id === id ? { ...record, category } : record)),
-    )
+    try {
+      await databaseService.update<DataRecordRow>('data_records', id, { category })
+      setRecords((prev) =>
+        prev.map((record) => (record.id === id ? { ...record, category } : record)),
+      )
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   async function handleDuplicate(record: DataRecord) {
-    const row = await databaseService.create<DataRecordRow>('data_records', {
-      date: todayDisplayDate(),
-      category: record.category,
-      file: record.file,
-      owner: record.owner,
-    })
-    const { $id, ...rest } = row
-    setRecords((prev) => {
-      const index = prev.findIndex((item) => item.id === record.id)
-      const next = [...prev]
-      next.splice(index + 1, 0, { id: $id, ...rest })
-      return next
-    })
+    try {
+      const row = await databaseService.create<DataRecordRow>('data_records', {
+        date: todayDisplayDate(),
+        category: record.category,
+        file: record.file,
+        owner: record.owner,
+      })
+      const { $id, ...rest } = row
+      setRecords((prev) => {
+        const index = prev.findIndex((item) => item.id === record.id)
+        const next = [...prev]
+        next.splice(index + 1, 0, { id: $id, ...rest })
+        return next
+      })
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   return (
@@ -114,15 +140,21 @@ export function DataManagementPage() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <DataRecordTable
-          records={filteredRecords}
-          onEdit={handleEditRecord}
-          onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-          onUpdateCategory={handleUpdateCategory}
-        />
-      </div>
+      {loadError ? (
+        <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : (
+        <div className="mt-6">
+          <DataRecordTable
+            records={filteredRecords}
+            onEdit={handleEditRecord}
+            onDelete={handleDelete}
+            onDuplicate={handleDuplicate}
+            onUpdateCategory={handleUpdateCategory}
+          />
+        </div>
+      )}
+
+      {toast && <Toast message={toast.message} variant={toast.variant} />}
     </div>
   )
 }
