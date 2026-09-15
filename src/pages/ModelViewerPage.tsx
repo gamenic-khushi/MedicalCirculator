@@ -36,7 +36,6 @@ import type { SavedSnapshot } from '@/types/viewerState'
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
-const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
 const DEFAULT_RING_RADIUS_PX = 12
 
 export function ModelViewerPage() {
@@ -240,15 +239,6 @@ export function ModelViewerPage() {
     setIsAnnotating(false)
   }
 
-  function measureReferenceWidth(x: number, y: number, direction: 1 | -1) {
-    for (const offset of REFERENCE_POINT_OFFSETS_PERCENT) {
-      const sampleY = Math.min(Math.max(y + direction * offset, 2), 98)
-      const width = canvasRef.current?.measureVesselWidth(x, sampleY)
-      if (width) return { width, y: sampleY }
-    }
-    return null
-  }
-
   function handleCalculateFfr() {
     const target = annotations[annotations.length - 1]
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
@@ -257,8 +247,8 @@ export function ModelViewerPage() {
     setIsCalculatingFfr(true)
     setTimeout(() => {
       const narrowest = canvasRef.current?.measureVesselWidth(target.x, target.y)
-      const upstreamResult = measureReferenceWidth(target.x, target.y, -1)
-      const downstreamResult = measureReferenceWidth(target.x, target.y, 1)
+      const upstreamResult = canvasRef.current?.measureAdaptiveReferenceWidth(target.x, target.y, -1)
+      const downstreamResult = canvasRef.current?.measureAdaptiveReferenceWidth(target.x, target.y, 1)
 
       if (!narrowest || !upstreamResult || !downstreamResult) {
         setIsCalculatingFfr(false)

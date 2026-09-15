@@ -23,6 +23,11 @@ export interface ModelCanvasHandle {
   setTool: (tool: ViewerTool) => void
   capture: () => string | null
   measureVesselWidth: (xPercent: number, yPercent: number) => number | null
+  measureAdaptiveReferenceWidth: (
+    xPercent: number,
+    yPercent: number,
+    direction: 1 | -1,
+  ) => { width: number; y: number } | null
   measureLesionPosition: (xPercent: number, yPercent: number) => string | null
   measureDistance3D: (
     x1Percent: number,
@@ -84,6 +89,13 @@ const POSITION_SCAN_STEP_PERCENT = 1
 const POSITION_SCAN_MAX_STEPS = 45
 const POSITION_WIDTH_JUMP_RATIO = 1.6
 const SEGMENT_HIGHLIGHT_STEPS = 30
+// A reference (healthy) width used to be sampled at fixed screen-percentage
+// offsets from the lesion — which brackets a different real segment length
+// depending on how long the lesion is, and a different real distance
+// depending on zoom. Walking outward until width stops changing instead
+// finds the actual healthy vessel next to the lesion, regardless of either.
+const REFERENCE_PLATEAU_STABLE_STEPS = 3
+const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
@@ -343,6 +355,51 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return distance
   }
 
+  // Walks outward the same way walkBranchDistance does, but stops once width
+  // has held steady (within REFERENCE_PLATEAU_TOLERANCE_RATIO) for
+  // REFERENCE_PLATEAU_STABLE_STEPS in a row — i.e. once we've walked out of
+  // the narrowing into stable, healthy vessel. Falls back to the last valid
+  // sample if a bifurcation is hit or the walk runs out of model before a
+  // plateau is found, rather than returning nothing.
+  function walkToStableReferenceWidth(
+    xPercent: number,
+    yPercent: number,
+    direction: 1 | -1,
+    baselineWidth: number,
+  ): { width: number; y: number } | null {
+    let x = xPercent
+    let y = yPercent
+    let lastWidth: number | null = null
+    let stableSteps = 0
+    let lastValid: { width: number; y: number } | null = null
+
+    for (let step = 0; step < POSITION_SCAN_MAX_STEPS; step++) {
+      const nextY = y + direction * POSITION_SCAN_STEP_PERCENT
+      if (nextY <= 1 || nextY >= 99) break
+
+      const found = findNearestHit(x, nextY)
+      if (!found) break
+
+      const width = computeVesselWidth(found.x, found.y)
+      if (!width) break
+      if (width > baselineWidth * POSITION_WIDTH_JUMP_RATIO) break
+
+      lastValid = { width, y: found.y }
+
+      if (lastWidth != null) {
+        const relativeChange = Math.abs(width - lastWidth) / lastWidth
+        stableSteps = relativeChange <= REFERENCE_PLATEAU_TOLERANCE_RATIO ? stableSteps + 1 : 0
+        if (stableSteps >= REFERENCE_PLATEAU_STABLE_STEPS) return lastValid
+      }
+
+      lastWidth = width
+      x = found.x
+      y = found.y
+    }
+
+    return lastValid
+  }
+
   function computeLesionPosition(xPercent: number, yPercent: number) {
     const baseline = computeVesselWidth(xPercent, yPercent)
     if (!baseline) return null
@@ -385,6 +442,11 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return outputCanvas.toDataURL('image/png')
     },
     measureVesselWidth: (xPercent, yPercent) => computeVesselWidth(xPercent, yPercent),
+    measureAdaptiveReferenceWidth: (xPercent, yPercent, direction) => {
+      const baseline = computeVesselWidth(xPercent, yPercent)
+      if (!baseline) return null
+      return walkToStableReferenceWidth(xPercent, yPercent, direction, baseline)
+    },
     measureLesionPosition: (xPercent, yPercent) => computeLesionPosition(xPercent, yPercent),
     getWorldPoint: (xPercent, yPercent) => {
       const hit = getHitResult(xPercent, yPercent)
