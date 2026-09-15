@@ -25,10 +25,12 @@ import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
+import { useToast } from '@/hooks/useToast'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor } from '@/lib/formulaSettings'
 import { generateId } from '@/lib/id'
+import { DELETE_FAILED, SAVE_FAILED, VESSEL_WIDTH_MEASURE_FAILED } from '@/lib/messages'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { measureTwoPointLesion, type PercentPoint } from '@/lib/twoPointLesionMeasurement'
 import { databaseService } from '@/services/appwrite/database'
@@ -39,7 +41,6 @@ import type { Annotation, CameraState, FfrResult, SavedSnapshot } from '@/types/
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
-const TOAST_DURATION_MS = 1800
 const PROXIMITY_PATH_STEPS = 10
 const PROXIMITY_SAMPLE_COUNT = 3
 
@@ -245,7 +246,7 @@ export function LesionAnalysisPage() {
   const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotations))
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const { toast, showToast } = useToast()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
   const [isInfoOpen, setIsInfoOpen] = useState(false)
@@ -352,11 +353,6 @@ export function LesionAnalysisPage() {
     return <Navigate to="/data/3d-analysis" state={{ dataRecordId }} replace />
   }
 
-  function showToast(message: string) {
-    setToastMessage(message)
-    setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
-  }
-
   function handleToolChange(tool: ViewerTool) {
     setActiveTool(tool)
     canvasRef.current?.setTool(tool)
@@ -369,7 +365,7 @@ export function LesionAnalysisPage() {
         await databaseService.remove('learning_content_frames', id)
       } catch (error) {
         console.error(error)
-        showToast('削除に失敗しました')
+        showToast(DELETE_FAILED, 'error')
         return
       }
     }
@@ -479,7 +475,7 @@ export function LesionAnalysisPage() {
 
       if (!result) {
         setIsMeasuring(false)
-        showToast('血管の幅を測定できませんでした。別の場所を選択してください。')
+        showToast(VESSEL_WIDTH_MEASURE_FAILED, 'error')
         return
       }
 
@@ -676,7 +672,7 @@ export function LesionAnalysisPage() {
         await databaseService.update('data_records', dataRecordId, { category: trimmed })
       } catch (error) {
         console.error(error)
-        showToast('タイトルの保存に失敗しました')
+        showToast('タイトルの保存に失敗しました', 'error')
       }
     }
   }
@@ -777,7 +773,7 @@ export function LesionAnalysisPage() {
       navigate('/data/learning-content', { state: { dataRecordId } })
     } catch (error) {
       console.error(error)
-      showToast('保存に失敗しました')
+      showToast(SAVE_FAILED, 'error')
     }
   }
 
@@ -1021,6 +1017,7 @@ export function LesionAnalysisPage() {
             type="button"
             onClick={handleSave}
             disabled={!measurement}
+            title="この画面上に一時的に保存します（ページを離れると失われます。永続的に保存するには「解析履歴に保存」を使用してください）"
             className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             仮保存
@@ -1073,7 +1070,7 @@ export function LesionAnalysisPage() {
 
       {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
-      {toastMessage && <Toast message={toastMessage} />}
+      {toast && <Toast message={toast.message} variant={toast.variant} />}
     </div>
   )
 }

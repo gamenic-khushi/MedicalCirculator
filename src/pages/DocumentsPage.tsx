@@ -6,12 +6,12 @@ import { Toast } from '@/components/common/Toast'
 import { DocumentFileTable } from '@/components/documents/DocumentFileTable'
 import { DocumentNameModal } from '@/components/documents/DocumentNameModal'
 import { DocumentUploadModal } from '@/components/documents/DocumentUploadModal'
+import { useToast } from '@/hooks/useToast'
+import { DELETE_FAILED, LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
 import { storageService } from '@/services/appwrite/storage'
 import type { DocumentFile } from '@/types/documentFile'
-
-const TOAST_DURATION_MS = 1800
 
 type DocumentRow = Models.Row & Omit<DocumentFile, 'id'>
 type DocumentFolderRow = Models.Row & { name: string }
@@ -29,20 +29,28 @@ export function DocumentsPage() {
   const [query, setQuery] = useState('')
   const [isAddingFolder, setIsAddingFolder] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const { toast, showToast } = useToast()
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
-    databaseService.list<DocumentRow>('documents').then(({ rows }) => {
-      const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
-      setDocuments(loaded)
-      setFolders((prev) => {
-        const loadedFolders = loaded.map((document) => document.folder).filter(Boolean)
-        return Array.from(new Set([...prev, ...loadedFolders])) as string[]
-      })
-    })
-    databaseService.list<DocumentFolderRow>('document_folders').then(({ rows }) => {
-      setFolders((prev) => Array.from(new Set([...prev, ...rows.map((row) => row.name)])))
-    })
+    async function load() {
+      try {
+        const [documentsResult, foldersResult] = await Promise.all([
+          databaseService.list<DocumentRow>('documents'),
+          databaseService.list<DocumentFolderRow>('document_folders'),
+        ])
+        const loaded = documentsResult.rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
+        setDocuments(loaded)
+        const loadedFolders = loaded.map((document) => document.folder).filter(Boolean) as string[]
+        setFolders(
+          Array.from(new Set([...loadedFolders, ...foldersResult.rows.map((row) => row.name)])),
+        )
+      } catch (error) {
+        console.error(error)
+        setLoadError(true)
+      }
+    }
+    void load()
   }, [])
 
   const filteredDocuments = useMemo(() => {
@@ -52,38 +60,57 @@ export function DocumentsPage() {
   }, [documents, query])
 
   async function handleAddFolder(folderName: string) {
-    await databaseService.create<DocumentFolderRow>('document_folders', { name: folderName })
-    setFolders((prev) => [...prev, folderName])
-    setToastMessage('登録完了')
-    setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
+    try {
+      await databaseService.create<DocumentFolderRow>('document_folders', { name: folderName })
+      setFolders((prev) => [...prev, folderName])
+      showToast('登録完了')
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   async function handleEdit(id: string, data: { folder: string; fileName: string }) {
-    await databaseService.update<DocumentRow>('documents', id, data)
-    setDocuments((prev) =>
-      prev.map((document) => (document.id === id ? { ...document, ...data } : document)),
-    )
+    try {
+      await databaseService.update<DocumentRow>('documents', id, data)
+      setDocuments((prev) =>
+        prev.map((document) => (document.id === id ? { ...document, ...data } : document)),
+      )
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   async function handleDelete(id: string) {
-    await databaseService.remove('documents', id)
-    setDocuments((prev) => prev.filter((document) => document.id !== id))
+    try {
+      await databaseService.remove('documents', id)
+      setDocuments((prev) => prev.filter((document) => document.id !== id))
+    } catch (error) {
+      console.error(error)
+      showToast(DELETE_FAILED, 'error')
+    }
   }
 
   async function handleDuplicate(document: DocumentFile) {
-    const row = await databaseService.create<DocumentRow>('documents', {
-      date: todayDisplayDate(),
-      fileName: document.fileName,
-      folder: document.folder,
-      imageUrl: document.imageUrl,
-    })
-    const { $id, ...rest } = row
-    setDocuments((prev) => {
-      const index = prev.findIndex((item) => item.id === document.id)
-      const next = [...prev]
-      next.splice(index + 1, 0, { id: $id, ...rest })
-      return next
-    })
+    try {
+      const row = await databaseService.create<DocumentRow>('documents', {
+        date: todayDisplayDate(),
+        fileName: document.fileName,
+        folder: document.folder,
+        imageUrl: document.imageUrl,
+      })
+      const { $id, ...rest } = row
+      setDocuments((prev) => {
+        const index = prev.findIndex((item) => item.id === document.id)
+        const next = [...prev]
+        next.splice(index + 1, 0, { id: $id, ...rest })
+        return next
+      })
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   async function handleSaveUpload({
@@ -95,20 +122,27 @@ export function DocumentsPage() {
     fileName: string
     imageFile?: File
   }) {
-    let imageUrl: string | undefined
-    if (imageFile) {
-      const uploaded = await storageService.upload(appwriteConfig.documentsBucketId, imageFile)
-      imageUrl = storageService.getViewUrl(appwriteConfig.documentsBucketId, uploaded.$id).toString()
-    }
+    try {
+      let imageUrl: string | undefined
+      if (imageFile) {
+        const uploaded = await storageService.upload(appwriteConfig.documentsBucketId, imageFile)
+        imageUrl = storageService
+          .getViewUrl(appwriteConfig.documentsBucketId, uploaded.$id)
+          .toString()
+      }
 
-    const row = await databaseService.create<DocumentRow>('documents', {
-      date: todayDisplayDate(),
-      fileName,
-      folder,
-      imageUrl,
-    })
-    const { $id, ...rest } = row
-    setDocuments((prev) => [{ id: $id, ...rest }, ...prev])
+      const row = await databaseService.create<DocumentRow>('documents', {
+        date: todayDisplayDate(),
+        fileName,
+        folder,
+        imageUrl,
+      })
+      const { $id, ...rest } = row
+      setDocuments((prev) => [{ id: $id, ...rest }, ...prev])
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
+    }
   }
 
   return (
@@ -146,15 +180,19 @@ export function DocumentsPage() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <DocumentFileTable
-          documents={filteredDocuments}
-          folders={folders}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onDuplicate={handleDuplicate}
-        />
-      </div>
+      {loadError ? (
+        <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : (
+        <div className="mt-6">
+          <DocumentFileTable
+            documents={filteredDocuments}
+            folders={folders}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onDuplicate={handleDuplicate}
+          />
+        </div>
+      )}
 
       {isAddingFolder && (
         <DocumentNameModal
@@ -173,7 +211,7 @@ export function DocumentsPage() {
         />
       )}
 
-      {toastMessage && <Toast message={toastMessage} />}
+      {toast && <Toast message={toast.message} variant={toast.variant} />}
     </div>
   )
 }

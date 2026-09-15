@@ -20,11 +20,13 @@ import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPan
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
+import { useToast } from '@/hooks/useToast'
 import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor } from '@/lib/formulaSettings'
 import { generateId } from '@/lib/id'
+import { SAVE_FAILED, VESSEL_WIDTH_MEASURE_FAILED } from '@/lib/messages'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
@@ -34,7 +36,6 @@ import type { SavedSnapshot } from '@/types/viewerState'
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 
 const MODEL_COLOR = '#d8dce3'
-const TOAST_DURATION_MS = 1800
 const REFERENCE_POINT_OFFSETS_PERCENT = [15, 10, 6, 3]
 const DEFAULT_RING_RADIUS_PX = 12
 
@@ -83,7 +84,7 @@ export function ModelViewerPage() {
   } = useViewerState()
 
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const { toast, showToast } = useToast()
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
   const [ffrStenosisFactor, setFfrStenosisFactor] = useState(DEFAULT_FFR_STENOSIS_FACTOR)
@@ -261,8 +262,7 @@ export function ModelViewerPage() {
 
       if (!narrowest || !upstreamResult || !downstreamResult) {
         setIsCalculatingFfr(false)
-        setToastMessage('血管の幅を測定できませんでした。別の場所を選択してください。')
-        setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
+        showToast(VESSEL_WIDTH_MEASURE_FAILED, 'error')
         return
       }
 
@@ -311,8 +311,7 @@ export function ModelViewerPage() {
   }
 
   function handleUpdateBloodPressure() {
-    setToastMessage('血圧が更新されました')
-    setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
+    showToast('血圧が更新されました')
   }
 
   function handleBloodPressureChange(value: string) {
@@ -384,12 +383,11 @@ export function ModelViewerPage() {
         'learning_content_frames',
         buildLearningContentPayload(snapshot),
       )
-      setToastMessage('学習データに保存しました')
+      showToast('学習データに保存しました')
     } catch (error) {
       console.error(error)
-      setToastMessage('保存に失敗しました')
+      showToast(SAVE_FAILED, 'error')
     }
-    setTimeout(() => setToastMessage(null), TOAST_DURATION_MS)
   }
 
   function buildLearningContentPayload(snapshot: SavedSnapshot) {
@@ -460,6 +458,7 @@ export function ModelViewerPage() {
               type="button"
               onClick={handleSaveCurrentToLearningData}
               disabled={!ffrResult}
+              title="この計測結果を学習データとして保存します（他のユーザーからも見え、後から削除するまで残ります）"
               className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               学習データに保存
@@ -589,6 +588,7 @@ export function ModelViewerPage() {
             <button
               type="button"
               onClick={handleSaveSnapshot}
+              title="この画面上に一時的に保存します（ページを離れると失われます。永続的に保存するには「学習データに保存」を使用してください）"
               className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
             >
               仮保存
@@ -601,7 +601,7 @@ export function ModelViewerPage() {
 
       {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
-      {toastMessage && <Toast message={toastMessage} />}
+      {toast && <Toast message={toast.message} variant={toast.variant} />}
     </div>
   )
 }

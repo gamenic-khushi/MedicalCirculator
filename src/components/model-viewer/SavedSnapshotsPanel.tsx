@@ -37,6 +37,7 @@ export function SavedSnapshotsPanel({
           type="button"
           onClick={onSaveToHistory}
           disabled={!canSaveToHistory}
+          title="この計測結果を永続的に保存します（一覧の「仮保存」と異なり、ページを離れても残ります）"
           className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           解析履歴に保存
