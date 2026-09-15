@@ -5,7 +5,9 @@ import { useNavigate } from 'react-router-dom'
 
 import { DataRecordTable } from '@/components/data/DataRecordTable'
 import { useModel3D } from '@/hooks/useModel3D'
+import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
+import { storageService } from '@/services/appwrite/storage'
 import type { DataRecord } from '@/types/dataRecord'
 
 type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
@@ -50,7 +52,15 @@ export function DataManagementPage() {
   }
 
   async function handleDelete(id: string) {
+    const modelFileId = records.find((record) => record.id === id)?.modelFileId
     await databaseService.remove('data_records', id)
+    if (modelFileId) {
+      try {
+        await storageService.remove(appwriteConfig.bucketId, modelFileId)
+      } catch (error) {
+        console.error(error)
+      }
+    }
     setRecords((prev) => prev.filter((record) => record.id !== id))
   }
 

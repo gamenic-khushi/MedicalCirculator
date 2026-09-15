@@ -362,7 +362,17 @@ export function LesionAnalysisPage() {
     canvasRef.current?.setTool(tool)
   }
 
-  function handleDeleteSnapshot(id: string) {
+  async function handleDeleteSnapshot(id: string) {
+    const target = savedSnapshots.find((snapshot) => snapshot.id === id)
+    if (target && !target.isDraft) {
+      try {
+        await databaseService.remove('learning_content_frames', id)
+      } catch (error) {
+        console.error(error)
+        showToast('削除に失敗しました')
+        return
+      }
+    }
     setSavedSnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id))
   }
 
@@ -645,6 +655,7 @@ export function LesionAnalysisPage() {
         mla: params.mla ? `${params.mla} mm²` : '—',
         lumenVolume: params.lumenVolume ? `${params.lumenVolume} mm³` : '—',
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
+        isDraft: true,
       },
     ])
   }

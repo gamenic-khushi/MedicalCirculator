@@ -31,4 +31,7 @@ export interface SavedSnapshot {
   mla: string
   lumenVolume: string
   bifurcationAngle: string
+  // A provisional (仮保存) capture that was never sent to the backend —
+  // deleting it should not attempt to remove a row that doesn't exist.
+  isDraft?: boolean
 }
