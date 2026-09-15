@@ -18,13 +18,18 @@ interface SelectedLesionModalProps {
   onSave: (data: SelectedLesionFormData) => void
 }
 
-const NUMBER_FIELDS: { key: keyof SelectedLesionFormData; label: string; unit: string }[] = [
+const NUMBER_FIELDS: {
+  key: keyof SelectedLesionFormData
+  label: string
+  unit: string
+  readOnly?: boolean
+}[] = [
   { key: 'lesionProximalDiameter', label: '病変近位径', unit: 'mm' },
   { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm' },
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
-  { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²' },
-  { key: 'stenosisRate', label: '狭窄率', unit: '%' },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
+  { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
+  { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
 ]
 
 export function SelectedLesionModal({ initialValues, onClose, onSave }: SelectedLesionModalProps) {
@@ -43,7 +48,7 @@ export function SelectedLesionModal({ initialValues, onClose, onSave }: Selected
           自動計測値（修正前）。数値は表示イメージです。単位・桁数・項目名は開発時に確定します。
         </p>
 
-        {NUMBER_FIELDS.map(({ key, label, unit }) => (
+        {NUMBER_FIELDS.map(({ key, label, unit, readOnly }) => (
           <label key={key} className="flex flex-col gap-2 text-sm font-medium text-gray-900">
             {label}
             <div className="flex items-center gap-2">
@@ -51,8 +56,18 @@ export function SelectedLesionModal({ initialValues, onClose, onSave }: Selected
                 type="number"
                 step="0.1"
                 value={values[key]}
-                onChange={(event) => setValues((prev) => ({ ...prev, [key]: event.target.value }))}
-                className="w-full rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-indigo-400"
+                readOnly={readOnly}
+                title={readOnly ? '自動計算される値です（直接編集はできません）' : undefined}
+                onChange={
+                  readOnly
+                    ? undefined
+                    : (event) => setValues((prev) => ({ ...prev, [key]: event.target.value }))
+                }
+                className={`w-full rounded-lg px-4 py-2.5 text-sm outline-none ${
+                  readOnly
+                    ? 'cursor-default bg-gray-50 text-gray-400'
+                    : 'bg-gray-100 text-gray-900 focus:ring-2 focus:ring-indigo-400'
+                }`}
               />
               <span className="text-sm text-gray-400">{unit}</span>
             </div>

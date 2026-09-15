@@ -151,13 +151,14 @@ const SELECTED_LESION_FIELDS: {
   key: keyof SelectedLesionFormData
   label: string
   unit: string
+  readOnly?: boolean
 }[] = [
   { key: 'lesionProximalDiameter', label: '病変近位径', unit: 'mm' },
   { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm' },
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
-  { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²' },
-  { key: 'stenosisRate', label: '狭窄率', unit: '%' },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
+  { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
+  { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
   { key: 'lesionPosition', label: '病変位置', unit: '' },
 ]
 
@@ -956,16 +957,26 @@ export function LesionAnalysisPage() {
               <p className="text-[11px] text-gray-400">自動計測値</p>
             </div>
             <div className="mt-3 flex flex-col gap-2">
-              {SELECTED_LESION_FIELDS.map(({ key, label, unit }) => (
+              {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }) => (
                 <div key={key} className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-gray-500">{label}</span>
                   <div className="flex items-center gap-1">
                     <input
                       type="text"
                       value={selectedLesion[key]}
-                      onChange={(event) => handleSelectedLesionFieldChange(key, event.target.value)}
-                      className={`w-16 rounded border border-gray-200 px-1.5 py-1 text-right outline-none focus:border-indigo-400 ${
-                        key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-900'
+                      readOnly={readOnly}
+                      title={readOnly ? '自動計算される値です（直接編集はできません）' : undefined}
+                      onChange={
+                        readOnly
+                          ? undefined
+                          : (event) => handleSelectedLesionFieldChange(key, event.target.value)
+                      }
+                      className={`w-16 rounded border px-1.5 py-1 text-right outline-none ${
+                        readOnly
+                          ? `cursor-default border-gray-100 bg-gray-50 ${
+                              key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-400'
+                            }`
+                          : 'border-gray-200 text-gray-900 focus:border-indigo-400'
                       }`}
                     />
                     <span className="w-6 shrink-0 text-gray-400">{unit}</span>
