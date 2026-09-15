@@ -7,6 +7,7 @@ import { ConferencePage } from '@/pages/ConferencePage'
 import { DataManagementPage } from '@/pages/DataManagementPage'
 import { DocumentsPage } from '@/pages/DocumentsPage'
 import { FormulaSettingsPage } from '@/pages/FormulaSettingsPage'
+import { HelpPage } from '@/pages/HelpPage'
 import { LearningContentPage } from '@/pages/LearningContentPage'
 import { LesionAnalysisPage } from '@/pages/LesionAnalysisPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
       { path: '3d-analysis', element: <ThreeDAnalysisPage /> },
       { path: 'conference', element: <ConferencePage /> },
       { path: 'documents', element: <DocumentsPage /> },
+      { path: 'help', element: <HelpPage /> },
       {
         path: 'users',
         element: (

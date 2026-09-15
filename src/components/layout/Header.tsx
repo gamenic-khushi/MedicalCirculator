@@ -125,6 +125,13 @@ export function Header() {
 
           {isMenuOpen && (
             <div className="absolute right-0 top-14 z-10 hidden w-48 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10 lg:block">
+              <NavLink
+                to="/help"
+                onClick={() => setIsMenuOpen(false)}
+                className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+              >
+                ヘルプ
+              </NavLink>
               {isAdmin && (
                 <>
                   <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-gray-400">設定</p>
@@ -192,6 +199,17 @@ export function Header() {
                 {item.label}
               </NavLink>
             ))}
+          <NavLink
+            to="/help"
+            onClick={() => setIsMenuOpen(false)}
+            className={({ isActive }) =>
+              `rounded-lg px-3 py-2 text-sm font-medium transition ${
+                isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
+              }`
+            }
+          >
+            ヘルプ
+          </NavLink>
           {isAdmin && (
             <>
               <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-white/60">設定</p>
