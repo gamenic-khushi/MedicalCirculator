@@ -23,7 +23,7 @@ import { useModel3D } from '@/hooks/useModel3D'
 import { useViewerState } from '@/hooks/useViewerState'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
-import { getFfrStenosisFactor } from '@/lib/formulaSettings'
+import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor } from '@/lib/formulaSettings'
 import { generateId } from '@/lib/id'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
@@ -86,6 +86,11 @@ export function ModelViewerPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
+  const [ffrStenosisFactor, setFfrStenosisFactor] = useState(DEFAULT_FFR_STENOSIS_FACTOR)
+
+  useEffect(() => {
+    fetchFfrStenosisFactor().then(setFfrStenosisFactor)
+  }, [])
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -266,7 +271,7 @@ export function ModelViewerPage() {
       const referenceDiameter = (upstream + downstream) / 2
       const rawStenosisRate = referenceDiameter > 0 ? (1 - narrowest / referenceDiameter) * 100 : 0
       const stenosisRate = Math.min(Math.max(rawStenosisRate, 0), 99)
-      const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
+      const ffrValue = 1 - (stenosisRate / 100) * ffrStenosisFactor
       const pdValue = (Number(bloodPressure) * ffrValue).toFixed(1)
 
       const segmentLength = canvasRef.current?.measureDistance3D(

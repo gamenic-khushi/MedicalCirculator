@@ -27,7 +27,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
-import { getFfrStenosisFactor } from '@/lib/formulaSettings'
+import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor } from '@/lib/formulaSettings'
 import { generateId } from '@/lib/id'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { measureTwoPointLesion, type PercentPoint } from '@/lib/twoPointLesionMeasurement'
@@ -249,9 +249,14 @@ export function LesionAnalysisPage() {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
   const [isInfoOpen, setIsInfoOpen] = useState(false)
+  const [ffrStenosisFactor, setFfrStenosisFactor] = useState(DEFAULT_FFR_STENOSIS_FACTOR)
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    fetchFfrStenosisFactor().then(setFfrStenosisFactor)
+  }, [])
 
   useEffect(() => {
     if (!dataRecordId) return
@@ -518,7 +523,7 @@ export function LesionAnalysisPage() {
     if (!target || !bounds || !bloodPressure.trim() || !selectedLesion.stenosisRate) return
 
     const stenosisRate = Math.min(Math.max(Number(selectedLesion.stenosisRate) || 0, 0), 99)
-    const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
+    const ffrValue = 1 - (stenosisRate / 100) * ffrStenosisFactor
     const pa = bloodPressure.trim()
     const pdValue = (Number(pa) * ffrValue).toFixed(1)
 
@@ -570,7 +575,7 @@ export function LesionAnalysisPage() {
     }))
 
     if (!measurement) return
-    const ffrValue = 1 - (stenosisRate / 100) * getFfrStenosisFactor()
+    const ffrValue = 1 - (stenosisRate / 100) * ffrStenosisFactor
     setMeasurement({ ...measurement, stenosisRate: Math.round(stenosisRate), ffrValue })
     setParams((prev) => ({
       ...prev,
@@ -674,7 +679,7 @@ export function LesionAnalysisPage() {
     const ffrDisplay = measurement
       ? measurement.ffrValue.toFixed(2)
       : params.stenosisRate
-        ? (1 - (Number(params.stenosisRate) / 100) * getFfrStenosisFactor()).toFixed(2)
+        ? (1 - (Number(params.stenosisRate) / 100) * ffrStenosisFactor).toFixed(2)
         : '—'
 
     const rows: [string, string][] = [
