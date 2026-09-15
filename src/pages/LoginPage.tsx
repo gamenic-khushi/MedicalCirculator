@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/hooks/useAuth'
+import { authService } from '@/services/appwrite/auth'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -10,6 +11,11 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [isRecovering, setIsRecovering] = useState(false)
+  const [recoveryEmail, setRecoveryEmail] = useState('')
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null)
+  const [isSendingRecovery, setIsSendingRecovery] = useState(false)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -24,6 +30,20 @@ export function LoginPage() {
       setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleRecoverySubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsSendingRecovery(true)
+    try {
+      await authService.createRecovery(recoveryEmail.trim())
+      setRecoveryMessage('パスワード再設定用のメールを送信しました。メールをご確認ください。')
+    } catch (err) {
+      console.error(err)
+      setRecoveryMessage('送信に失敗しました。メールアドレスをご確認のうえ、もう一度お試しください。')
+    } finally {
+      setIsSendingRecovery(false)
     }
   }
 
@@ -72,6 +92,41 @@ export function LoginPage() {
             {isSubmitting ? 'ログイン中...' : 'ログイン'}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() => {
+            setIsRecovering((value) => !value)
+            setRecoveryMessage(null)
+          }}
+          className="mt-4 text-sm font-medium text-indigo-600 hover:underline"
+        >
+          パスワードをお忘れですか？
+        </button>
+
+        {isRecovering && (
+          <form onSubmit={handleRecoverySubmit} className="mt-4 space-y-3 rounded-2xl bg-gray-50 p-4">
+            <label className="block text-sm font-medium text-gray-700">
+              登録済みのメールアドレス
+              <input
+                type="email"
+                value={recoveryEmail}
+                onChange={(event) => setRecoveryEmail(event.target.value)}
+                required
+                className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="example@example.com"
+              />
+            </label>
+            {recoveryMessage && <p className="text-sm text-gray-600">{recoveryMessage}</p>}
+            <button
+              type="submit"
+              disabled={isSendingRecovery}
+              className="w-full rounded-xl bg-white border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSendingRecovery ? '送信中...' : '再設定メールを送信'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   )

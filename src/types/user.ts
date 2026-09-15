@@ -14,4 +14,5 @@ export interface AppUser {
   organization: string
   name: string
   email?: string
+  accountId?: string
 }

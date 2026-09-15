@@ -52,12 +52,19 @@ export function UserManagementPage() {
 
   async function handleAdd(data: UserFormData & { password?: string }) {
     const { password, ...profileData } = data
+    let accountId: string | undefined
     if (password) {
-      await authService.createAccountWithoutSession(profileData.email, password, profileData.name)
+      const account = await authService.createAccountWithoutSession(
+        profileData.email,
+        password,
+        profileData.name,
+      )
+      accountId = account.$id
     }
     const row = await databaseService.create<UserRow>('users', {
       date: todayDisplayDate(),
       ...profileData,
+      ...(accountId ? { accountId } : {}),
     })
     const { $id, ...rest } = row
     setUsers((prev) => [{ id: $id, ...rest }, ...prev])

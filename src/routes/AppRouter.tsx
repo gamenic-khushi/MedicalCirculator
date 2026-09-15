@@ -13,6 +13,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { ModelViewerErrorPage } from '@/pages/ModelViewerErrorPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { ThreeDAnalysisPage } from '@/pages/ThreeDAnalysisPage'
 import { UserManagementPage } from '@/pages/UserManagementPage'
 
@@ -89,6 +90,7 @@ const router = createBrowserRouter([
     ],
   },
   { path: '/login', element: <LoginPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
 ])
 
 export function AppRouter() {

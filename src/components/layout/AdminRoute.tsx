@@ -5,7 +5,11 @@ import { useAuth } from '@/hooks/useAuth'
 import { isAdminCategory } from '@/types/user'
 
 export function AdminRoute({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) {
+    return null
+  }
 
   if (!isAdminCategory(user?.category)) {
     return <Navigate to="/" replace />

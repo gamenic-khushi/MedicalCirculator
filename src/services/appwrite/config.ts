@@ -3,6 +3,7 @@ export const appwriteConfig = {
   projectId: import.meta.env.VITE_APPWRITE_PROJECT_ID,
   databaseId: import.meta.env.VITE_APPWRITE_DATABASE_ID,
   bucketId: import.meta.env.VITE_APPWRITE_BUCKET_ID,
+  documentsBucketId: import.meta.env.VITE_APPWRITE_DOCUMENTS_BUCKET_ID,
 } as const
 
 if (import.meta.env.DEV) {
