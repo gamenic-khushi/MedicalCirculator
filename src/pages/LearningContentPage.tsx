@@ -48,6 +48,7 @@ export function LearningContentPage() {
   const { setModel } = useModel3D()
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
   const [record, setRecord] = useState<DataRecord | null>(null)
+  const [isLoadingRecord, setIsLoadingRecord] = useState(Boolean(dataRecordId))
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -59,12 +60,15 @@ export function LearningContentPage() {
   useEffect(() => {
     if (!dataRecordId) {
       setRecord(null)
+      setIsLoadingRecord(false)
       return
     }
+    setIsLoadingRecord(true)
     databaseService
       .get<DataRecordRow>('data_records', dataRecordId)
       .then(({ $id, ...rest }) => setRecord({ id: $id, ...rest }))
       .catch((error) => console.error(error))
+      .finally(() => setIsLoadingRecord(false))
   }, [dataRecordId])
 
   function loadFile(file: File) {
@@ -88,6 +92,7 @@ export function LearningContentPage() {
   }
 
   async function handleAddNew() {
+    if (isLoadingRecord) return
     if (!record?.modelFileId) {
       const file = await pickModelFile(() => inputRef.current?.click())
       if (file) await registerAndLoadFile(file)
@@ -127,8 +132,9 @@ export function LearningContentPage() {
         <button
           type="button"
           onClick={handleAddNew}
+          disabled={isLoadingRecord}
           title="新規追加"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
         </button>
