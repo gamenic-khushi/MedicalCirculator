@@ -3,9 +3,12 @@ import { Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+import { Toast } from '@/components/common/Toast'
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useModel3D } from '@/hooks/useModel3D'
+import { useToast } from '@/hooks/useToast'
 import { pickModelFile } from '@/lib/filePickerMemory'
+import { LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
 import { storageService } from '@/services/appwrite/storage'
@@ -49,6 +52,7 @@ export function LearningContentPage() {
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
   const [record, setRecord] = useState<DataRecord | null>(null)
   const [isLoadingRecord, setIsLoadingRecord] = useState(Boolean(dataRecordId))
+  const { toast, showToast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -81,14 +85,19 @@ export function LearningContentPage() {
   // a file this one time and register it as the folder's model — every "+"
   // after that reuses it like normal, same as a folder created going forward.
   async function registerAndLoadFile(file: File) {
-    if (dataRecordId) {
-      const uploadedFile = await storageService.upload(appwriteConfig.bucketId, file)
-      await databaseService.update<DataRecordRow>('data_records', dataRecordId, {
-        modelFileId: uploadedFile.$id,
-      })
-      setRecord((prev) => (prev ? { ...prev, modelFileId: uploadedFile.$id } : prev))
+    try {
+      if (dataRecordId) {
+        const uploadedFile = await storageService.upload(appwriteConfig.bucketId, file)
+        await databaseService.update<DataRecordRow>('data_records', dataRecordId, {
+          modelFileId: uploadedFile.$id,
+        })
+        setRecord((prev) => (prev ? { ...prev, modelFileId: uploadedFile.$id } : prev))
+      }
+      loadFile(file)
+    } catch (error) {
+      console.error(error)
+      showToast(SAVE_FAILED, 'error')
     }
-    loadFile(file)
   }
 
   async function handleAddNew() {
@@ -99,11 +108,16 @@ export function LearningContentPage() {
       return
     }
 
-    const viewUrl = storageService.getViewUrl(appwriteConfig.bucketId, record.modelFileId)
-    const response = await fetch(viewUrl)
-    const blob = await response.blob()
-    const file = new File([blob], record.file, { type: blob.type })
-    loadFile(file)
+    try {
+      const viewUrl = storageService.getViewUrl(appwriteConfig.bucketId, record.modelFileId)
+      const response = await fetch(viewUrl)
+      const blob = await response.blob()
+      const file = new File([blob], record.file, { type: blob.type })
+      loadFile(file)
+    } catch (error) {
+      console.error(error)
+      showToast(LOAD_FAILED, 'error')
+    }
   }
 
   function handleFileSelected(files: FileList | null) {
@@ -160,6 +174,8 @@ export function LearningContentPage() {
           onDelete={handleDelete}
         />
       </div>
+
+      {toast && <Toast message={toast.message} variant={toast.variant} />}
     </div>
   )
 }
