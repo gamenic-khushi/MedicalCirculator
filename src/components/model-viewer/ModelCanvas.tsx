@@ -105,24 +105,10 @@ const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 const HEART_PROXIMITY_STEP_PERCENT = 1
 const HEART_PROXIMITY_MAX_STEPS = 20
 const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.4
-// The walk only needs a rough "wider or not" signal at each step, not a
-// precise diameter — computeVesselWidth's own accuracy (adaptive tangent
-// estimate, snap-search recovery) costs up to 4 findNearestHit calls per
-// sample, each up to 41 raycasts when the direct hit misses. A
-// fixed-direction, direct-raycast-only proxy trades precision for speed.
-//
-// The scan radius (steps × step%) has to comfortably exceed how wide a
-// merely-moderate branch mouth or local bulge can look on screen — confirmed
-// live on a real case where a 15%-radius cap (the original 5 steps) already
-// saturated at a side branch's own local width, so the walk reported it as
-// "found nothing wider" without ever getting the chance to walk toward the
-// genuinely much wider chamber a few steps further on. A too-small radius
-// doesn't fail loudly, it just quietly caps out and produces a confident,
-// wrong answer. 30 steps keeps each probe direction cheap (plain hitAt, no
-// snap-search) while giving enough headroom that a real trunk/chamber can
-// still be told apart from an ordinary branch.
-const HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT = 3
-const HEART_PROXIMITY_QUICK_SCAN_STEPS = 30
+// Below this relative gap between the two sides' widest real measurement,
+// treat width as inconclusive rather than trusting a razor-thin difference
+// that's as likely to be raycasting noise as a genuine signal.
+const HEART_PROXIMITY_WIDTH_TIE_TOLERANCE = 0.1
 
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
@@ -445,30 +431,6 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return lastValid
   }
 
-  // A cheap, low-precision width proxy used by the heart-proximity walk
-  // below: fixed-direction perpendicular probing with plain direct raycasts
-  // (no snap-search fallback). computeVesselWidth's own accuracy (adaptive
-  // tangent estimate, snap-search recovery) costs 4 findNearestHit calls per
-  // sample — each up to 41 raycasts when the direct hit misses — which is
-  // fine for the one-off final measurement shown to the user, but the walk
-  // needs up to 40 samples per placement and measured over 9 seconds using
-  // that path. This trades precision for speed: good enough to tell "wider"
-  // from "narrower", not meant to produce a displayed diameter.
-  function quickWidthAt(xPercent: number, yPercent: number, perpXPercent: number, perpYPercent: number) {
-    if (!hitAt(xPercent, yPercent)) return null
-    let nearSteps = 0
-    for (let i = 1; i <= HEART_PROXIMITY_QUICK_SCAN_STEPS; i++) {
-      if (!hitAt(xPercent - perpXPercent * i, yPercent - perpYPercent * i)) break
-      nearSteps = i
-    }
-    let farSteps = 0
-    for (let i = 1; i <= HEART_PROXIMITY_QUICK_SCAN_STEPS; i++) {
-      if (!hitAt(xPercent + perpXPercent * i, yPercent + perpYPercent * i)) break
-      farSteps = i
-    }
-    return nearSteps + farSteps
-  }
-
   // Local vessel width at the two clicked points is a weak, often-flat signal
   // for "which one is closer to the heart" — a lesion's two boundary points
   // are usually chosen on healthy vessel of near-identical caliber either
@@ -485,49 +447,45 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   // The walk direction is re-derived from where each step actually lands,
   // not fixed to the original two-point line — a real vessel curves in
   // screen space, and a rigid straight-line walk runs off the mesh (and
-  // dead-ends) after a step or two on anything but a straight segment. The
-  // perpendicular used for the width proxy is re-derived the same way each
-  // step, for the same reason computeVesselWidth re-estimates its tangent
-  // locally instead of once: a perpendicular that's stale by even a few
-  // steps of curvature no longer cuts a real cross-section.
+  // dead-ends) after a step or two on anything but a straight segment.
   //
-  // Returns the widest cross-section reached (a proxy, in perpendicular
-  // hit-count, not real width) alongside how many steps the walk actually
-  // completed before running off the model — a point near a branch tip
-  // dead-ends in a step or two, while a trunk-ward point usually has much
-  // more vessel left to walk, which is a useful tiebreaker when neither
-  // side's width proxy is decisive.
+  // Width at each step is measured with the same full-precision
+  // computeVesselWidth used for the final on-screen measurement, not a
+  // cheap proxy — a cheaper perpendicular-hit-count proxy (tried first) used
+  // the walk's own forward direction as a stand-in for the local tangent,
+  // which is fine on an open stretch of vessel but badly underestimates
+  // width right at a narrow neck opening into a much wider chamber, exactly
+  // the spot this comparison most needs to get right. computeVesselWidth
+  // re-estimates the true local tangent at every sample, so it catches that
+  // opening; confirmed live against two real failing cases where the proxy
+  // missed a >2x real width difference that computeVesselWidth found
+  // cleanly. This is a real, unavoidable cost (each sample is expensive on
+  // this mesh, which has no spatial acceleration structure) — the decisive
+  // ratio break below exists specifically to stop walking as soon as one
+  // side has a confident answer, rather than spending the full step budget
+  // on both sides every time.
+  //
+  // Returns the widest real cross-section reached alongside how many steps
+  // the walk actually completed before running off the model — a point near
+  // a branch tip dead-ends in a step or two, while a trunk-ward point
+  // usually has much more vessel left to walk, which is a useful tiebreaker
+  // when neither side's width is decisive.
   function walkAwayFrom(
     fromXPercent: number,
     fromYPercent: number,
     towardsXPercent: number,
     towardsYPercent: number,
-  ): { maxWidthSteps: number; stepsCompleted: number } {
+  ): { maxWidth: number; stepsCompleted: number } {
     const dx0 = fromXPercent - towardsXPercent
     const dy0 = fromYPercent - towardsYPercent
     const length0 = Math.hypot(dx0, dy0) || 1
     let dirX = dx0 / length0
     let dirY = dy0 / length0
 
-    function widthAt(x: number, y: number) {
-      const perpX = -dirY * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
-      const perpY = dirX * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
-      return quickWidthAt(x, y, perpX, perpY)
-    }
-
     let x = fromXPercent
     let y = fromYPercent
-    const startingWidthSteps = widthAt(x, y) ?? 0
-    let maxWidthSteps = startingWidthSteps
-    // If the starting point alone already saturates the scan (both
-    // directions ran to the cap without finding an edge), it's already on
-    // very wide vessel — e.g. sitting on the aortic root itself, which can
-    // never look "2x wider than where I started" relative to itself. That
-    // case would otherwise burn the full step budget for no new signal, so
-    // treat an already-saturated reading as decisive on its own.
-    if (startingWidthSteps >= HEART_PROXIMITY_QUICK_SCAN_STEPS) {
-      return { maxWidthSteps, stepsCompleted: 0 }
-    }
+    const startingWidth = computeVesselWidth(x, y) ?? 0
+    let maxWidth = startingWidth
 
     let step = 0
     for (; step < HEART_PROXIMITY_MAX_STEPS; step++) {
@@ -550,18 +508,18 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       x = found.x
       y = found.y
 
-      const widthSteps = widthAt(x, y)
-      if (widthSteps == null) break
-      if (widthSteps > maxWidthSteps) maxWidthSteps = widthSteps
+      const width = computeVesselWidth(x, y)
+      if (width == null) break
+      if (width > maxWidth) maxWidth = width
       // Once we've clearly found something much wider than where we
       // started, that's a confident enough "this side leads toward the
       // trunk" signal on its own — no need to keep walking.
-      if (maxWidthSteps > Math.max(startingWidthSteps, 1) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO) {
+      if (maxWidth > Math.max(startingWidth, 1e-6) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO) {
         step += 1
         break
       }
     }
-    return { maxWidthSteps, stepsCompleted: step }
+    return { maxWidth, stepsCompleted: step }
   }
 
   // Returns which of the two points is proximal (closer to the heart), or
@@ -585,13 +543,18 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const reach1 = walkAwayFrom(start1.x, start1.y, start2.x, start2.y)
     const reach2 = walkAwayFrom(start2.x, start2.y, start1.x, start1.y)
 
-    if (reach1.maxWidthSteps !== reach2.maxWidthSteps) {
-      return reach1.maxWidthSteps > reach2.maxWidthSteps ? 'first' : 'second'
+    // Real measured widths, so exact equality isn't the right bar for a
+    // "tie" — treat anything within a small relative margin as too close to
+    // call from width alone, and fall through to the steps-walked signal.
+    const widerWidth = Math.max(reach1.maxWidth, reach2.maxWidth)
+    const widthGapRatio = widerWidth > 0 ? Math.abs(reach1.maxWidth - reach2.maxWidth) / widerWidth : 0
+    if (widthGapRatio > HEART_PROXIMITY_WIDTH_TIE_TOLERANCE) {
+      return reach1.maxWidth > reach2.maxWidth ? 'first' : 'second'
     }
-    // Width proxy tied — fall back to how far each side could walk before
-    // running off the model. A point sitting near a branch tip dead-ends
-    // within a step or two; a trunk-ward point almost always has much more
-    // vessel left to traverse.
+    // Width was inconclusive — fall back to how far each side could walk
+    // before running off the model. A point sitting near a branch tip
+    // dead-ends within a step or two; a trunk-ward point almost always has
+    // much more vessel left to traverse.
     if (reach1.stepsCompleted !== reach2.stepsCompleted) {
       return reach1.stepsCompleted > reach2.stepsCompleted ? 'first' : 'second'
     }
