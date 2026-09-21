@@ -103,8 +103,8 @@ const SEGMENT_HIGHLIGHT_STEPS = 30
 const REFERENCE_PLATEAU_STABLE_STEPS = 3
 const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 const HEART_PROXIMITY_STEP_PERCENT = 1
-const HEART_PROXIMITY_MAX_STEPS = 8
-const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.5
+const HEART_PROXIMITY_MAX_STEPS = 20
+const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.4
 // The walk only needs a rough "wider or not" signal at each step, not a
 // precise diameter — computeVesselWidth's own accuracy (adaptive tangent
 // estimate, snap-search recovery) costs up to 4 findNearestHit calls per
@@ -467,39 +467,51 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   // for "which one is closer to the heart" — a lesion's two boundary points
   // are usually chosen on healthy vessel of near-identical caliber either
   // side of the narrowing, so there's often no real width difference to
-  // compare. Instead, walk away from each point (continuing the line past
-  // it, away from the other point) and track the widest cross-section found
-  // along the way, starting from the point's own width. Whichever side's
-  // walk reaches the higher width is more proximal — this covers both a
-  // point that gradually widens toward the trunk, and a point that's
-  // already sitting on the trunk itself (nothing wider to find, but its own
-  // width already wins). A point walking toward a branch tip instead just
-  // tapers or dead-ends without ever beating the other side's width.
+  // compare. Instead, walk away from each point (continuing past it, away
+  // from the other point) and track the widest cross-section found along
+  // the way, starting from the point's own width. Whichever side's walk
+  // reaches the higher width is more proximal — this covers both a point
+  // that gradually widens toward the trunk, and a point that's already
+  // sitting on the trunk itself (nothing wider to find, but its own width
+  // already wins). A point walking toward a branch tip instead just tapers
+  // or dead-ends without ever beating the other side's width.
   //
-  // Returns a proxy for "widest cross-section reached" in arbitrary units
-  // (perpendicular hit-count, not real width), since the caller only ever
-  // compares this against the same walk run from the other point.
+  // The walk direction is re-derived from where each step actually lands,
+  // not fixed to the original two-point line — a real vessel curves in
+  // screen space, and a rigid straight-line walk runs off the mesh (and
+  // dead-ends) after a step or two on anything but a straight segment. The
+  // perpendicular used for the width proxy is re-derived the same way each
+  // step, for the same reason computeVesselWidth re-estimates its tangent
+  // locally instead of once: a perpendicular that's stale by even a few
+  // steps of curvature no longer cuts a real cross-section.
+  //
+  // Returns the widest cross-section reached (a proxy, in perpendicular
+  // hit-count, not real width) alongside how many steps the walk actually
+  // completed before running off the model — a point near a branch tip
+  // dead-ends in a step or two, while a trunk-ward point usually has much
+  // more vessel left to walk, which is a useful tiebreaker when neither
+  // side's width proxy is decisive.
   function walkAwayFrom(
     fromXPercent: number,
     fromYPercent: number,
     towardsXPercent: number,
     towardsYPercent: number,
-  ): number {
-    const dx = fromXPercent - towardsXPercent
-    const dy = fromYPercent - towardsYPercent
-    const length = Math.hypot(dx, dy) || 1
-    const stepX = (dx / length) * HEART_PROXIMITY_STEP_PERCENT
-    const stepY = (dy / length) * HEART_PROXIMITY_STEP_PERCENT
-    // Perpendicular to the walk direction, in the same fixed direction the
-    // whole walk moves in — cheaper than re-estimating the vessel's local
-    // tangent at every step, and good enough for a width proxy since the
-    // walk direction already roughly follows the vessel.
-    const perpX = (-dy / length) * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
-    const perpY = (dx / length) * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
+  ): { maxWidthSteps: number; stepsCompleted: number } {
+    const dx0 = fromXPercent - towardsXPercent
+    const dy0 = fromYPercent - towardsYPercent
+    const length0 = Math.hypot(dx0, dy0) || 1
+    let dirX = dx0 / length0
+    let dirY = dy0 / length0
+
+    function widthAt(x: number, y: number) {
+      const perpX = -dirY * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
+      const perpY = dirX * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
+      return quickWidthAt(x, y, perpX, perpY)
+    }
 
     let x = fromXPercent
     let y = fromYPercent
-    const startingWidthSteps = quickWidthAt(x, y, perpX, perpY) ?? 0
+    const startingWidthSteps = widthAt(x, y) ?? 0
     let maxWidthSteps = startingWidthSteps
     // If the starting point alone already saturates the scan (both
     // directions ran to the cap without finding an edge), it's already on
@@ -507,28 +519,48 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     // never look "2x wider than where I started" relative to itself. That
     // case would otherwise burn the full step budget for no new signal, so
     // treat an already-saturated reading as decisive on its own.
-    if (startingWidthSteps >= HEART_PROXIMITY_QUICK_SCAN_STEPS) return maxWidthSteps
-    for (let step = 0; step < HEART_PROXIMITY_MAX_STEPS; step++) {
-      const nextX = x + stepX
-      const nextY = y + stepY
-      if (nextX <= 1 || nextX >= 99 || nextY <= 1 || nextY >= 99) break
-      if (!hitAt(nextX, nextY)) break
-      x = nextX
-      y = nextY
+    if (startingWidthSteps >= HEART_PROXIMITY_QUICK_SCAN_STEPS) {
+      return { maxWidthSteps, stepsCompleted: 0 }
+    }
 
-      const widthSteps = quickWidthAt(x, y, perpX, perpY)
+    let step = 0
+    for (; step < HEART_PROXIMITY_MAX_STEPS; step++) {
+      const nextX = x + dirX * HEART_PROXIMITY_STEP_PERCENT
+      const nextY = y + dirY * HEART_PROXIMITY_STEP_PERCENT
+      if (nextX <= 1 || nextX >= 99 || nextY <= 1 || nextY >= 99) break
+      // findNearestHit's snap-search recovers from a straight extrapolation
+      // landing just off the vessel surface as it curves — the common case
+      // (gentle curve, small step) still costs a single direct raycast.
+      const found = findNearestHit(nextX, nextY)
+      if (!found) break
+
+      const stepDx = found.x - x
+      const stepDy = found.y - y
+      const stepLen = Math.hypot(stepDx, stepDy)
+      if (stepLen > 1e-6) {
+        dirX = stepDx / stepLen
+        dirY = stepDy / stepLen
+      }
+      x = found.x
+      y = found.y
+
+      const widthSteps = widthAt(x, y)
       if (widthSteps == null) break
       if (widthSteps > maxWidthSteps) maxWidthSteps = widthSteps
       // Once we've clearly found something much wider than where we
       // started, that's a confident enough "this side leads toward the
       // trunk" signal on its own — no need to keep walking.
-      if (maxWidthSteps > Math.max(startingWidthSteps, 1) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO) break
+      if (maxWidthSteps > Math.max(startingWidthSteps, 1) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO) {
+        step += 1
+        break
+      }
     }
-    return maxWidthSteps
+    return { maxWidthSteps, stepsCompleted: step }
   }
 
   // Returns which of the two points is proximal (closer to the heart), or
-  // null if neither side's walk finds any distinguishing width difference.
+  // null if neither width nor how far each side could walk distinguishes
+  // them.
   function determineProximalPoint(
     x1Percent: number,
     y1Percent: number,
@@ -547,8 +579,17 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const reach1 = walkAwayFrom(start1.x, start1.y, start2.x, start2.y)
     const reach2 = walkAwayFrom(start2.x, start2.y, start1.x, start1.y)
 
-    if (reach1 === reach2) return null
-    return reach1 > reach2 ? 'first' : 'second'
+    if (reach1.maxWidthSteps !== reach2.maxWidthSteps) {
+      return reach1.maxWidthSteps > reach2.maxWidthSteps ? 'first' : 'second'
+    }
+    // Width proxy tied — fall back to how far each side could walk before
+    // running off the model. A point sitting near a branch tip dead-ends
+    // within a step or two; a trunk-ward point almost always has much more
+    // vessel left to traverse.
+    if (reach1.stepsCompleted !== reach2.stepsCompleted) {
+      return reach1.stepsCompleted > reach2.stepsCompleted ? 'first' : 'second'
+    }
+    return null
   }
 
   function computeLesionPosition(xPercent: number, yPercent: number) {
