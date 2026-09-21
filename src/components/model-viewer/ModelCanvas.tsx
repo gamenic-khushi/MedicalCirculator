@@ -108,15 +108,21 @@ const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.4
 // The walk only needs a rough "wider or not" signal at each step, not a
 // precise diameter — computeVesselWidth's own accuracy (adaptive tangent
 // estimate, snap-search recovery) costs up to 4 findNearestHit calls per
-// sample, each up to 41 raycasts when the direct hit misses. Repeating that
-// on every one of up to 20 steps per side measured over 10 seconds for a
-// single two-point placement near the wide aortic root — and this mesh has
-// no spatial acceleration structure, so a single raycast alone measured
-// ~5ms here. A fixed-direction, direct-raycast-only proxy trades precision
-// for speed, and a coarser step keeps the same detectable range (up to 15%
-// of canvas either side) with a third of the samples.
+// sample, each up to 41 raycasts when the direct hit misses. A
+// fixed-direction, direct-raycast-only proxy trades precision for speed.
+//
+// The scan radius (steps × step%) has to comfortably exceed how wide a
+// merely-moderate branch mouth or local bulge can look on screen — confirmed
+// live on a real case where a 15%-radius cap (the original 5 steps) already
+// saturated at a side branch's own local width, so the walk reported it as
+// "found nothing wider" without ever getting the chance to walk toward the
+// genuinely much wider chamber a few steps further on. A too-small radius
+// doesn't fail loudly, it just quietly caps out and produces a confident,
+// wrong answer. 30 steps keeps each probe direction cheap (plain hitAt, no
+// snap-search) while giving enough headroom that a real trunk/chamber can
+// still be told apart from an ordinary branch.
 const HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT = 3
-const HEART_PROXIMITY_QUICK_SCAN_STEPS = 5
+const HEART_PROXIMITY_QUICK_SCAN_STEPS = 30
 
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
