@@ -422,15 +422,28 @@ export function LesionAnalysisPage() {
   // ① must always be the near-heart side and ② the far side. Screen position
   // (e.g. whichever point is higher on screen) isn't a reliable stand-in for
   // that — it flips as soon as the vessel curves or the camera rotates.
-  // Vessel diameter is: arteries taper as they run away from the heart, so
-  // whichever of the two points sits on the wider cross-section is proximal
-  // — sampled from the run of points nearest each end of the segment, not
-  // just the single raw click, so one noisy raycast can't flip the answer.
+  //
+  // Local vessel width at the two points is a weak signal too: the two
+  // boundary points of a lesion are usually placed on healthy vessel of
+  // near-identical caliber either side of the narrowing, so there's often no
+  // real width difference between them to compare, and comparing anyway just
+  // amplifies raycasting noise into a wrong answer. The reliable signal is
+  // topology: walking away from the true proximal point (continuing past it,
+  // away from the other point) runs into the wider trunk; walking away from
+  // the true distal point runs off the end of a branch. canvas.determineProximalPoint
+  // does that walk. Only fall back to the width comparison (which at least
+  // sometimes helps when the walk itself is inconclusive, e.g. both points
+  // sit deep inside one long uniform segment) if the walk can't decide.
   function orderByHeartProximity(points: Annotation[]): Annotation[] {
     if (points.length !== 2) return points
     const canvas = canvasRef.current
     if (!canvas) return points
     const [first, second] = points
+
+    const decision = canvas.determineProximalPoint(first.x, first.y, second.x, second.y)
+    if (decision === 'first') return points
+    if (decision === 'second') return [second, first]
+
     const path = Array.from({ length: PROXIMITY_PATH_STEPS + 1 }, (_, step) => {
       const t = step / PROXIMITY_PATH_STEPS
       return { x: first.x + (second.x - first.x) * t, y: first.y + (second.y - first.y) * t }

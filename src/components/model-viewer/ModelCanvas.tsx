@@ -35,6 +35,12 @@ export interface ModelCanvasHandle {
     x2Percent: number,
     y2Percent: number,
   ) => number | null
+  determineProximalPoint: (
+    x1Percent: number,
+    y1Percent: number,
+    x2Percent: number,
+    y2Percent: number,
+  ) => 'first' | 'second' | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
   highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => boolean
   highlightSegment: (
@@ -96,6 +102,21 @@ const SEGMENT_HIGHLIGHT_STEPS = 30
 // finds the actual healthy vessel next to the lesion, regardless of either.
 const REFERENCE_PLATEAU_STABLE_STEPS = 3
 const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
+const HEART_PROXIMITY_STEP_PERCENT = 1
+const HEART_PROXIMITY_MAX_STEPS = 8
+const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.5
+// The walk only needs a rough "wider or not" signal at each step, not a
+// precise diameter — computeVesselWidth's own accuracy (adaptive tangent
+// estimate, snap-search recovery) costs up to 4 findNearestHit calls per
+// sample, each up to 41 raycasts when the direct hit misses. Repeating that
+// on every one of up to 20 steps per side measured over 10 seconds for a
+// single two-point placement near the wide aortic root — and this mesh has
+// no spatial acceleration structure, so a single raycast alone measured
+// ~5ms here. A fixed-direction, direct-raycast-only proxy trades precision
+// for speed, and a coarser step keeps the same detectable range (up to 15%
+// of canvas either side) with a third of the samples.
+const HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT = 3
+const HEART_PROXIMITY_QUICK_SCAN_STEPS = 5
 
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
@@ -187,6 +208,24 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const camera = threeStateRef.current?.camera
     const scene = threeStateRef.current?.scene
     if (!camera || !scene || !(camera instanceof THREE.PerspectiveCamera)) return null
+
+    // The canvas can resize (viewport change, layout shift from an annotation
+    // marker appearing, etc.) faster than R3F's own resize handling updates
+    // camera.aspect. Raycasting against a stale aspect ratio silently aims
+    // the ray at the wrong point in 3D space — it doesn't error, it just
+    // misses real geometry near the edges, which looked like intermittent
+    // raycasting noise until traced back to this. Keep aspect in sync with
+    // the actual rendered canvas size on every raycast, the same way
+    // projectWorldPointToScreen already does before projecting a point back.
+    const canvasElement = containerRef.current?.querySelector('canvas')
+    if (canvasElement && canvasElement.clientHeight > 0) {
+      const aspect = canvasElement.clientWidth / canvasElement.clientHeight
+      if (camera.aspect !== aspect) {
+        camera.aspect = aspect
+        camera.updateProjectionMatrix()
+      }
+    }
+    camera.updateMatrixWorld()
 
     const raycaster = new THREE.Raycaster()
     const ndc = new THREE.Vector2()
@@ -400,6 +439,118 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return lastValid
   }
 
+  // A cheap, low-precision width proxy used by the heart-proximity walk
+  // below: fixed-direction perpendicular probing with plain direct raycasts
+  // (no snap-search fallback). computeVesselWidth's own accuracy (adaptive
+  // tangent estimate, snap-search recovery) costs 4 findNearestHit calls per
+  // sample — each up to 41 raycasts when the direct hit misses — which is
+  // fine for the one-off final measurement shown to the user, but the walk
+  // needs up to 40 samples per placement and measured over 9 seconds using
+  // that path. This trades precision for speed: good enough to tell "wider"
+  // from "narrower", not meant to produce a displayed diameter.
+  function quickWidthAt(xPercent: number, yPercent: number, perpXPercent: number, perpYPercent: number) {
+    if (!hitAt(xPercent, yPercent)) return null
+    let nearSteps = 0
+    for (let i = 1; i <= HEART_PROXIMITY_QUICK_SCAN_STEPS; i++) {
+      if (!hitAt(xPercent - perpXPercent * i, yPercent - perpYPercent * i)) break
+      nearSteps = i
+    }
+    let farSteps = 0
+    for (let i = 1; i <= HEART_PROXIMITY_QUICK_SCAN_STEPS; i++) {
+      if (!hitAt(xPercent + perpXPercent * i, yPercent + perpYPercent * i)) break
+      farSteps = i
+    }
+    return nearSteps + farSteps
+  }
+
+  // Local vessel width at the two clicked points is a weak, often-flat signal
+  // for "which one is closer to the heart" — a lesion's two boundary points
+  // are usually chosen on healthy vessel of near-identical caliber either
+  // side of the narrowing, so there's often no real width difference to
+  // compare. Instead, walk away from each point (continuing the line past
+  // it, away from the other point) and track the widest cross-section found
+  // along the way, starting from the point's own width. Whichever side's
+  // walk reaches the higher width is more proximal — this covers both a
+  // point that gradually widens toward the trunk, and a point that's
+  // already sitting on the trunk itself (nothing wider to find, but its own
+  // width already wins). A point walking toward a branch tip instead just
+  // tapers or dead-ends without ever beating the other side's width.
+  //
+  // Returns a proxy for "widest cross-section reached" in arbitrary units
+  // (perpendicular hit-count, not real width), since the caller only ever
+  // compares this against the same walk run from the other point.
+  function walkAwayFrom(
+    fromXPercent: number,
+    fromYPercent: number,
+    towardsXPercent: number,
+    towardsYPercent: number,
+  ): number {
+    const dx = fromXPercent - towardsXPercent
+    const dy = fromYPercent - towardsYPercent
+    const length = Math.hypot(dx, dy) || 1
+    const stepX = (dx / length) * HEART_PROXIMITY_STEP_PERCENT
+    const stepY = (dy / length) * HEART_PROXIMITY_STEP_PERCENT
+    // Perpendicular to the walk direction, in the same fixed direction the
+    // whole walk moves in — cheaper than re-estimating the vessel's local
+    // tangent at every step, and good enough for a width proxy since the
+    // walk direction already roughly follows the vessel.
+    const perpX = (-dy / length) * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
+    const perpY = (dx / length) * HEART_PROXIMITY_QUICK_SCAN_STEP_PERCENT
+
+    let x = fromXPercent
+    let y = fromYPercent
+    const startingWidthSteps = quickWidthAt(x, y, perpX, perpY) ?? 0
+    let maxWidthSteps = startingWidthSteps
+    // If the starting point alone already saturates the scan (both
+    // directions ran to the cap without finding an edge), it's already on
+    // very wide vessel — e.g. sitting on the aortic root itself, which can
+    // never look "2x wider than where I started" relative to itself. That
+    // case would otherwise burn the full step budget for no new signal, so
+    // treat an already-saturated reading as decisive on its own.
+    if (startingWidthSteps >= HEART_PROXIMITY_QUICK_SCAN_STEPS) return maxWidthSteps
+    for (let step = 0; step < HEART_PROXIMITY_MAX_STEPS; step++) {
+      const nextX = x + stepX
+      const nextY = y + stepY
+      if (nextX <= 1 || nextX >= 99 || nextY <= 1 || nextY >= 99) break
+      if (!hitAt(nextX, nextY)) break
+      x = nextX
+      y = nextY
+
+      const widthSteps = quickWidthAt(x, y, perpX, perpY)
+      if (widthSteps == null) break
+      if (widthSteps > maxWidthSteps) maxWidthSteps = widthSteps
+      // Once we've clearly found something much wider than where we
+      // started, that's a confident enough "this side leads toward the
+      // trunk" signal on its own — no need to keep walking.
+      if (maxWidthSteps > Math.max(startingWidthSteps, 1) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO) break
+    }
+    return maxWidthSteps
+  }
+
+  // Returns which of the two points is proximal (closer to the heart), or
+  // null if neither side's walk finds any distinguishing width difference.
+  function determineProximalPoint(
+    x1Percent: number,
+    y1Percent: number,
+    x2Percent: number,
+    y2Percent: number,
+  ): 'first' | 'second' | null {
+    // findNearestHit's snap-search tolerates a click that's a little off the
+    // (sometimes only a few pixels wide) vessel surface — worth paying for
+    // once here, unlike inside the walk loop below where it's the dominant
+    // cost. Walk from the snapped, on-mesh position it finds, not the raw
+    // click, or a single missed direct hit would derail the whole walk.
+    const start1 = findNearestHit(x1Percent, y1Percent)
+    const start2 = findNearestHit(x2Percent, y2Percent)
+    if (!start1 || !start2) return null
+
+    const reach1 = walkAwayFrom(start1.x, start1.y, start2.x, start2.y)
+    const reach2 = walkAwayFrom(start2.x, start2.y, start1.x, start1.y)
+
+    if (reach1 === reach2) return null
+    return reach1 > reach2 ? 'first' : 'second'
+  }
+
   function computeLesionPosition(xPercent: number, yPercent: number) {
     const baseline = computeVesselWidth(xPercent, yPercent)
     if (!baseline) return null
@@ -468,6 +619,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       if (!hit1 || !hit2) return null
       return hit1.point.distanceTo(hit2.point)
     },
+    determineProximalPoint: (x1Percent, y1Percent, x2Percent, y2Percent) =>
+      determineProximalPoint(x1Percent, y1Percent, x2Percent, y2Percent),
     measureBifurcationAngle: (xPercent, yPercent) => {
       const camera = threeStateRef.current?.camera
       const scene = threeStateRef.current?.scene
