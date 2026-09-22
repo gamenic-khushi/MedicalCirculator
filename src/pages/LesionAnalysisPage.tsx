@@ -32,6 +32,7 @@ import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor } from '@/lib/formu
 import { generateId } from '@/lib/id'
 import { DELETE_FAILED, SAVE_FAILED, VESSEL_WIDTH_MEASURE_FAILED } from '@/lib/messages'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
+import { resolveProximalTiebreak } from '@/lib/typesafeProximity'
 import { measureTwoPointLesion, type PercentPoint } from '@/lib/twoPointLesionMeasurement'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
@@ -43,6 +44,9 @@ type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
 const MODEL_COLOR = '#d8dce3'
 const PROXIMITY_PATH_STEPS = 10
 const PROXIMITY_SAMPLE_COUNT = 3
+// Below this confidence, treat Jev's tiebreak as not worth acting on — the
+// width-fallback order it would override already stands.
+const PROXIMITY_TIEBREAK_MIN_CONFIDENCE = 0.6
 
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
   return {
@@ -434,15 +438,20 @@ export function LesionAnalysisPage() {
   // does that walk. Only fall back to the width comparison (which at least
   // sometimes helps when the walk itself is inconclusive, e.g. both points
   // sit deep inside one long uniform segment) if the walk can't decide.
+  //
+  // When even that's inconclusive, order synchronously with the width
+  // fallback (so placement never blocks on a network call) and kick off a
+  // Jev tiebreak in the background — if it comes back with a confident,
+  // different answer, correct the order in place once it lands.
   function orderByHeartProximity(points: Annotation[]): Annotation[] {
     if (points.length !== 2) return points
     const canvas = canvasRef.current
     if (!canvas) return points
     const [first, second] = points
 
-    const decision = canvas.determineProximalPoint(first.x, first.y, second.x, second.y)
-    if (decision === 'first') return points
-    if (decision === 'second') return [second, first]
+    const result = canvas.determineProximalPoint(first.x, first.y, second.x, second.y)
+    if (result?.decision === 'first') return points
+    if (result?.decision === 'second') return [second, first]
 
     const path = Array.from({ length: PROXIMITY_PATH_STEPS + 1 }, (_, step) => {
       const t = step / PROXIMITY_PATH_STEPS
@@ -450,8 +459,37 @@ export function LesionAnalysisPage() {
     })
     const firstWidth = averageVesselWidth(canvas, path.slice(0, PROXIMITY_SAMPLE_COUNT))
     const secondWidth = averageVesselWidth(canvas, path.slice(-PROXIMITY_SAMPLE_COUNT))
-    if (firstWidth == null || secondWidth == null) return points
-    return firstWidth >= secondWidth ? points : [second, first]
+    const widthOrdered = firstWidth == null || secondWidth == null || firstWidth >= secondWidth
+      ? points
+      : [second, first]
+
+    if (result) requestProximityTiebreak(first.id, second.id, result.reach1, result.reach2)
+    return widthOrdered
+  }
+
+  // Fire-and-forget: asks Jev to break the tie using the same walk data the
+  // geometric check itself measured, then swaps ①/② in place if it disagrees
+  // with the width fallback above and is reasonably confident. Only applies
+  // if the same two points are still the current pair when the answer comes
+  // back — a since-superseded placement is left alone.
+  function requestProximityTiebreak(
+    firstId: string,
+    secondId: string,
+    reach1: { maxWidth: number; stepsCompleted: number },
+    reach2: { maxWidth: number; stepsCompleted: number },
+  ) {
+    resolveProximalTiebreak(reach1, reach2).then((result) => {
+      if (!result || result.confidence < PROXIMITY_TIEBREAK_MIN_CONFIDENCE) return
+      setAnnotations((prev) => {
+        if (prev.length !== 2) return prev
+        const ids = new Set(prev.map((a) => a.id))
+        if (!ids.has(firstId) || !ids.has(secondId)) return prev
+        const byId = new Map(prev.map((a) => [a.id, a]))
+        const first = byId.get(firstId)!
+        const second = byId.get(secondId)!
+        return result.decision === 'first' ? [first, second] : [second, first]
+      })
+    })
   }
 
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {

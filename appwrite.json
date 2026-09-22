@@ -1,4 +1,22 @@
 {
     "projectId": "6a85582b0023b5c32287",
-    "projectName": ""
+    "projectName": "",
+    "functions": [
+        {
+            "$id": "resolveProximityTiebreak",
+            "name": "Resolve Proximity Tiebreak",
+            "runtime": "node-22",
+            "execute": [
+                "users"
+            ],
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/resolveProximityTiebreak"
+        }
+    ]
 }

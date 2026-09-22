@@ -34,3 +34,4 @@ jobs:
             --key "$APPWRITE_API_KEY"
 
           appwrite push site --site-id medicalCirculator --activate=true --force
+          appwrite push function --function-id resolveProximityTiebreak --activate=true --force

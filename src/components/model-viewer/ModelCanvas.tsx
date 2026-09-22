@@ -40,7 +40,11 @@ export interface ModelCanvasHandle {
     y1Percent: number,
     x2Percent: number,
     y2Percent: number,
-  ) => 'first' | 'second' | null
+  ) => {
+    decision: 'first' | 'second' | null
+    reach1: { maxWidth: number; stepsCompleted: number }
+    reach2: { maxWidth: number; stepsCompleted: number }
+  } | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
   highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => boolean
   highlightSegment: (
@@ -522,15 +526,22 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return { maxWidth, stepsCompleted: step }
   }
 
-  // Returns which of the two points is proximal (closer to the heart), or
-  // null if neither width nor how far each side could walk distinguishes
-  // them.
+  // Returns which of the two points is proximal (closer to the heart) along
+  // with the raw walk data for both sides, or null if the points themselves
+  // couldn't be resolved on the mesh. decision is null when neither width
+  // nor how far each side could walk distinguishes them — the caller can
+  // hand reach1/reach2 to an external tiebreaker in that case instead of
+  // guessing.
   function determineProximalPoint(
     x1Percent: number,
     y1Percent: number,
     x2Percent: number,
     y2Percent: number,
-  ): 'first' | 'second' | null {
+  ): {
+    decision: 'first' | 'second' | null
+    reach1: { maxWidth: number; stepsCompleted: number }
+    reach2: { maxWidth: number; stepsCompleted: number }
+  } | null {
     // findNearestHit's snap-search tolerates a click that's a little off the
     // (sometimes only a few pixels wide) vessel surface — worth paying for
     // once here, unlike inside the walk loop below where it's the dominant
@@ -549,16 +560,16 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const widerWidth = Math.max(reach1.maxWidth, reach2.maxWidth)
     const widthGapRatio = widerWidth > 0 ? Math.abs(reach1.maxWidth - reach2.maxWidth) / widerWidth : 0
     if (widthGapRatio > HEART_PROXIMITY_WIDTH_TIE_TOLERANCE) {
-      return reach1.maxWidth > reach2.maxWidth ? 'first' : 'second'
+      return { decision: reach1.maxWidth > reach2.maxWidth ? 'first' : 'second', reach1, reach2 }
     }
     // Width was inconclusive — fall back to how far each side could walk
     // before running off the model. A point sitting near a branch tip
     // dead-ends within a step or two; a trunk-ward point almost always has
     // much more vessel left to traverse.
     if (reach1.stepsCompleted !== reach2.stepsCompleted) {
-      return reach1.stepsCompleted > reach2.stepsCompleted ? 'first' : 'second'
+      return { decision: reach1.stepsCompleted > reach2.stepsCompleted ? 'first' : 'second', reach1, reach2 }
     }
-    return null
+    return { decision: null, reach1, reach2 }
   }
 
   function computeLesionPosition(xPercent: number, yPercent: number) {
