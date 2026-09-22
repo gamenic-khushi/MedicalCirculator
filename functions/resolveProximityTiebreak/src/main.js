@@ -3,8 +3,13 @@
 // geometric walk can't decide. This exists purely so the TYPESAFE_API_KEY
 // never has to reach the browser — the client only ever talks to this
 // function via its own authenticated Appwrite session.
+//
+// CommonJS + Node's built-in https module on purpose: this project's
+// Appwrite instance only offers the node-16.0 runtime (no global fetch,
+// added in Node 18), and avoiding any external dependency sidesteps
+// ESM/CJS interop issues in that older runtime entirely.
 
-const TYPESAFE_ENDPOINT = 'https://api.typesafe.ai/v1/systemone'
+const https = require('https')
 
 function isReach(value) {
   return (
@@ -15,7 +20,28 @@ function isReach(value) {
   )
 }
 
-export default async ({ req, res, error }) => {
+function postJson(url, body, headers) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body)
+    const req = https.request(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...headers },
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => resolve({ statusCode: res.statusCode || 0, body: data }))
+      },
+    )
+    req.on('error', reject)
+    req.write(payload)
+    req.end()
+  })
+}
+
+module.exports = async ({ req, res, error }) => {
   if (req.method !== 'POST') {
     return res.json({ error: 'POST only' }, 405)
   }
@@ -43,13 +69,9 @@ export default async ({ req, res, error }) => {
 
   let response
   try {
-    response = await fetch(TYPESAFE_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    response = await postJson(
+      'https://api.typesafe.ai/v1/systemone',
+      {
         state: {
           pointA: {
             widestVesselCrossSectionFoundWalkingAway: reach1.maxWidth,
@@ -72,20 +94,28 @@ export default async ({ req, res, error }) => {
             },
           },
         },
-      }),
-    })
+      },
+      { Authorization: `Bearer ${apiKey}` },
+    )
   } catch (err) {
     error(String(err))
     return res.json({ error: 'Request to TypeSafe failed' }, 502)
   }
 
-  if (!response.ok) {
-    error(`TypeSafe API error ${response.status}: ${await response.text()}`)
+  if (response.statusCode !== 200) {
+    error(`TypeSafe API error ${response.statusCode}: ${response.body}`)
     return res.json({ error: 'TypeSafe API error' }, 502)
   }
 
-  const data = await response.json()
-  const answer = data?.answers?.proximal
+  let data
+  try {
+    data = JSON.parse(response.body)
+  } catch {
+    error(`Non-JSON TypeSafe response: ${response.body}`)
+    return res.json({ error: 'Unexpected TypeSafe response shape' }, 502)
+  }
+
+  const answer = data && data.answers && data.answers.proximal
   if (!answer || (answer.choice !== 'pointA' && answer.choice !== 'pointB')) {
     error(`Unexpected TypeSafe response shape: ${JSON.stringify(data)}`)
     return res.json({ error: 'Unexpected TypeSafe response shape' }, 502)

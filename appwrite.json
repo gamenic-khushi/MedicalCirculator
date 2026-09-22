@@ -5,7 +5,7 @@
         {
             "$id": "resolveProximityTiebreak",
             "name": "Resolve Proximity Tiebreak",
-            "runtime": "node-22",
+            "runtime": "node-16.0",
             "execute": [
                 "users"
             ],

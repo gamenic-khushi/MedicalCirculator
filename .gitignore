@@ -20,6 +20,9 @@ dist
 dist-ssr
 *.local
 
+# Appwrite Functions manual-deploy packages (built locally, not source)
+functions/**/*.tar.gz
+
 # Environment variables
 .env
 .env.local
