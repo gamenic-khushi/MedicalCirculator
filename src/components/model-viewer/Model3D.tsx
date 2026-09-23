@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DRACOLoader, FBXLoader, GLTFLoader, OBJLoader, STLLoader } from 'three-stdlib'
@@ -28,13 +28,42 @@ interface Model3DProps {
   url: string
   extension: string
   color: string
+  clippingPlane?: THREE.Plane | null
 }
 
-export function Model3D({ url, extension, color }: Model3DProps) {
-  if (extension === 'obj') return <ObjModel url={url} color={color} />
-  if (extension === 'fbx') return <FbxModel url={url} color={color} />
-  if (extension === 'glb' || extension === 'gltf') return <GltfModel url={url} color={color} />
-  return <StlModel url={url} color={color} />
+export function Model3D({ url, extension, color, clippingPlane }: Model3DProps) {
+  if (extension === 'obj') return <ObjModel url={url} color={color} clippingPlane={clippingPlane} />
+  if (extension === 'fbx') return <FbxModel url={url} color={color} clippingPlane={clippingPlane} />
+  if (extension === 'glb' || extension === 'gltf')
+    return <GltfModel url={url} color={color} clippingPlane={clippingPlane} />
+  return <StlModel url={url} color={color} clippingPlane={clippingPlane} />
+}
+
+// clippingPlanes is read by the renderer every frame as a live array
+// reference, not deep-diffed — mutating one shared array's element in place
+// (instead of replacing the array on every plane change) means dragging the
+// slice gizmo updates the cut in real time without forcing a material
+// recompile on every frame.
+function useClippingPlanes(clippingPlane: THREE.Plane | null | undefined) {
+  const planesRef = useRef<THREE.Plane[]>([new THREE.Plane()])
+  useMemo(() => {
+    if (clippingPlane) planesRef.current[0].copy(clippingPlane)
+  }, [clippingPlane])
+  return clippingPlane ? planesRef.current : EMPTY_PLANES
+}
+const EMPTY_PLANES: THREE.Plane[] = []
+
+// Materials built imperatively inside applyMaterial() (OBJ/FBX/GLTF) aren't
+// JSX props R3F can reconcile — clippingPlanes has to be assigned by hand
+// whenever the plane set's identity changes (entering/leaving slice mode;
+// in-place mutation while dragging doesn't change the array reference, so
+// this intentionally doesn't re-run on every drag frame).
+function applyClippingPlanes(object: THREE.Object3D, planes: THREE.Plane[]) {
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh && !Array.isArray(child.material)) {
+      child.material.clippingPlanes = planes
+    }
+  })
 }
 
 function ensureVertexColorAttribute(geometry: THREE.BufferGeometry) {
@@ -51,8 +80,17 @@ function ensureVertexColorAttribute(geometry: THREE.BufferGeometry) {
   geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3))
 }
 
-function StlModel({ url, color }: { url: string; color: string }) {
+function StlModel({
+  url,
+  color,
+  clippingPlane,
+}: {
+  url: string
+  color: string
+  clippingPlane?: THREE.Plane | null
+}) {
   const geometry = useLoader(STLLoader, url)
+  const clippingPlanes = useClippingPlanes(clippingPlane)
 
   const centered = useMemo(() => {
     geometry.center()
@@ -69,6 +107,7 @@ function StlModel({ url, color }: { url: string; color: string }) {
         metalness={0.05}
         side={THREE.DoubleSide}
         vertexColors
+        clippingPlanes={clippingPlanes}
       />
     </mesh>
   )
@@ -92,18 +131,38 @@ function disableTextureLoading() {
 }
 disableTextureLoading()
 
-function ObjModel({ url, color }: { url: string; color: string }) {
+function ObjModel({
+  url,
+  color,
+  clippingPlane,
+}: {
+  url: string
+  color: string
+  clippingPlane?: THREE.Plane | null
+}) {
   const object = useLoader(OBJLoader, url)
+  const clippingPlanes = useClippingPlanes(clippingPlane)
   useMemo(() => applyMaterial(object, color), [object, color])
+  useEffect(() => applyClippingPlanes(object, clippingPlanes), [object, clippingPlanes])
   return <primitive object={object} />
 }
 
-function FbxModel({ url, color }: { url: string; color: string }) {
+function FbxModel({
+  url,
+  color,
+  clippingPlane,
+}: {
+  url: string
+  color: string
+  clippingPlane?: THREE.Plane | null
+}) {
   const object = useLoader(FBXLoader, url)
+  const clippingPlanes = useClippingPlanes(clippingPlane)
   useMemo(() => {
     disableAnimations(object)
     applyMaterial(object, color)
   }, [object, color])
+  useEffect(() => applyClippingPlanes(object, clippingPlanes), [object, clippingPlanes])
   return <primitive object={object} />
 }
 
@@ -118,14 +177,24 @@ dracoLoader.setDecoderPath('/draco/')
 // highlight radius) comes out 100x too small.
 const GLTF_UNIT_SCALE = 100
 
-function GltfModel({ url, color }: { url: string; color: string }) {
+function GltfModel({
+  url,
+  color,
+  clippingPlane,
+}: {
+  url: string
+  color: string
+  clippingPlane?: THREE.Plane | null
+}) {
   const gltf = useLoader(GLTFLoader, url, (loader) => {
     loader.setDRACOLoader(dracoLoader)
   })
+  const clippingPlanes = useClippingPlanes(clippingPlane)
   useMemo(() => {
     disableAnimations(gltf.scene)
     applyMaterial(gltf.scene, color)
   }, [gltf, color])
+  useEffect(() => applyClippingPlanes(gltf.scene, clippingPlanes), [gltf, clippingPlanes])
   return <primitive object={gltf.scene} scale={GLTF_UNIT_SCALE} />
 }
 

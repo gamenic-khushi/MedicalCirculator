@@ -11,6 +11,8 @@ import { FfrResultOverlay } from '@/components/model-viewer/FfrResultOverlay'
 import {
   ModelCanvas,
   type ModelCanvasHandle,
+  type SliceAxis,
+  type SliceGizmoMode,
   type ViewerTool,
 } from '@/components/model-viewer/ModelCanvas'
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
@@ -232,6 +234,8 @@ export function LesionAnalysisPage() {
       : null
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
+  const [sliceAxis, setSliceAxis] = useState<SliceAxis>('z')
+  const [sliceGizmoMode, setSliceGizmoMode] = useState<SliceGizmoMode>('translate')
   const [cameraState, setCameraState] = useState<CameraState | null>(
     navigationState?.cameraState ?? null,
   )
@@ -493,6 +497,7 @@ export function LesionAnalysisPage() {
   }
 
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
+    if (activeTool === 'slice') return
     if (!isAnnotating) return
     if (annotations.length >= 2) return
     if ((event.target as HTMLElement).closest('button')) return
@@ -924,9 +929,12 @@ export function LesionAnalysisPage() {
                   url={validModel!.objectUrl}
                   extension={validModel!.extension}
                   color={MODEL_COLOR}
-                  controlsEnabled={!isAnnotating && annotations.length < 2}
+                  controlsEnabled={activeTool !== 'slice' && !isAnnotating && annotations.length < 2}
                   initialCamera={cameraState}
                   onCameraChange={setCameraState}
+                  sliceMode={activeTool === 'slice'}
+                  sliceAxis={sliceAxis}
+                  sliceGizmoMode={sliceGizmoMode}
                 />
 
                 <TwoPointMarkers
@@ -990,6 +998,10 @@ export function LesionAnalysisPage() {
                   onToolChange={handleToolChange}
                   onToggleFullscreen={() => {}}
                   onReset={handleResetAnnotations}
+                  sliceAxis={sliceAxis}
+                  onSliceAxisChange={setSliceAxis}
+                  sliceGizmoMode={sliceGizmoMode}
+                  onSliceGizmoModeChange={setSliceGizmoMode}
                 />
               </>
             )}

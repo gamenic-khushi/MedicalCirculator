@@ -4,6 +4,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
   type MutableRefObject,
 } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
@@ -14,8 +15,11 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
+import { SliceCapMeshes } from './SliceCapMeshes'
+import { SlicePlaneGizmo, type SliceAxis, type SliceGizmoMode } from './SlicePlaneGizmo'
 
-export type ViewerTool = 'rotate' | 'pan'
+export type { SliceAxis, SliceGizmoMode } from './SlicePlaneGizmo'
+export type ViewerTool = 'rotate' | 'pan' | 'slice'
 
 export interface ModelCanvasHandle {
   zoomIn: () => void
@@ -69,6 +73,9 @@ interface ModelCanvasProps {
   controlsEnabled?: boolean
   initialCamera?: CameraState | null
   onCameraChange?: (state: CameraState) => void
+  sliceMode?: boolean
+  sliceAxis?: SliceAxis | null
+  sliceGizmoMode?: SliceGizmoMode
 }
 
 interface ThreeState {
@@ -139,7 +146,17 @@ function CameraTargetRestorer({
 }
 
 export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(function ModelCanvas(
-  { url, extension, color, controlsEnabled = true, initialCamera, onCameraChange },
+  {
+    url,
+    extension,
+    color,
+    controlsEnabled = true,
+    initialCamera,
+    onCameraChange,
+    sliceMode = false,
+    sliceAxis = null,
+    sliceGizmoMode = 'translate',
+  },
   ref,
 ) {
   const controlsRef = useRef<OrbitControlsImpl>(null)
@@ -147,6 +164,29 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const threeStateRef = useRef<ThreeState | null>(null)
   const paintedMeshRef = useRef<THREE.Mesh | null>(null)
   const lastHighlightRef = useRef<{ points: THREE.Vector3[]; radius: number } | null>(null)
+  const modelGroupRef = useRef<THREE.Group>(null)
+  const [modelBoundingBox, setModelBoundingBox] = useState<THREE.Box3 | null>(null)
+  const [slicePlane, setSlicePlane] = useState<THREE.Plane | null>(null)
+
+  // The model has already been visible (and any <Bounds> auto-fit already
+  // settled) by the time a user switches into slice mode, so measuring the
+  // bounding box synchronously here — rather than tracking it continuously
+  // every frame — is enough to place the plane sensibly, at no ongoing cost
+  // while slicing isn't in use. Clearing slicePlane on exit also restores
+  // the un-clipped model rather than leaving a stale cut applied.
+  useEffect(() => {
+    if (!sliceMode) {
+      setSlicePlane(null)
+      return
+    }
+    if (modelGroupRef.current) {
+      setModelBoundingBox(new THREE.Box3().setFromObject(modelGroupRef.current))
+    }
+  }, [sliceMode])
+
+  function handleSlicePlaneChange({ normal, constant }: { normal: [number, number, number]; constant: number }) {
+    setSlicePlane(new THREE.Plane(new THREE.Vector3(...normal), constant))
+  }
 
   function resetMeshColors(mesh: THREE.Mesh) {
     const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
@@ -799,7 +839,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     <div ref={containerRef} className="h-full w-full">
       <Canvas
         camera={{ position: initialCamera?.position ?? [4, 3, 4], fov: 45 }}
-        gl={{ alpha: true, preserveDrawingBuffer: true }}
+        gl={{ alpha: true, preserveDrawingBuffer: true, localClippingEnabled: true }}
       >
         <SceneAccessor stateRef={threeStateRef} />
         <ambientLight intensity={0.7} />
@@ -807,10 +847,23 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <directionalLight position={[-5, -3, -5]} intensity={0.3} />
         <Suspense fallback={null}>
           <Bounds fit={!initialCamera} clip margin={1.3} maxDuration={0}>
-            <Model3D url={url} extension={extension} color={color} />
+            <group ref={modelGroupRef}>
+              <Model3D url={url} extension={extension} color={color} clippingPlane={slicePlane} />
+            </group>
           </Bounds>
           <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />
         </Suspense>
+        {/* Sibling to <Bounds>, not a child of it, so the slice plane's pose
+            lives in true scene-root world space rather than inside whatever
+            fit transform <Bounds> applies to the model. */}
+        <SlicePlaneGizmo
+          enabled={sliceMode}
+          mode={sliceGizmoMode}
+          boundingBox={modelBoundingBox}
+          axisPreset={sliceAxis}
+          onPlaneChange={handleSlicePlaneChange}
+        />
+        {sliceMode && <SliceCapMeshes modelGroupRef={modelGroupRef} plane={slicePlane} color={color} />}
         <OrbitControls
           ref={controlsRef}
           makeDefault

@@ -1,12 +1,23 @@
-import { Maximize, Move, RotateCw } from 'lucide-react'
+import { Maximize, Move, RotateCw, Scissors } from 'lucide-react'
 
+import type { SliceAxis, SliceGizmoMode } from './SlicePlaneGizmo'
 import type { ViewerTool } from './ModelCanvas'
+
+const AXIS_OPTIONS: SliceAxis[] = ['x', 'y', 'z']
+const GIZMO_MODE_LABELS: Record<SliceGizmoMode, string> = { translate: '移動', rotate: '回転' }
 
 interface ViewerToolbarProps {
   activeTool: ViewerTool
   onToolChange: (tool: ViewerTool) => void
   onToggleFullscreen: () => void
   onReset: () => void
+  // Slicing is only wired up on pages that pass onSliceAxisChange (currently
+  // just the lesion-measurement viewer) — omit it elsewhere and the toggle
+  // and axis buttons don't render at all.
+  sliceAxis?: SliceAxis | null
+  onSliceAxisChange?: (axis: SliceAxis) => void
+  sliceGizmoMode?: SliceGizmoMode
+  onSliceGizmoModeChange?: (mode: SliceGizmoMode) => void
 }
 
 export function ViewerToolbar({
@@ -14,6 +25,10 @@ export function ViewerToolbar({
   onToolChange,
   onToggleFullscreen,
   onReset,
+  sliceAxis = null,
+  onSliceAxisChange,
+  sliceGizmoMode = 'translate',
+  onSliceGizmoModeChange,
 }: ViewerToolbarProps) {
   return (
     <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-gray-100 bg-white p-1 shadow-sm">
@@ -43,6 +58,60 @@ export function ViewerToolbar({
       >
         <Move className="h-4 w-4" />
       </button>
+      {onSliceAxisChange && (
+        <>
+          <button
+            type="button"
+            onClick={() => onToolChange('slice')}
+            aria-pressed={activeTool === 'slice'}
+            title="断面を表示"
+            className={`rounded-full p-2 transition ${
+              activeTool === 'slice' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <Scissors className="h-4 w-4" />
+          </button>
+          {activeTool === 'slice' && (
+            <div className="flex items-center gap-1 border-l border-gray-100 pl-1">
+              {AXIS_OPTIONS.map((axis) => (
+                <button
+                  key={axis}
+                  type="button"
+                  onClick={() => onSliceAxisChange(axis)}
+                  aria-pressed={sliceAxis === axis}
+                  title={`${axis.toUpperCase()}軸で切断`}
+                  className={`h-8 w-8 rounded-full text-xs font-semibold uppercase transition ${
+                    sliceAxis === axis
+                      ? 'bg-indigo-50 text-indigo-600'
+                      : 'text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {axis}
+                </button>
+              ))}
+              {onSliceGizmoModeChange && (
+                <div className="flex items-center gap-1 border-l border-gray-100 pl-1">
+                  {(Object.keys(GIZMO_MODE_LABELS) as SliceGizmoMode[]).map((gizmoMode) => (
+                    <button
+                      key={gizmoMode}
+                      type="button"
+                      onClick={() => onSliceGizmoModeChange(gizmoMode)}
+                      aria-pressed={sliceGizmoMode === gizmoMode}
+                      className={`rounded-full px-2 py-1.5 text-xs font-medium transition ${
+                        sliceGizmoMode === gizmoMode
+                          ? 'bg-indigo-50 text-indigo-600'
+                          : 'text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      {GIZMO_MODE_LABELS[gizmoMode]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
       <button
         type="button"
         onClick={onToggleFullscreen}
