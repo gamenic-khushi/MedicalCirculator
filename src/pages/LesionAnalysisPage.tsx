@@ -511,7 +511,18 @@ export function LesionAnalysisPage() {
     }
   }
 
+  // Just move the point — determining which side is proximal walks the
+  // mesh and is too slow to re-run on every mousemove tick of a drag (worse
+  // now that the walk uses real width measurements instead of a cheap
+  // proxy). Re-ordering here caused a stale, still-in-flight computation
+  // from an earlier cursor position to clobber the result for wherever the
+  // drag actually ended up. handleDragEnd re-derives the order once, after
+  // the drag settles.
   function handleDragAnnotation(id: string, x: number, y: number) {
+    setAnnotations((prev) => prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y } : annotation)))
+  }
+
+  function handleDragEnd(id: string, x: number, y: number) {
     setAnnotations((prev) =>
       orderByHeartProximity(
         prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y } : annotation)),
@@ -922,6 +933,7 @@ export function LesionAnalysisPage() {
                   points={annotations}
                   draggable={annotations.length === 2 && selectedLesion.stenosisRate === ''}
                   onDragPoint={handleDragAnnotation}
+                  onDragEnd={handleDragEnd}
                 />
 
                 <div className="absolute left-4 top-4 flex flex-col gap-2">

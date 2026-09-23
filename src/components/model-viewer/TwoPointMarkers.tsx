@@ -10,6 +10,7 @@ interface TwoPointMarkersProps {
   points: Point[]
   draggable?: boolean
   onDragPoint?: (id: string, x: number, y: number) => void
+  onDragEnd?: (id: string, x: number, y: number) => void
 }
 
 const MARKER_STYLES = [
@@ -17,8 +18,8 @@ const MARKER_STYLES = [
   { border: 'border-blue-500', bg: 'bg-blue-500/70' },
 ]
 
-export function TwoPointMarkers({ points, draggable, onDragPoint }: TwoPointMarkersProps) {
-  const dragState = useRef<{ id: string; rect: DOMRect } | null>(null)
+export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd }: TwoPointMarkersProps) {
+  const dragState = useRef<{ id: string; rect: DOMRect; lastX: number; lastY: number } | null>(null)
 
   useEffect(() => {
     if (!draggable) return
@@ -28,10 +29,19 @@ export function TwoPointMarkers({ points, draggable, onDragPoint }: TwoPointMark
       if (!state) return
       const x = Math.min(100, Math.max(0, ((event.clientX - state.rect.left) / state.rect.width) * 100))
       const y = Math.min(100, Math.max(0, ((event.clientY - state.rect.top) / state.rect.height) * 100))
+      state.lastX = x
+      state.lastY = y
       onDragPoint?.(state.id, x, y)
     }
     function handleUp() {
+      const state = dragState.current
       dragState.current = null
+      // Determining which point is proximal walks the mesh and is too slow
+      // to re-run on every mousemove tick during a drag — doing so let a
+      // stale, still-in-flight computation from an earlier cursor position
+      // clobber the result for the final, settled one. Only re-derive it
+      // once, here, on the position the drag actually ended at.
+      if (state) onDragEnd?.(state.id, state.lastX, state.lastY)
     }
 
     window.addEventListener('mousemove', handleMove)
@@ -40,7 +50,7 @@ export function TwoPointMarkers({ points, draggable, onDragPoint }: TwoPointMark
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mouseup', handleUp)
     }
-  }, [draggable, onDragPoint])
+  }, [draggable, onDragPoint, onDragEnd])
 
   return (
     <>
@@ -57,7 +67,12 @@ export function TwoPointMarkers({ points, draggable, onDragPoint }: TwoPointMark
                     event.preventDefault()
                     const container = event.currentTarget.parentElement
                     if (!container) return
-                    dragState.current = { id: point.id, rect: container.getBoundingClientRect() }
+                    dragState.current = {
+                      id: point.id,
+                      rect: container.getBoundingClientRect(),
+                      lastX: point.x,
+                      lastY: point.y,
+                    }
                   }
                 : undefined
             }
