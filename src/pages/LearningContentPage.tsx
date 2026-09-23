@@ -9,6 +9,7 @@ import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
 import { pickModelFile } from '@/lib/filePickerMemory'
 import { LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
+import { sniffModelExtension } from '@/lib/sniffModelFormat'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
 import { storageService } from '@/services/appwrite/storage'
@@ -111,8 +112,17 @@ export function LearningContentPage() {
     try {
       const viewUrl = storageService.getViewUrl(appwriteConfig.bucketId, record.modelFileId)
       const response = await fetch(viewUrl)
-      const blob = await response.blob()
-      const file = new File([blob], record.file, { type: blob.type })
+      if (!response.ok) throw new Error(`Failed to fetch model file (${response.status})`)
+      const buffer = await response.arrayBuffer()
+      // record.file is stored metadata, not the actual bytes — if it ever
+      // drifts from what modelFileId really points to, trusting its
+      // extension picks the wrong loader and fails deep inside a
+      // third-party parser with no hint the real issue is a mismatch.
+      const sniffedExtension = sniffModelExtension(buffer)
+      const fileName = sniffedExtension && !record.file.toLowerCase().endsWith(`.${sniffedExtension}`)
+        ? `${record.file.replace(/\.[^./]+$/, '')}.${sniffedExtension}`
+        : record.file
+      const file = new File([buffer], fileName)
       loadFile(file)
     } catch (error) {
       console.error(error)
