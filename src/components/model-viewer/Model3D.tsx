@@ -2,6 +2,27 @@ import { useMemo } from 'react'
 import { useLoader } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DRACOLoader, FBXLoader, GLTFLoader, OBJLoader, STLLoader } from 'three-stdlib'
+import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
+
+// ModelCanvas's lesion-analysis walks (heart-proximity ordering, reference
+// width, bifurcation angle, ...) raycast against these meshes dozens of
+// times per placement, now at full precision (computeVesselWidth) rather
+// than a cheap proxy — and Three.js's default raycast is a linear scan over
+// every triangle, which measured ~5ms per cast on these meshes with no
+// acceleration structure. A BVH turns that into a tree lookup instead,
+// typically two to three orders of magnitude faster, which is what makes
+// running the real, accurate walk on every click actually feel instant
+// rather than taking several seconds. This patches every mesh in the app,
+// not just these models, but raycasting is the only thing it changes.
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree
+THREE.Mesh.prototype.raycast = acceleratedRaycast
+
+function buildBoundsTree(geometry: THREE.BufferGeometry) {
+  // Cheap to skip if a highlight repaint or remount hands us the same
+  // (cached, per ensureVertexColorAttribute) geometry a second time.
+  if (!(geometry as { boundsTree?: unknown }).boundsTree) geometry.computeBoundsTree()
+}
 
 interface Model3DProps {
   url: string
@@ -36,6 +57,7 @@ function StlModel({ url, color }: { url: string; color: string }) {
   const centered = useMemo(() => {
     geometry.center()
     ensureVertexColorAttribute(geometry)
+    buildBoundsTree(geometry)
     return geometry
   }, [geometry])
 
@@ -122,6 +144,7 @@ function applyMaterial(object: THREE.Object3D, color: string) {
   object.traverse((child) => {
     if (child instanceof THREE.Mesh) {
       ensureVertexColorAttribute(child.geometry)
+      buildBoundsTree(child.geometry)
       child.material = new THREE.MeshStandardMaterial({
         color,
         roughness: 0.6,
