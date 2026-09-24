@@ -76,6 +76,7 @@ interface ModelCanvasProps {
   sliceMode?: boolean
   sliceAxis?: SliceAxis | null
   sliceGizmoMode?: SliceGizmoMode
+  onSliceAreaChange?: (area: number | null) => void
 }
 
 interface ThreeState {
@@ -156,6 +157,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     sliceMode = false,
     sliceAxis = null,
     sliceGizmoMode = 'translate',
+    onSliceAreaChange,
   },
   ref,
 ) {
@@ -863,7 +865,14 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           axisPreset={sliceAxis}
           onPlaneChange={handleSlicePlaneChange}
         />
-        {sliceMode && <SliceCapMeshes modelGroupRef={modelGroupRef} plane={slicePlane} color={color} />}
+        {sliceMode && (
+          <SliceCapMeshes
+            modelGroupRef={modelGroupRef}
+            plane={slicePlane}
+            color={color}
+            onAreaChange={onSliceAreaChange}
+          />
+        )}
         <OrbitControls
           ref={controlsRef}
           makeDefault

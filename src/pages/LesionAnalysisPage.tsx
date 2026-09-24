@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
 
+import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
@@ -26,6 +27,7 @@ import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
+import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
@@ -236,6 +238,7 @@ export function LesionAnalysisPage() {
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [sliceAxis, setSliceAxis] = useState<SliceAxis>('z')
   const [sliceGizmoMode, setSliceGizmoMode] = useState<SliceGizmoMode>('translate')
+  const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   const [cameraState, setCameraState] = useState<CameraState | null>(
     navigationState?.cameraState ?? null,
   )
@@ -260,6 +263,8 @@ export function LesionAnalysisPage() {
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const [ffrStenosisFactor, setFfrStenosisFactor] = useState(DEFAULT_FFR_STENOSIS_FACTOR)
+  const { isDismissed: isLesionHintDismissed, dismiss: dismissLesionHint } =
+    useGuidanceDismissed('lesion-selection-hint')
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
@@ -267,6 +272,15 @@ export function LesionAnalysisPage() {
   useEffect(() => {
     fetchFfrStenosisFactor().then(setFfrStenosisFactor)
   }, [])
+
+  // Once the user has actually started (or already has) a lesion selection,
+  // they've found the button — showing the hint again on a future upload
+  // would just be nagging, so this dismissal is permanent, not per-session.
+  useEffect(() => {
+    if ((isAnnotating || annotations.length > 0) && !isLesionHintDismissed) {
+      dismissLesionHint()
+    }
+  }, [isAnnotating, annotations.length, isLesionHintDismissed, dismissLesionHint])
 
   useEffect(() => {
     if (!dataRecordId) return
@@ -691,6 +705,23 @@ export function LesionAnalysisPage() {
     })
   }
 
+  // 最小断面積 is normally derived from 最小血管径 via a circular assumption
+  // (see handleSelectedLesionFieldChange) — the slice tool measures the
+  // real cut polygon's actual area instead, which can differ meaningfully
+  // from that assumption on a non-circular lumen. This intentionally
+  // doesn't touch 狭窄率 the way a diameter edit does: there's no diameter
+  // to derive it from here, and overwriting it from an assumed-circular
+  // back-conversion would just reintroduce the same approximation this
+  // exists to avoid.
+  function handleUseSliceCrossSectionArea() {
+    if (sliceCrossSectionArea == null) return
+    setSelectedLesion((prev) => ({
+      ...prev,
+      minCrossSectionArea: formatMeasurement(sliceCrossSectionArea),
+    }))
+    showToast('スライスの断面積を最小断面積に反映しました')
+  }
+
   function handleUpdateSelectedLesion() {
     if (annotations.length === 2 && selectedLesion.stenosisRate === '') {
       measureLesion(annotations[0], annotations[1])
@@ -935,6 +966,7 @@ export function LesionAnalysisPage() {
                   sliceMode={activeTool === 'slice'}
                   sliceAxis={sliceAxis}
                   sliceGizmoMode={sliceGizmoMode}
+                  onSliceAreaChange={setSliceCrossSectionArea}
                 />
 
                 <TwoPointMarkers
@@ -958,6 +990,15 @@ export function LesionAnalysisPage() {
                     <MousePointerClick className="h-4 w-4" />
                   </button>
                 </div>
+
+                {annotations.length === 0 && !isAnnotating && !isLesionHintDismissed && (
+                  <GuidanceBubble
+                    anchor="top-left"
+                    style={{ left: '3.25rem', top: '1rem' }}
+                    message="ここをクリックして、①②の2点で病変部位を選択してください"
+                    onDismiss={dismissLesionHint}
+                  />
+                )}
 
                 <div className="absolute right-4 top-4 flex flex-col gap-2">
                   {measurement && (
@@ -993,6 +1034,20 @@ export function LesionAnalysisPage() {
                   pd={measurement ? params.pd : ''}
                 />
                 <AnatomyGuideThumbnail />
+                {activeTool === 'slice' && sliceCrossSectionArea != null && (
+                  <div className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white py-1.5 pl-4 pr-1.5 shadow-sm">
+                    <span className="text-xs text-gray-500">
+                      断面積 <span className="font-semibold text-gray-900">{formatMeasurement(sliceCrossSectionArea)}</span> mm²
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleUseSliceCrossSectionArea}
+                      className="whitespace-nowrap rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-100"
+                    >
+                      最小断面積に反映
+                    </button>
+                  </div>
+                )}
                 <ViewerToolbar
                   activeTool={activeTool}
                   onToolChange={handleToolChange}

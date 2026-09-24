@@ -3,8 +3,10 @@ import { Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { Toast } from '@/components/common/Toast'
 import { LearningContentTable } from '@/components/data/LearningContentTable'
+import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
 import { pickModelFile } from '@/lib/filePickerMemory'
@@ -55,6 +57,8 @@ export function LearningContentPage() {
   const [isLoadingRecord, setIsLoadingRecord] = useState(Boolean(dataRecordId))
   const { toast, showToast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
+  const { isDismissed: isReuseHintDismissed, dismiss: dismissReuseHint } =
+    useGuidanceDismissed('learning-content-reuse-hint')
 
   useEffect(() => {
     fetchFrames()
@@ -109,6 +113,8 @@ export function LearningContentPage() {
       return
     }
 
+    if (!isReuseHintDismissed) dismissReuseHint()
+
     try {
       const viewUrl = storageService.getViewUrl(appwriteConfig.bucketId, record.modelFileId)
       const response = await fetch(viewUrl)
@@ -153,15 +159,25 @@ export function LearningContentPage() {
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="mt-3 flex items-center gap-2">
         <span className="text-2xl font-bold text-gray-900">{record?.category ?? DEFAULT_STUDY_NAME}</span>
-        <button
-          type="button"
-          onClick={handleAddNew}
-          disabled={isLoadingRecord}
-          title="新規追加"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        <div className="relative inline-block">
+          <button
+            type="button"
+            onClick={handleAddNew}
+            disabled={isLoadingRecord}
+            title="新規追加"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          {record?.modelFileId && !isReuseHintDismissed && (
+            <GuidanceBubble
+              anchor="top-left"
+              className="left-10 top-0"
+              message="この「+」はこのフォルダに登録済みの3Dモデルを再利用します"
+              onDismiss={dismissReuseHint}
+            />
+          )}
+        </div>
         <input
           ref={inputRef}
           type="file"

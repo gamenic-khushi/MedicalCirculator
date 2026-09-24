@@ -1,4 +1,8 @@
 import { Maximize, Move, RotateCw, Scissors } from 'lucide-react'
+import { useEffect } from 'react'
+
+import { GuidanceBubble } from '@/components/common/GuidanceBubble'
+import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 
 import type { SliceAxis, SliceGizmoMode } from './SlicePlaneGizmo'
 import type { ViewerTool } from './ModelCanvas'
@@ -30,8 +34,27 @@ export function ViewerToolbar({
   sliceGizmoMode = 'translate',
   onSliceGizmoModeChange,
 }: ViewerToolbarProps) {
+  // Self-contained (not lifted into the page) since this component already
+  // decides on its own whether the slice button renders at all based on
+  // onSliceAxisChange — the hint about that button belongs with it, so pages
+  // that don't wire up slicing (e.g. ModelViewerPage) never show it either.
+  const { isDismissed: isSliceHintDismissed, dismiss: dismissSliceHint } =
+    useGuidanceDismissed('slice-mode-hint')
+
+  useEffect(() => {
+    if (activeTool === 'slice' && !isSliceHintDismissed) dismissSliceHint()
+  }, [activeTool, isSliceHintDismissed, dismissSliceHint])
+
   return (
     <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-gray-100 bg-white p-1 shadow-sm">
+      {onSliceAxisChange && activeTool !== 'slice' && !isSliceHintDismissed && (
+        <GuidanceBubble
+          anchor="bottom-left"
+          className="bottom-full left-1/2 mb-2 -translate-x-1/2"
+          message="血管を輪切りにして断面積を確認できます"
+          onDismiss={dismissSliceHint}
+        />
+      )}
       <button
         type="button"
         onClick={() => {
