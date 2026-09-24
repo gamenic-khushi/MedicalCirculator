@@ -167,13 +167,13 @@ export function ModelViewerPage() {
       ['ファイル名', validModel?.file.name ?? '—'],
       ['Pa', calculatedPa ? `${calculatedPa} mmHg` : '—'],
       ['Pd', pd ? `${pd} mmHg` : '—'],
-      ['Stenosis rate', ffrResult ? `${ffrResult.stenosisRate} %` : '—'],
+      ['狭窄率', ffrResult ? `${ffrResult.stenosisRate} %` : '—'],
       ['FFR', ffrResult ? ffrResult.ffrValue.toFixed(2) : '—'],
       ['上流血管のサイズ', upstreamDiameter ? `${upstreamDiameter} mm` : '—'],
       ['下流血管のサイズ', downstreamDiameter ? `${downstreamDiameter} mm` : '—'],
       ['MLA', mla ? `${mla} mm²` : '—'],
-      ['Lumen volume', lumenVolume ? `${lumenVolume} mm³` : '—'],
-      ['Bifurcation angle', bifurcationAngle ? `${bifurcationAngle} °` : '—'],
+      ['血管内腔体積', lumenVolume ? `${lumenVolume} mm³` : '—'],
+      ['分岐角度', bifurcationAngle ? `${bifurcationAngle} °` : '—'],
     ]
 
     reportWindow.document.write(`<!DOCTYPE html>

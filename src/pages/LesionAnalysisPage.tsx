@@ -792,13 +792,13 @@ export function LesionAnalysisPage() {
       ['ファイル名', validModel ? validModel.file.name : (viewFrame?.fileName ?? '—')],
       ['Pa', params.pa ? `${params.pa} mmHg` : '—'],
       ['Pd', params.pd ? `${params.pd} mmHg` : '—'],
-      ['Stenosis rate', params.stenosisRate ? `${params.stenosisRate} %` : '—'],
+      ['狭窄率', params.stenosisRate ? `${params.stenosisRate} %` : '—'],
       ['FFR', ffrDisplay],
       ['上流血管のサイズ', params.upstreamSize ? `${params.upstreamSize} mm` : '—'],
       ['下流血管のサイズ', params.downstreamSize ? `${params.downstreamSize} mm` : '—'],
       ['MLA', params.mla ? `${params.mla} mm²` : '—'],
-      ['Lumen volume', params.lumenVolume ? `${params.lumenVolume} mm³` : '—'],
-      ['Bifurcation angle', params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—'],
+      ['血管内腔体積', params.lumenVolume ? `${params.lumenVolume} mm³` : '—'],
+      ['分岐角度', params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—'],
     ]
 
     reportWindow.document.write(`<!DOCTYPE html>
