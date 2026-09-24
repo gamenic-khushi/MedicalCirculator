@@ -1,4 +1,4 @@
-import { Maximize, Move, RotateCw, Scissors } from 'lucide-react'
+import { Maximize, Move, RefreshCw, Rotate3d, Scissors } from 'lucide-react'
 import { useEffect } from 'react'
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
@@ -57,29 +57,22 @@ export function ViewerToolbar({
       )}
       <button
         type="button"
-        onClick={() => {
-          onToolChange('rotate')
-          onReset()
-        }}
-        aria-pressed={activeTool === 'rotate'}
+        onClick={onReset}
         title="リセットして新しい位置に丸を描く"
-        className={`rounded-full p-2 transition ${
-          activeTool === 'rotate'
-            ? 'bg-indigo-50 text-indigo-600'
-            : 'text-gray-500 hover:bg-gray-50'
-        }`}
+        className="rounded-full p-2 text-gray-500 transition hover:bg-gray-50"
       >
-        <RotateCw className="h-4 w-4" />
+        <RefreshCw className="h-4 w-4" />
       </button>
       <button
         type="button"
-        onClick={() => onToolChange('pan')}
-        aria-pressed={activeTool === 'pan'}
+        onClick={() => onToolChange(activeTool === 'pan' ? 'rotate' : 'pan')}
+        aria-pressed={activeTool !== 'slice'}
+        title={activeTool === 'pan' ? 'クリックして回転モードに切り替え' : 'クリックして移動モードに切り替え'}
         className={`rounded-full p-2 transition ${
-          activeTool === 'pan' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
+          activeTool === 'slice' ? 'text-gray-500 hover:bg-gray-50' : 'bg-indigo-50 text-indigo-600'
         }`}
       >
-        <Move className="h-4 w-4" />
+        {activeTool === 'pan' ? <Move className="h-4 w-4" /> : <Rotate3d className="h-4 w-4" />}
       </button>
       {onSliceAxisChange && (
         <>
