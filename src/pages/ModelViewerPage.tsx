@@ -93,6 +93,29 @@ export function ModelViewerPage() {
     fetchFfrStenosisFactor().then(setFfrStenosisFactor)
   }, [])
 
+  // Re-projects the annotation's 3D anchor point back onto the screen from
+  // the camera's current position — called continuously while the camera
+  // moves (so the circle stays pinned to the mesh instead of visibly
+  // drifting during a rotate/pan) and on container resize.
+  function syncAnnotationPositions() {
+    setAnnotations((prev) =>
+      prev.map((annotation) => {
+        if (!annotation.worldPoint) return annotation
+        const projected = canvasRef.current?.projectWorldPoint(annotation.worldPoint)
+        if (!projected) return annotation
+        return { ...annotation, x: projected.x, y: projected.y }
+      }),
+    )
+  }
+
+  useEffect(() => {
+    const container = canvasAreaRef.current
+    if (!container) return
+    const observer = new ResizeObserver(syncAnnotationPositions)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
     document.addEventListener('fullscreenchange', onFullscreenChange)
@@ -236,7 +259,8 @@ export function ModelViewerPage() {
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    setAnnotations([{ id: generateId(), x, y }])
+    const worldPoint = canvasRef.current?.getWorldPoint(x, y) ?? undefined
+    setAnnotations([{ id: generateId(), x, y, worldPoint }])
     setIsAnnotating(false)
   }
 
@@ -502,6 +526,7 @@ export function ModelViewerPage() {
               controlsEnabled={!isAnnotating && !isResizingRing}
               initialCamera={cameraState}
               onCameraChange={setCameraState}
+              onCameraMove={syncAnnotationPositions}
             />
 
             {!ffrResult &&

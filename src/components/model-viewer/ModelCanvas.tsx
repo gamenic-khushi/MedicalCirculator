@@ -73,6 +73,11 @@ interface ModelCanvasProps {
   controlsEnabled?: boolean
   initialCamera?: CameraState | null
   onCameraChange?: (state: CameraState) => void
+  // Fires continuously while the camera is moving (every OrbitControls
+  // 'change' tick), not just once it settles — lets a caller re-project any
+  // world-anchored annotation markers every frame so they stay pinned to
+  // the mesh instead of visibly drifting during the rotate/pan/zoom itself.
+  onCameraMove?: () => void
   sliceMode?: boolean
   sliceAxis?: SliceAxis | null
   sliceGizmoMode?: SliceGizmoMode
@@ -154,6 +159,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     controlsEnabled = true,
     initialCamera,
     onCameraChange,
+    onCameraMove,
     sliceMode = false,
     sliceAxis = null,
     sliceGizmoMode = 'translate',
@@ -877,6 +883,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           ref={controlsRef}
           makeDefault
           enabled={controlsEnabled}
+          onChange={onCameraMove}
           onEnd={emitCameraChange}
         />
       </Canvas>

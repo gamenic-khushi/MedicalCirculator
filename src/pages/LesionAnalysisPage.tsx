@@ -353,21 +353,24 @@ export function LesionAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Re-projects any annotation that has a 3D anchor point back onto the
+  // screen from the camera's current position — called both continuously
+  // while the camera moves (so points stay pinned to the mesh instead of
+  // visibly drifting during a rotate/pan) and on container resize.
+  function syncAnnotationPositions() {
+    setAnnotations((prev) =>
+      prev.map((annotation) => {
+        if (!annotation.worldPoint) return annotation
+        const projected = canvasRef.current?.projectWorldPoint(annotation.worldPoint)
+        if (!projected) return annotation
+        return { ...annotation, x: projected.x, y: projected.y }
+      }),
+    )
+  }
+
   useEffect(() => {
     const container = canvasAreaRef.current
     if (!container) return
-
-    function syncAnnotationPositions() {
-      setAnnotations((prev) =>
-        prev.map((annotation) => {
-          if (!annotation.worldPoint) return annotation
-          const projected = canvasRef.current?.projectWorldPoint(annotation.worldPoint)
-          if (!projected) return annotation
-          return { ...annotation, x: projected.x, y: projected.y }
-        }),
-      )
-    }
-
     const observer = new ResizeObserver(syncAnnotationPositions)
     observer.observe(container)
     return () => observer.disconnect()
@@ -519,7 +522,8 @@ export function LesionAnalysisPage() {
     const bounds = event.currentTarget.getBoundingClientRect()
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
-    const next = [...annotations, { id: generateId(), x, y }]
+    const worldPoint = canvasRef.current?.getWorldPoint(x, y) ?? undefined
+    const next = [...annotations, { id: generateId(), x, y, worldPoint }]
     if (next.length === 2) {
       // Don't measure yet — let the user drag either point to fine-tune the
       // selected area first; 測定範囲を更新 below the viewer runs the
@@ -543,9 +547,10 @@ export function LesionAnalysisPage() {
   }
 
   function handleDragEnd(id: string, x: number, y: number) {
+    const worldPoint = canvasRef.current?.getWorldPoint(x, y) ?? undefined
     setAnnotations((prev) =>
       orderByHeartProximity(
-        prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y } : annotation)),
+        prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y, worldPoint } : annotation)),
       ),
     )
   }
@@ -964,6 +969,7 @@ export function LesionAnalysisPage() {
                   controlsEnabled={activeTool !== 'slice' && !isAnnotating && !isDraggingPoint}
                   initialCamera={cameraState}
                   onCameraChange={setCameraState}
+                  onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
                   sliceAxis={sliceAxis}
                   sliceGizmoMode={sliceGizmoMode}
