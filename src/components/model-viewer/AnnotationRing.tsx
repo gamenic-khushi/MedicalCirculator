@@ -11,6 +11,9 @@ interface AnnotationRingProps {
   containerRef: RefObject<HTMLElement | null>
   minRadius?: number
   maxRadius?: number
+  // Fires only for the span of an actual resize drag, not for as long as
+  // the ring exists — lets the camera stay rotatable once it's been placed.
+  onResizingChange?: (isResizing: boolean) => void
 }
 
 export function AnnotationRing({
@@ -21,6 +24,7 @@ export function AnnotationRing({
   containerRef,
   minRadius = DEFAULT_MIN_RADIUS_PX,
   maxRadius = DEFAULT_MAX_RADIUS_PX,
+  onResizingChange,
 }: AnnotationRingProps) {
   function handleResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -30,6 +34,7 @@ export function AnnotationRing({
     const bounds = container.getBoundingClientRect()
     const centerX = bounds.left + (x / 100) * bounds.width
     const centerY = bounds.top + (y / 100) * bounds.height
+    onResizingChange?.(true)
 
     function handlePointerMove(moveEvent: PointerEvent) {
       const dx = moveEvent.clientX - centerX
@@ -40,6 +45,7 @@ export function AnnotationRing({
     function handlePointerUp() {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
+      onResizingChange?.(false)
     }
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)

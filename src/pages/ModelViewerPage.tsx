@@ -86,6 +86,7 @@ export function ModelViewerPage() {
   const { toast, showToast } = useToast()
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
+  const [isResizingRing, setIsResizingRing] = useState(false)
   const [ffrStenosisFactor, setFfrStenosisFactor] = useState(DEFAULT_FFR_STENOSIS_FACTOR)
 
   useEffect(() => {
@@ -498,7 +499,7 @@ export function ModelViewerPage() {
               url={validModel.objectUrl}
               extension={validModel.extension}
               color={MODEL_COLOR}
-              controlsEnabled={!isAnnotating && annotations.length === 0}
+              controlsEnabled={!isAnnotating && !isResizingRing}
               initialCamera={cameraState}
               onCameraChange={setCameraState}
             />
@@ -512,6 +513,7 @@ export function ModelViewerPage() {
                   radius={ringRadius}
                   onRadiusChange={setRingRadius}
                   containerRef={canvasAreaRef}
+                  onResizingChange={setIsResizingRing}
                 />
               ))}
 

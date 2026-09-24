@@ -243,6 +243,7 @@ export function LesionAnalysisPage() {
     navigationState?.cameraState ?? null,
   )
   const [isAnnotating, setIsAnnotating] = useState(false)
+  const [isDraggingPoint, setIsDraggingPoint] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
   const [bloodPressure, setBloodPressure] = useState(
@@ -960,7 +961,7 @@ export function LesionAnalysisPage() {
                   url={validModel!.objectUrl}
                   extension={validModel!.extension}
                   color={MODEL_COLOR}
-                  controlsEnabled={activeTool !== 'slice' && !isAnnotating && annotations.length < 2}
+                  controlsEnabled={activeTool !== 'slice' && !isAnnotating && !isDraggingPoint}
                   initialCamera={cameraState}
                   onCameraChange={setCameraState}
                   sliceMode={activeTool === 'slice'}
@@ -974,6 +975,7 @@ export function LesionAnalysisPage() {
                   draggable={annotations.length === 2 && selectedLesion.stenosisRate === ''}
                   onDragPoint={handleDragAnnotation}
                   onDragEnd={handleDragEnd}
+                  onDraggingChange={setIsDraggingPoint}
                 />
 
                 <div className="absolute left-4 top-4 flex flex-col gap-2">

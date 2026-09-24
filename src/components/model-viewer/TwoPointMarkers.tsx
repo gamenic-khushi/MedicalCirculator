@@ -11,6 +11,11 @@ interface TwoPointMarkersProps {
   draggable?: boolean
   onDragPoint?: (id: string, x: number, y: number) => void
   onDragEnd?: (id: string, x: number, y: number) => void
+  // Fires exactly for the span of an actual point drag (mousedown on a
+  // marker through mouseup), not for as long as points merely exist — lets
+  // the camera stay rotatable in between adjustments instead of being
+  // locked out for the rest of the measurement once points are placed.
+  onDraggingChange?: (isDragging: boolean) => void
 }
 
 const MARKER_STYLES = [
@@ -18,7 +23,7 @@ const MARKER_STYLES = [
   { border: 'border-blue-500', bg: 'bg-blue-500/70' },
 ]
 
-export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd }: TwoPointMarkersProps) {
+export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd, onDraggingChange }: TwoPointMarkersProps) {
   const dragState = useRef<{ id: string; rect: DOMRect; lastX: number; lastY: number } | null>(null)
 
   useEffect(() => {
@@ -41,7 +46,10 @@ export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd }: T
       // stale, still-in-flight computation from an earlier cursor position
       // clobber the result for the final, settled one. Only re-derive it
       // once, here, on the position the drag actually ended at.
-      if (state) onDragEnd?.(state.id, state.lastX, state.lastY)
+      if (state) {
+        onDragEnd?.(state.id, state.lastX, state.lastY)
+        onDraggingChange?.(false)
+      }
     }
 
     window.addEventListener('mousemove', handleMove)
@@ -50,7 +58,7 @@ export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd }: T
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mouseup', handleUp)
     }
-  }, [draggable, onDragPoint, onDragEnd])
+  }, [draggable, onDragPoint, onDragEnd, onDraggingChange])
 
   return (
     <>
@@ -73,6 +81,7 @@ export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd }: T
                       lastX: point.x,
                       lastY: point.y,
                     }
+                    onDraggingChange?.(true)
                   }
                 : undefined
             }
