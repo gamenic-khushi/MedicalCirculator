@@ -3,7 +3,7 @@ import type { LearningContentFrame } from '@/types/learningContentFrame'
 
 const ROWS: { key: keyof LearningContentFrame; label: string }[] = [
   { key: 'upstreamSize', label: '上流血管のサイズ' },
-  { key: 'downstreamSize', label: '下流側の容器のサイズ' },
+  { key: 'downstreamSize', label: '下流血管のサイズ' },
   { key: 'pa', label: 'Pa' },
   { key: 'pd', label: 'Pd' },
   { key: 'parameter', label: '〇〇パラメータ' },

@@ -52,7 +52,7 @@ export function FfrResultOverlay({
         className="absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap pb-2 text-xs font-medium text-gray-800"
       >
         <span className="h-2 w-2 rotate-45 bg-blue-500" />
-        Stenosis rate {stenosisRate}%
+        狭窄率 {stenosisRate}%
       </div>
 
       <div

@@ -43,7 +43,7 @@ export function AnatomyGuideThumbnail() {
             onClick={(event) => event.stopPropagation()}
             className="relative w-full max-w-md"
           >
-            <h2 className="mb-3 text-sm font-semibold text-white">Anatomy Guide</h2>
+            <h2 className="mb-3 text-sm font-semibold text-white">解剖学ガイド</h2>
 
             <div className="relative rounded-2xl bg-white p-4 shadow-xl">
               <button
@@ -57,7 +57,7 @@ export function AnatomyGuideThumbnail() {
               <div className="overflow-hidden rounded-lg">
                 <img
                   src={arteryImage}
-                  alt="Anatomy Guide"
+                  alt="解剖学ガイド"
                   className="w-full scale-105 object-contain"
                 />
               </div>
