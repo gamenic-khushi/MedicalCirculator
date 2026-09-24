@@ -472,6 +472,15 @@ export function LesionAnalysisPage() {
     const [first, second] = points
 
     const result = canvas.determineProximalPoint(first.x, first.y, second.x, second.y)
+    // Ask for the AI tiebreak whenever both points resolved on the mesh at
+    // all — not only when the geometric walk itself came back undecided.
+    // Near a bifurcation, a branch can start out locally wider than the
+    // trunk right at its own root before tapering further out, so the walk
+    // can return a confident-looking width gap that's actually backwards;
+    // this gives every placement a background second opinion that can
+    // correct a wrongly-confident geometric guess, not just break literal
+    // ties.
+    if (result) requestProximityTiebreak(first.id, second.id, result.reach1, result.reach2)
     if (result?.decision === 'first') return points
     if (result?.decision === 'second') return [second, first]
 
@@ -481,12 +490,9 @@ export function LesionAnalysisPage() {
     })
     const firstWidth = averageVesselWidth(canvas, path.slice(0, PROXIMITY_SAMPLE_COUNT))
     const secondWidth = averageVesselWidth(canvas, path.slice(-PROXIMITY_SAMPLE_COUNT))
-    const widthOrdered = firstWidth == null || secondWidth == null || firstWidth >= secondWidth
+    return firstWidth == null || secondWidth == null || firstWidth >= secondWidth
       ? points
       : [second, first]
-
-    if (result) requestProximityTiebreak(first.id, second.id, result.reach1, result.reach2)
-    return widthOrdered
   }
 
   // Fire-and-forget: asks Jev to break the tie using the same walk data the
