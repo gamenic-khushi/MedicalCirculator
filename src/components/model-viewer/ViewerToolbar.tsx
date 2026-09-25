@@ -40,6 +40,12 @@ export function ViewerToolbar({
   // that don't wire up slicing (e.g. ModelViewerPage) never show it either.
   const { isDismissed: isSliceHintDismissed, dismiss: dismissSliceHint } =
     useGuidanceDismissed('slice-mode-hint')
+  // The rotate/pan toggle used to be two separate buttons — this hint only
+  // exists to explain that they're now combined into one, so it should get
+  // out of the way the moment the button has actually been used once, same
+  // as the slice hint below.
+  const { isDismissed: isRotatePanHintDismissed, dismiss: dismissRotatePanHint } =
+    useGuidanceDismissed('rotate-pan-toggle-hint')
 
   useEffect(() => {
     if (activeTool === 'slice' && !isSliceHintDismissed) dismissSliceHint()
@@ -47,12 +53,25 @@ export function ViewerToolbar({
 
   return (
     <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-gray-100 bg-white p-1 shadow-sm">
+      {/* Stacked with a fixed pixel gap rather than both sitting flush against
+          the toolbar — with both hints visible at once (a fresh session that
+          hasn't touched either button yet), flush positioning put them at
+          the same height and they overlapped each other. */}
       {onSliceAxisChange && activeTool !== 'slice' && !isSliceHintDismissed && (
         <GuidanceBubble
           anchor="bottom-left"
-          className="bottom-full left-1/2 mb-2 -translate-x-1/2"
+          className="bottom-full left-1/2 -translate-x-1/2"
+          style={{ marginBottom: isRotatePanHintDismissed ? '0.5rem' : '4.5rem' }}
           message="血管を輪切りにして断面積を確認できます"
           onDismiss={dismissSliceHint}
+        />
+      )}
+      {!isRotatePanHintDismissed && (
+        <GuidanceBubble
+          anchor="bottom-left"
+          className="bottom-full left-0 mb-2"
+          message="「回転」と「移動」が1つのボタンにまとまりました。クリックで切り替えられます"
+          onDismiss={dismissRotatePanHint}
         />
       )}
       <button
@@ -65,7 +84,10 @@ export function ViewerToolbar({
       </button>
       <button
         type="button"
-        onClick={() => onToolChange(activeTool === 'pan' ? 'rotate' : 'pan')}
+        onClick={() => {
+          onToolChange(activeTool === 'pan' ? 'rotate' : 'pan')
+          if (!isRotatePanHintDismissed) dismissRotatePanHint()
+        }}
         aria-pressed={activeTool !== 'slice'}
         title={activeTool === 'pan' ? 'クリックして回転モードに切り替え' : 'クリックして移動モードに切り替え'}
         className={`rounded-full p-2 transition ${
