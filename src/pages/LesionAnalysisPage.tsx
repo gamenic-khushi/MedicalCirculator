@@ -30,9 +30,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
+import {
+  computeFfrCubic,
+  describeFfrRangeError,
+  findOutOfRangeFfrInputs,
+  type FfrCubicInputs,
+} from '@/lib/ffrCubicModel'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
-import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor } from '@/lib/formulaSettings'
 import { generateId } from '@/lib/id'
 import { DELETE_FAILED, SAVE_FAILED, VESSEL_WIDTH_MEASURE_FAILED } from '@/lib/messages'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
@@ -263,16 +268,11 @@ export function LesionAnalysisPage() {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
   const [isInfoOpen, setIsInfoOpen] = useState(false)
-  const [ffrStenosisFactor, setFfrStenosisFactor] = useState(DEFAULT_FFR_STENOSIS_FACTOR)
   const { isDismissed: isLesionHintDismissed, dismiss: dismissLesionHint } =
     useGuidanceDismissed('lesion-selection-hint')
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    fetchFfrStenosisFactor().then(setFfrStenosisFactor)
-  }, [])
 
   // Once the user has actually started (or already has) a lesion selection,
   // they've found the button — showing the hint again on a future upload
@@ -637,8 +637,21 @@ export function LesionAnalysisPage() {
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
     if (!target || !bounds || !bloodPressure.trim() || !selectedLesion.stenosisRate) return
 
+    const ffrInputs: FfrCubicInputs = {
+      dp: Number(selectedLesion.lesionProximalDiameter),
+      dd: Number(selectedLesion.lesionDistalDiameter),
+      a: Number(selectedLesion.minCrossSectionArea),
+      l: Number(selectedLesion.stenosisLength),
+      p: Number(bloodPressure),
+    }
+    const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
+    if (outOfRange.length > 0) {
+      showToast(describeFfrRangeError(outOfRange), 'error')
+      return
+    }
+
     const stenosisRate = Math.min(Math.max(Number(selectedLesion.stenosisRate) || 0, 0), 99)
-    const ffrValue = 1 - (stenosisRate / 100) * ffrStenosisFactor
+    const ffrValue = computeFfrCubic(ffrInputs)
     const pa = bloodPressure.trim()
     const pdValue = (Number(pa) * ffrValue).toFixed(1)
 
@@ -690,7 +703,21 @@ export function LesionAnalysisPage() {
     }))
 
     if (!measurement) return
-    const ffrValue = 1 - (stenosisRate / 100) * ffrStenosisFactor
+
+    const ffrInputs: FfrCubicInputs = {
+      dp: Number(data.lesionProximalDiameter),
+      dd: Number(data.lesionDistalDiameter),
+      a: Number(data.minCrossSectionArea),
+      l: Number(data.stenosisLength),
+      p: Number(params.pa),
+    }
+    const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
+    if (outOfRange.length > 0) {
+      showToast(describeFfrRangeError(outOfRange), 'error')
+      return
+    }
+
+    const ffrValue = computeFfrCubic(ffrInputs)
     setMeasurement({ ...measurement, stenosisRate: Math.round(stenosisRate), ffrValue })
     setParams((prev) => ({
       ...prev,
@@ -809,10 +836,17 @@ export function LesionAnalysisPage() {
     const reportWindow = window.open('', '_blank')
     if (!reportWindow) return
 
+    const pdfFfrInputs: FfrCubicInputs = {
+      dp: Number(selectedLesion.lesionProximalDiameter),
+      dd: Number(selectedLesion.lesionDistalDiameter),
+      a: Number(selectedLesion.minCrossSectionArea),
+      l: Number(selectedLesion.stenosisLength),
+      p: Number(params.pa),
+    }
     const ffrDisplay = measurement
       ? measurement.ffrValue.toFixed(2)
-      : params.stenosisRate
-        ? (1 - (Number(params.stenosisRate) / 100) * ffrStenosisFactor).toFixed(2)
+      : params.pa && findOutOfRangeFfrInputs(pdfFfrInputs).length === 0
+        ? computeFfrCubic(pdfFfrInputs).toFixed(2)
         : '—'
 
     const rows: [string, string][] = [

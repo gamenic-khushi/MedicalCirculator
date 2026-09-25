@@ -22,9 +22,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
 import { useViewerState } from '@/hooks/useViewerState'
+import {
+  computeFfrCubic,
+  describeFfrRangeError,
+  findOutOfRangeFfrInputs,
+  type FfrCubicInputs,
+} from '@/lib/ffrCubicModel'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
-import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor } from '@/lib/formulaSettings'
 import { generateId } from '@/lib/id'
 import { SAVE_FAILED, VESSEL_WIDTH_MEASURE_FAILED } from '@/lib/messages'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
@@ -87,12 +92,6 @@ export function ModelViewerPage() {
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
   const [isResizingRing, setIsResizingRing] = useState(false)
-  const [ffrStenosisFactor, setFfrStenosisFactor] = useState(DEFAULT_FFR_STENOSIS_FACTOR)
-
-  useEffect(() => {
-    fetchFfrStenosisFactor().then(setFfrStenosisFactor)
-  }, [])
-
   // Re-projects the annotation's 3D anchor point back onto the screen from
   // the camera's current position — called continuously while the camera
   // moves (so the circle stays pinned to the mesh instead of visibly
@@ -286,8 +285,6 @@ export function ModelViewerPage() {
       const referenceDiameter = (upstream + downstream) / 2
       const rawStenosisRate = referenceDiameter > 0 ? (1 - narrowest / referenceDiameter) * 100 : 0
       const stenosisRate = Math.min(Math.max(rawStenosisRate, 0), 99)
-      const ffrValue = 1 - (stenosisRate / 100) * ffrStenosisFactor
-      const pdValue = (Number(bloodPressure) * ffrValue).toFixed(1)
 
       const segmentLength = canvasRef.current?.measureDistance3D(
         target.x,
@@ -298,6 +295,24 @@ export function ModelViewerPage() {
       const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(target.x, target.y)
       const clampedMld = referenceDiameter * (1 - stenosisRate / 100)
       const mlaValue = Math.PI * (clampedMld / 2) ** 2
+
+      const ffrInputs: FfrCubicInputs = {
+        dp: upstream,
+        dd: downstream,
+        a: mlaValue,
+        l: segmentLength ?? NaN,
+        p: Number(bloodPressure),
+      }
+      const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
+      if (outOfRange.length > 0) {
+        setIsCalculatingFfr(false)
+        showToast(describeFfrRangeError(outOfRange), 'error')
+        return
+      }
+
+      const ffrValue = computeFfrCubic(ffrInputs)
+      const pdValue = (Number(bloodPressure) * ffrValue).toFixed(1)
+
       const lumenVolumeValue = segmentLength
         ? Math.PI * (referenceDiameter / 2) ** 2 * segmentLength
         : null
