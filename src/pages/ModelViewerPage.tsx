@@ -306,7 +306,7 @@ export function ModelViewerPage() {
       const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
       if (outOfRange.length > 0) {
         setIsCalculatingFfr(false)
-        showToast(describeFfrRangeError(outOfRange), 'error')
+        showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error')
         return
       }
 

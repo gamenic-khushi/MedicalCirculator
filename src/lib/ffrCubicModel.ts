@@ -27,13 +27,29 @@ export interface FfrCubicInputs {
 
 export type FfrCubicInputKey = keyof FfrCubicInputs
 
-// [min, max] observed range each input was trained on.
+// [min, max] observed range each input was trained on. Dp/Dd/L/P were
+// trained across their full listed range at every pressure level.
 export const FFR_INPUT_RANGES: Record<FfrCubicInputKey, [number, number]> = {
   dp: [3, 5],
   dd: [3, 5],
   a: [0.28274328, 2.54468952],
   l: [1, 8],
   p: [80, 120],
+}
+
+// Area is the one exception: per the report's per-pressure shape-level
+// table, the narrowest trained area (0.28274328mm²) was only ever paired
+// with exactly P=100mmHg (1,400 of the 2,840 training cases). Every other
+// trained pressure (80/90/110/120mmHg) only goes down to 0.50265472mm² —
+// confirmed directly against the full 2,840-row training set, not just the
+// report's prose. An area below that floor at any pressure other than 100
+// looks in-range on its own but is a combination the model never actually
+// saw, i.e. still an extrapolation.
+const FFR_AREA_MIN_AWAY_FROM_P100 = 0.50265472
+const P100_EPSILON = 0.01
+
+function minTrainedArea(p: number): number {
+  return Math.abs(p - 100) <= P100_EPSILON ? FFR_INPUT_RANGES.a[0] : FFR_AREA_MIN_AWAY_FROM_P100
 }
 
 export const FFR_INPUT_LABELS: Record<FfrCubicInputKey, string> = {
@@ -55,17 +71,23 @@ export const FFR_INPUT_UNITS: Record<FfrCubicInputKey, string> = {
 /** Inputs (by key) that fall outside the trained range — empty if all are within range. */
 export function findOutOfRangeFfrInputs(inputs: FfrCubicInputs): FfrCubicInputKey[] {
   return (Object.keys(FFR_INPUT_RANGES) as FfrCubicInputKey[]).filter((key) => {
-    const [min, max] = FFR_INPUT_RANGES[key]
+    const [, max] = FFR_INPUT_RANGES[key]
+    const min = key === 'a' ? minTrainedArea(inputs.p) : FFR_INPUT_RANGES[key][0]
     const value = inputs[key]
     return !Number.isFinite(value) || value < min || value > max
   })
 }
 
-/** User-facing error text naming which inputs are outside the model's trained range. */
-export function describeFfrRangeError(outOfRangeKeys: FfrCubicInputKey[]): string {
+/**
+ * User-facing error text naming which inputs are outside the model's trained
+ * range. Takes the full inputs (not just the out-of-range keys) because
+ * area's actual lower bound depends on the paired blood pressure.
+ */
+export function describeFfrRangeError(outOfRangeKeys: FfrCubicInputKey[], inputs: FfrCubicInputs): string {
   const details = outOfRangeKeys
     .map((key) => {
-      const [min, max] = FFR_INPUT_RANGES[key]
+      const [, max] = FFR_INPUT_RANGES[key]
+      const min = key === 'a' ? minTrainedArea(inputs.p) : FFR_INPUT_RANGES[key][0]
       return `${FFR_INPUT_LABELS[key]}(${min}〜${max}${FFR_INPUT_UNITS[key]})`
     })
     .join('、')
