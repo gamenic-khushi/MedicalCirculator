@@ -1,7 +1,7 @@
 import { Query, type Models } from 'appwrite'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { ArrowLeftRight, Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
@@ -561,6 +561,21 @@ export function LesionAnalysisPage() {
     )
   }
 
+  // Manual override for the automatic ①/② (proximal/distal) guess — near a
+  // bifurcation, a side branch can look wider than the actual trunk right
+  // where it splits off, which fools both the geometric width check and the
+  // AI tiebreak (it only ever sees the same derived width numbers, not the
+  // real shape). Letting the user flip the assignment directly is the only
+  // reliable fix for that case, rather than trusting either heuristic.
+  function handleSwapAnnotations() {
+    if (annotations.length !== 2) return
+    const swapped: [Annotation, Annotation] = [annotations[1], annotations[0]]
+    setAnnotations(swapped)
+    if (selectedLesion.stenosisRate !== '') {
+      measureLesion(swapped[0], swapped[1])
+    }
+  }
+
   function measureLesion(proximal: PercentPoint, distal: PercentPoint) {
     if (!canvasRef.current) return
     setIsMeasuring(true)
@@ -1003,6 +1018,16 @@ export function LesionAnalysisPage() {
                   >
                     <MousePointerClick className="h-4 w-4" />
                   </button>
+                  {annotations.length === 2 && (
+                    <button
+                      type="button"
+                      onClick={handleSwapAnnotations}
+                      className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
+                      title="①と②を入れ替える（心臓に近い側を修正）"
+                    >
+                      <ArrowLeftRight className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
                 {annotations.length === 0 && !isAnnotating && !isLesionHintDismissed && (

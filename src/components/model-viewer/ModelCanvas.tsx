@@ -46,8 +46,8 @@ export interface ModelCanvasHandle {
     y2Percent: number,
   ) => {
     decision: 'first' | 'second' | null
-    reach1: { maxWidth: number; stepsCompleted: number }
-    reach2: { maxWidth: number; stepsCompleted: number }
+    reach1: { maxWidth: number; stepsCompleted: number; hitDecisiveWidth: boolean }
+    reach2: { maxWidth: number; stepsCompleted: number; hitDecisiveWidth: boolean }
   } | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
   highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => boolean
@@ -527,7 +527,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     fromYPercent: number,
     towardsXPercent: number,
     towardsYPercent: number,
-  ): { maxWidth: number; stepsCompleted: number } {
+  ): { maxWidth: number; stepsCompleted: number; hitDecisiveWidth: boolean } {
     const dx0 = fromXPercent - towardsXPercent
     const dy0 = fromYPercent - towardsYPercent
     const length0 = Math.hypot(dx0, dy0) || 1
@@ -538,6 +538,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     let y = fromYPercent
     const startingWidth = computeVesselWidth(x, y) ?? 0
     let maxWidth = startingWidth
+    let hitDecisiveWidth = false
 
     let step = 0
     for (; step < HEART_PROXIMITY_MAX_STEPS; step++) {
@@ -567,11 +568,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       // started, that's a confident enough "this side leads toward the
       // trunk" signal on its own — no need to keep walking.
       if (maxWidth > Math.max(startingWidth, 1e-6) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO) {
+        hitDecisiveWidth = true
         step += 1
         break
       }
     }
-    return { maxWidth, stepsCompleted: step }
+    return { maxWidth, stepsCompleted: step, hitDecisiveWidth }
   }
 
   // Returns which of the two points is proximal (closer to the heart) along
@@ -587,8 +589,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     y2Percent: number,
   ): {
     decision: 'first' | 'second' | null
-    reach1: { maxWidth: number; stepsCompleted: number }
-    reach2: { maxWidth: number; stepsCompleted: number }
+    reach1: { maxWidth: number; stepsCompleted: number; hitDecisiveWidth: boolean }
+    reach2: { maxWidth: number; stepsCompleted: number; hitDecisiveWidth: boolean }
   } | null {
     // findNearestHit's snap-search tolerates a click that's a little off the
     // (sometimes only a few pixels wide) vessel surface — worth paying for
@@ -602,18 +604,34 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const reach1 = walkAwayFrom(start1.x, start1.y, start2.x, start2.y)
     const reach2 = walkAwayFrom(start2.x, start2.y, start1.x, start1.y)
 
-    // Real measured widths, so exact equality isn't the right bar for a
-    // "tie" — treat anything within a small relative margin as too close to
-    // call from width alone, and fall through to the steps-walked signal.
-    const widerWidth = Math.max(reach1.maxWidth, reach2.maxWidth)
-    const widthGapRatio = widerWidth > 0 ? Math.abs(reach1.maxWidth - reach2.maxWidth) / widerWidth : 0
-    if (widthGapRatio > HEART_PROXIMITY_WIDTH_TIE_TOLERANCE) {
-      return { decision: reach1.maxWidth > reach2.maxWidth ? 'first' : 'second', reach1, reach2 }
+    // A width comparison is only trustworthy when at least one side actually
+    // found something decisively wider than its OWN starting point along the
+    // way (hitDecisiveWidth) — otherwise both maxWidth values are just
+    // "whatever this budget-limited walk happened to pass on its way to
+    // running out of steps", and a side branch that bulges locally before
+    // tapering further out can rack up a higher maxWidth than the real trunk
+    // ever did, confidently pointing the wrong way. Confirmed against a real
+    // bifurcating vessel where this exact case produced a >20% "confident"
+    // width gap in the wrong direction, with neither walk ever hitting the
+    // decisive threshold — both had simply exhausted their step budget.
+    if (reach1.hitDecisiveWidth !== reach2.hitDecisiveWidth) {
+      return { decision: reach1.hitDecisiveWidth ? 'first' : 'second', reach1, reach2 }
     }
-    // Width was inconclusive — fall back to how far each side could walk
-    // before running off the model. A point sitting near a branch tip
-    // dead-ends within a step or two; a trunk-ward point almost always has
-    // much more vessel left to traverse.
+    if (reach1.hitDecisiveWidth && reach2.hitDecisiveWidth) {
+      // Both sides found genuine widening — real measured widths, so exact
+      // equality isn't the right bar for a "tie" — treat anything within a
+      // small relative margin as too close to call from width alone.
+      const widerWidth = Math.max(reach1.maxWidth, reach2.maxWidth)
+      const widthGapRatio = widerWidth > 0 ? Math.abs(reach1.maxWidth - reach2.maxWidth) / widerWidth : 0
+      if (widthGapRatio > HEART_PROXIMITY_WIDTH_TIE_TOLERANCE) {
+        return { decision: reach1.maxWidth > reach2.maxWidth ? 'first' : 'second', reach1, reach2 }
+      }
+    }
+    // Neither side's width is trustworthy (or both were decisive but tied) —
+    // fall back to how far each side could walk before running off the
+    // model. A point sitting near a branch tip dead-ends within a step or
+    // two; a trunk-ward point almost always has much more vessel left to
+    // traverse.
     if (reach1.stepsCompleted !== reach2.stepsCompleted) {
       return { decision: reach1.stepsCompleted > reach2.stepsCompleted ? 'first' : 'second', reach1, reach2 }
     }
