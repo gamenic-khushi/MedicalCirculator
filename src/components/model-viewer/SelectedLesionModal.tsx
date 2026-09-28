@@ -45,7 +45,7 @@ export function SelectedLesionModal({ initialValues, onClose, onSave }: Selected
     <Modal title="選択病変" onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <p className="text-xs text-gray-400">
-          自動計測値（修正前）。数値は表示イメージです。単位・桁数・項目名は開発時に確定します。
+          3Dモデルから自動計測された値です。径と病変位置は修正できます。この値はFFRの計算にも使用されます。
         </p>
 
         {NUMBER_FIELDS.map(({ key, label, unit, readOnly }) => (
