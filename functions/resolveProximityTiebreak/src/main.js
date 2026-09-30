@@ -41,7 +41,7 @@ function postJson(url, body, headers) {
   })
 }
 
-module.exports = async ({ req, res, error }) => {
+module.exports = async ({ req, res, log, error }) => {
   if (req.method !== 'POST') {
     return res.json({ error: 'POST only' }, 405)
   }
@@ -121,8 +121,12 @@ module.exports = async ({ req, res, error }) => {
     return res.json({ error: 'Unexpected TypeSafe response shape' }, 502)
   }
 
-  return res.json({
-    decision: answer.choice === 'pointA' ? 'first' : 'second',
-    confidence: answer.confidence ?? 0,
-  })
+  const decision = answer.choice === 'pointA' ? 'first' : 'second'
+  const confidence = answer.confidence ?? 0
+  // responseBody isn't retrievable after the fact through the executions
+  // list/get API (only the synchronous creation response includes it), but
+  // logs are — this is the only way to see the real confidence distribution
+  // over time without a server-side API key.
+  log(`decision=${decision} confidence=${confidence}`)
+  return res.json({ decision, confidence })
 }

@@ -55,7 +55,7 @@ const PROXIMITY_PATH_STEPS = 10
 const PROXIMITY_SAMPLE_COUNT = 3
 // Below this confidence, treat Jev's tiebreak as not worth acting on — the
 // width-fallback order it would override already stands.
-const PROXIMITY_TIEBREAK_MIN_CONFIDENCE = 0.6
+const PROXIMITY_TIEBREAK_MIN_CONFIDENCE = 0.5
 
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
   return {
