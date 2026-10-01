@@ -57,6 +57,12 @@ const PROXIMITY_SAMPLE_COUNT = 3
 // width-fallback order it would override already stands.
 const PROXIMITY_TIEBREAK_MIN_CONFIDENCE = 0.5
 
+// Order-independent so the same two points always produce the same key
+// whichever order they're currently arranged in.
+function pointPairKey(id1: string, id2: string): string {
+  return [id1, id2].sort().join('|')
+}
+
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
   return {
     id: row.$id,
@@ -250,6 +256,13 @@ export function LesionAnalysisPage() {
   const [isAnnotating, setIsAnnotating] = useState(false)
   const [isDraggingPoint, setIsDraggingPoint] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
+  // Key of the point pair the user last corrected with the manual swap
+  // button, so a Jev tiebreak already in flight for that exact pair doesn't
+  // land afterward and silently flip the order back — the swap button is
+  // the user overriding Jev, not the other way around. A genuinely new pair
+  // of points always gets a new generateId()-based key, so this never needs
+  // to be reset for a fresh placement.
+  const manualSwapPairRef = useRef<string | null>(null)
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
   const [bloodPressure, setBloodPressure] = useState(
     initialBloodPressure ?? (viewFrame ? stripUnit(viewFrame.pa) : ''),
@@ -470,6 +483,12 @@ export function LesionAnalysisPage() {
     const canvas = canvasRef.current
     if (!canvas) return points
     const [first, second] = points
+    // The user has already told us which of these two is proximal via the
+    // swap button — respect that even if they then drag a point and this
+    // re-runs, rather than letting a fresh geometric read quietly flip it
+    // back. Only an actual new pair of points (new generateId()s) escapes
+    // this lock.
+    if (manualSwapPairRef.current === pointPairKey(first.id, second.id)) return points
 
     const result = canvas.determineProximalPoint(first.x, first.y, second.x, second.y)
     // Ask for the AI tiebreak whenever both points resolved on the mesh at
@@ -499,7 +518,10 @@ export function LesionAnalysisPage() {
   // geometric check itself measured, then swaps ①/② in place if it disagrees
   // with the width fallback above and is reasonably confident. Only applies
   // if the same two points are still the current pair when the answer comes
-  // back — a since-superseded placement is left alone.
+  // back — a since-superseded placement is left alone. Also backs off if the
+  // user has since manually swapped this exact pair with the swap button —
+  // otherwise a slow-arriving answer could silently flip the order right
+  // back after the user just fixed it.
   function requestProximityTiebreak(
     firstId: string,
     secondId: string,
@@ -508,6 +530,7 @@ export function LesionAnalysisPage() {
   ) {
     resolveProximalTiebreak(reach1, reach2).then((result) => {
       if (!result || result.confidence < PROXIMITY_TIEBREAK_MIN_CONFIDENCE) return
+      if (manualSwapPairRef.current === pointPairKey(firstId, secondId)) return
       setAnnotations((prev) => {
         if (prev.length !== 2) return prev
         const ids = new Set(prev.map((a) => a.id))
@@ -569,6 +592,7 @@ export function LesionAnalysisPage() {
   // reliable fix for that case, rather than trusting either heuristic.
   function handleSwapAnnotations() {
     if (annotations.length !== 2) return
+    manualSwapPairRef.current = pointPairKey(annotations[0].id, annotations[1].id)
     const swapped: [Annotation, Annotation] = [annotations[1], annotations[0]]
     setAnnotations(swapped)
     if (selectedLesion.stenosisRate !== '') {
