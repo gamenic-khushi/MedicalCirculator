@@ -122,6 +122,13 @@ const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 const HEART_PROXIMITY_STEP_PERCENT = 1
 const HEART_PROXIMITY_MAX_STEPS = 20
 const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.4
+// A branch's root can flare wider than its own tip right where it meets the
+// trunk, then narrow again a few steps further out — crossing the decisive
+// ratio for a single step there used to latch the decision immediately,
+// confidently calling the branch "proximal" before the walk ever saw it
+// narrow back down. Requiring the ratio to hold for several consecutive
+// steps lets the walk see past that local flare before committing.
+const HEART_PROXIMITY_DECISIVE_CONFIRM_STEPS = 3
 // Below this relative gap between the two sides' widest real measurement,
 // treat width as inconclusive rather than trusting a razor-thin difference
 // that's as likely to be raycasting noise as a genuine signal.
@@ -537,8 +544,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     let x = fromXPercent
     let y = fromYPercent
     const startingWidth = computeVesselWidth(x, y) ?? 0
+    const decisiveThreshold = Math.max(startingWidth, 1e-6) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO
     let maxWidth = startingWidth
     let hitDecisiveWidth = false
+    let consecutiveStepsAboveThreshold = 0
 
     let step = 0
     for (; step < HEART_PROXIMITY_MAX_STEPS; step++) {
@@ -564,10 +573,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const width = computeVesselWidth(x, y)
       if (width == null) break
       if (width > maxWidth) maxWidth = width
-      // Once we've clearly found something much wider than where we
-      // started, that's a confident enough "this side leads toward the
-      // trunk" signal on its own — no need to keep walking.
-      if (maxWidth > Math.max(startingWidth, 1e-6) * HEART_PROXIMITY_DECISIVE_WIDTH_RATIO) {
+      // A single step above the threshold isn't enough to commit — see
+      // HEART_PROXIMITY_DECISIVE_CONFIRM_STEPS above. Width dropping back
+      // down (a branch-root flare narrowing again) resets the streak rather
+      // than ending the walk.
+      consecutiveStepsAboveThreshold = width > decisiveThreshold ? consecutiveStepsAboveThreshold + 1 : 0
+      if (consecutiveStepsAboveThreshold >= HEART_PROXIMITY_DECISIVE_CONFIRM_STEPS) {
         hitDecisiveWidth = true
         step += 1
         break
