@@ -32,7 +32,7 @@ export function AddPaperModal({ onClose, onAdd }: AddPaperModalProps) {
   }
 
   return (
-    <Modal title="資料登録" onClose={onClose}>
+    <Modal title="論文登録" onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <label className="flex flex-col gap-2 text-sm font-medium text-gray-900">
           学会名

@@ -77,7 +77,7 @@ export function ViewerToolbar({
       <button
         type="button"
         onClick={onReset}
-        title="リセットして新しい位置に丸を描く"
+        title="リセットして選択をやり直す"
         className="rounded-full p-2 text-gray-500 transition hover:bg-gray-50"
       >
         <RefreshCw className="h-4 w-4" />
