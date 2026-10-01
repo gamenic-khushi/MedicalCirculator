@@ -20,12 +20,15 @@ jobs:
         run: npm ci
 
       - name: Install Appwrite CLI
-        # 17.4.0 predates the self-hosted server's current version (1.9.0) and
-        # couldn't find an existing function by ID anymore (push function kept
-        # failing with "Function 'resolveProximityTiebreak' not found" even
-        # though the function exists and the key has functions.read/write) —
-        # the site push kept working since that's a newer, simpler API.
-        run: npm install -g appwrite-cli@26.0.0
+        # Tried bumping this to 26.0.0 to see if it was a version-skew problem
+        # with the server (1.9.0) — it wasn't: the function push failed with
+        # the exact same "not found" error on 26.0.0, and the newer CLI
+        # additionally made the site push a hard failure over a "rules.read"
+        # scope self-hosted API keys can't even be granted (no such scope
+        # exists in this project's key-scope picker), a regression from
+        # 17.4.0 just logging it as a non-fatal warning. Back on 17.4.0 while
+        # the real function-push cause gets diagnosed with --verbose below.
+        run: npm install -g appwrite-cli@17.4.0
 
       - name: Deploy to Appwrite
         env:
@@ -39,4 +42,4 @@ jobs:
             --key "$APPWRITE_API_KEY"
 
           appwrite push site --site-id medicalCirculator --activate=true --force
-          appwrite push function --function-id resolveProximityTiebreak --activate=true --force
+          appwrite push function --function-id resolveProximityTiebreak --activate=true --force --verbose --report
