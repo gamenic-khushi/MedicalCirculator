@@ -68,6 +68,12 @@ export const FFR_INPUT_UNITS: Record<FfrCubicInputKey, string> = {
   p: 'mmHg',
 }
 
+/** Trained [min, max] for one input; area's min depends on the paired pressure. */
+export function ffrRangeFor(key: FfrCubicInputKey, p: number): [number, number] {
+  const [min, max] = FFR_INPUT_RANGES[key]
+  return [key === 'a' ? minTrainedArea(p) : min, max]
+}
+
 /** Inputs (by key) that fall outside the trained range — empty if all are within range. */
 export function findOutOfRangeFfrInputs(inputs: FfrCubicInputs): FfrCubicInputKey[] {
   return (Object.keys(FFR_INPUT_RANGES) as FfrCubicInputKey[]).filter((key) => {

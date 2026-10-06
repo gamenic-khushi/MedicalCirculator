@@ -33,7 +33,9 @@ import { useToast } from '@/hooks/useToast'
 import {
   computeFfrCubic,
   describeFfrRangeError,
+  ffrRangeFor,
   findOutOfRangeFfrInputs,
+  type FfrCubicInputKey,
   type FfrCubicInputs,
 } from '@/lib/ffrCubicModel'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
@@ -180,6 +182,21 @@ const SELECTED_LESION_FIELDS: {
   { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
   { key: 'lesionPosition', label: '病変位置', unit: '' },
 ]
+
+// Rounded inward (min up, max down) so the shortened display never claims a
+// value is in range when the exact check would reject it.
+function formatRangeBound(value: number, bound: 'min' | 'max'): string {
+  const scaled = value * 1e4
+  const rounded = (bound === 'min' ? Math.ceil(scaled - 1e-9) : Math.floor(scaled + 1e-9)) / 1e4
+  return String(rounded)
+}
+
+const FFR_INPUT_KEY_BY_FIELD: Partial<Record<keyof SelectedLesionFormData, FfrCubicInputKey>> = {
+  lesionProximalDiameter: 'dp',
+  lesionDistalDiameter: 'dd',
+  minCrossSectionArea: 'a',
+  stenosisLength: 'l',
+}
 
 function LesionSnapshotPanel({
   proximalDiameter,
@@ -1195,32 +1212,53 @@ export function LesionAnalysisPage() {
               <p className="text-[11px] text-gray-400">自動計測値</p>
             </div>
             <div className="mt-3 flex flex-col gap-2">
-              {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }) => (
-                <div key={key} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-gray-500">{label}</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={selectedLesion[key]}
-                      readOnly={readOnly}
-                      title={readOnly ? '自動計算される値です（直接編集はできません）' : undefined}
-                      onChange={
-                        readOnly
-                          ? undefined
-                          : (event) => handleSelectedLesionFieldChange(key, event.target.value)
-                      }
-                      className={`w-16 rounded border px-1.5 py-1 text-right outline-none ${
-                        readOnly
-                          ? `cursor-default border-gray-100 bg-gray-50 ${
-                              key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-400'
-                            }`
-                          : 'border-gray-200 text-gray-900 focus:border-indigo-400'
-                      }`}
-                    />
-                    <span className="w-6 shrink-0 text-gray-400">{unit}</span>
+              {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }) => {
+                const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
+                const range = ffrKey ? ffrRangeFor(ffrKey, Number(bloodPressure) || 100) : null
+                const numericValue = Number(selectedLesion[key])
+                const isOutOfRange =
+                  !!range &&
+                  selectedLesion[key] !== '' &&
+                  (!Number.isFinite(numericValue) || numericValue < range[0] || numericValue > range[1])
+                return (
+                  <div key={key} className="flex items-center justify-between gap-2 text-xs">
+                    <div className="flex flex-col">
+                      <span className="text-gray-500">{label}</span>
+                      {range && (
+                        <span
+                          title="FFRの推定式の学習範囲です。範囲外の値ではFFRを計算できません"
+                          className={`text-[10px] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
+                        >
+                          学習範囲 {formatRangeBound(range[0], 'min')}〜{formatRangeBound(range[1], 'max')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={selectedLesion[key]}
+                        readOnly={readOnly}
+                        title={readOnly ? '自動計算される値です（直接編集はできません）' : undefined}
+                        onChange={
+                          readOnly
+                            ? undefined
+                            : (event) => handleSelectedLesionFieldChange(key, event.target.value)
+                        }
+                        className={`w-16 rounded border px-1.5 py-1 text-right outline-none ${
+                          isOutOfRange
+                            ? 'border-red-300 text-red-500'
+                            : readOnly
+                              ? `cursor-default border-gray-100 bg-gray-50 ${
+                                  key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-400'
+                                }`
+                              : 'border-gray-200 text-gray-900 focus:border-indigo-400'
+                        }`}
+                      />
+                      <span className="w-6 shrink-0 text-gray-400">{unit}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
