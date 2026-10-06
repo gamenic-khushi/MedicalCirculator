@@ -88,7 +88,7 @@ export function ModelViewerPage() {
   } = useViewerState()
 
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const { toast, showToast } = useToast()
+  const { toast, showToast, dismissToast } = useToast()
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [ringRadius, setRingRadius] = useState(DEFAULT_RING_RADIUS_PX)
   const [isResizingRing, setIsResizingRing] = useState(false)
@@ -306,9 +306,10 @@ export function ModelViewerPage() {
       const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
       if (outOfRange.length > 0) {
         setIsCalculatingFfr(false)
-        showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error')
+        showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error', { persistent: true })
         return
       }
+      dismissToast()
 
       const ffrValue = computeFfrCubic(ffrInputs)
       const pdValue = (Number(bloodPressure) * ffrValue).toFixed(1)
@@ -633,7 +634,13 @@ export function ModelViewerPage() {
 
       {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
-      {toast && <Toast message={toast.message} variant={toast.variant} />}
+      {toast && (
+        <Toast
+          message={toast.message}
+          variant={toast.variant}
+          onDismiss={toast.persistent ? dismissToast : undefined}
+        />
+      )}
     </div>
   )
 }

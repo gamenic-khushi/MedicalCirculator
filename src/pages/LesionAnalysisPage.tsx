@@ -277,7 +277,7 @@ export function LesionAnalysisPage() {
   const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotations))
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
-  const { toast, showToast } = useToast()
+  const { toast, showToast, dismissToast } = useToast()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
   const [isInfoOpen, setIsInfoOpen] = useState(false)
@@ -600,7 +600,11 @@ export function LesionAnalysisPage() {
     }
   }
 
-  function measureLesion(proximal: PercentPoint, distal: PercentPoint) {
+  function measureLesion(
+    proximal: PercentPoint,
+    distal: PercentPoint,
+    afterMeasure?: (lesion: SelectedLesionFormData) => void,
+  ) {
     if (!canvasRef.current) return
     setIsMeasuring(true)
     setTimeout(() => {
@@ -639,7 +643,7 @@ export function LesionAnalysisPage() {
         bifurcationAngle: bifurcationAngleDeg ? bifurcationAngleDeg.toFixed(0) : '',
       }))
 
-      setSelectedLesion({
+      const measuredLesion: SelectedLesionFormData = {
         lesionProximalDiameter: formatMeasurement(proximalWidth),
         minVesselDiameter: formatMeasurement(mldValue),
         lesionDistalDiameter: formatMeasurement(distalWidth),
@@ -647,9 +651,11 @@ export function LesionAnalysisPage() {
         stenosisRate: String(Math.round(stenosisRate)),
         stenosisLength: segmentLength ? formatMeasurement(segmentLength) : '',
         lesionPosition,
-      })
+      }
+      setSelectedLesion(measuredLesion)
 
       setIsMeasuring(false)
+      afterMeasure?.(measuredLesion)
     }, 0)
   }
 
@@ -670,9 +676,10 @@ export function LesionAnalysisPage() {
     }
     const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
     if (outOfRange.length > 0) {
-      showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error')
+      showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error', { persistent: true })
       return
     }
+    dismissToast()
 
     const stenosisRate = Math.min(Math.max(Number(selectedLesion.stenosisRate) || 0, 0), 99)
     const ffrValue = computeFfrCubic(ffrInputs)
@@ -737,7 +744,7 @@ export function LesionAnalysisPage() {
     }
     const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
     if (outOfRange.length > 0) {
-      showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error')
+      showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error', { persistent: true })
       return
     }
 
@@ -800,9 +807,12 @@ export function LesionAnalysisPage() {
     showToast('スライスの断面積を最小断面積に反映しました')
   }
 
+  // Always re-measures from the two points, so clicking this also restores
+  // the auto-measured values after an accidental manual edit. If FFR was
+  // already calculated, it's refreshed from the restored values.
   function handleUpdateSelectedLesion() {
-    if (annotations.length === 2 && selectedLesion.stenosisRate === '') {
-      measureLesion(annotations[0], annotations[1])
+    if (annotations.length === 2) {
+      measureLesion(annotations[0], annotations[1], measurement ? applySelectedLesion : undefined)
       return
     }
     applySelectedLesion(selectedLesion)
@@ -1164,6 +1174,7 @@ export function LesionAnalysisPage() {
               <button
                 type="button"
                 onClick={handleUpdateSelectedLesion}
+                title="選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）"
                 className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
               >
                 測定範囲を更新
@@ -1308,7 +1319,13 @@ export function LesionAnalysisPage() {
 
       {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
 
-      {toast && <Toast message={toast.message} variant={toast.variant} />}
+      {toast && (
+        <Toast
+          message={toast.message}
+          variant={toast.variant}
+          onDismiss={toast.persistent ? dismissToast : undefined}
+        />
+      )}
     </div>
   )
 }
