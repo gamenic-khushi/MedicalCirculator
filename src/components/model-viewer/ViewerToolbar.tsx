@@ -22,6 +22,10 @@ interface ViewerToolbarProps {
   onSliceAxisChange?: (axis: SliceAxis) => void
   sliceGizmoMode?: SliceGizmoMode
   onSliceGizmoModeChange?: (mode: SliceGizmoMode) => void
+  // The guidance bubbles for these buttons are held back until the page says
+  // the user has finished the first step, so a freshly loaded model only
+  // shows the one hint about what to do first.
+  showHints?: boolean
 }
 
 export function ViewerToolbar({
@@ -33,6 +37,7 @@ export function ViewerToolbar({
   onSliceAxisChange,
   sliceGizmoMode = 'translate',
   onSliceGizmoModeChange,
+  showHints = true,
 }: ViewerToolbarProps) {
   // Self-contained (not lifted into the page) since this component already
   // decides on its own whether the slice button renders at all based on
@@ -57,7 +62,7 @@ export function ViewerToolbar({
           the toolbar — with both hints visible at once (a fresh session that
           hasn't touched either button yet), flush positioning put them at
           the same height and they overlapped each other. */}
-      {onSliceAxisChange && activeTool !== 'slice' && !isSliceHintDismissed && (
+      {showHints && onSliceAxisChange && activeTool !== 'slice' && !isSliceHintDismissed && (
         <GuidanceBubble
           anchor="bottom-left"
           className="bottom-full left-1/2 -translate-x-1/2"
@@ -66,7 +71,7 @@ export function ViewerToolbar({
           onDismiss={dismissSliceHint}
         />
       )}
-      {!isRotatePanHintDismissed && (
+      {showHints && !isRotatePanHintDismissed && (
         <GuidanceBubble
           anchor="bottom-left"
           className="bottom-full left-0 mb-2"

@@ -599,6 +599,7 @@ export function ModelViewerPage() {
               onToolChange={handleToolChange}
               onToggleFullscreen={toggleFullscreen}
               onReset={handleResetAnnotations}
+              showHints={annotations.length > 0}
             />
 
             {isFullscreen && (

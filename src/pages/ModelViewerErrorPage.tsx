@@ -26,7 +26,7 @@ export function ModelViewerErrorPage() {
         onClick={handleBack}
         className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
       >
-        3D分析に戻る
+        3D解析に戻る
       </button>
     </div>
   )

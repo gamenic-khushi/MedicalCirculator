@@ -1177,6 +1177,7 @@ export function LesionAnalysisPage() {
                   onToolChange={handleToolChange}
                   onToggleFullscreen={() => {}}
                   onReset={handleResetAnnotations}
+                  showHints={annotations.length === 2}
                   sliceAxis={sliceAxis}
                   onSliceAxisChange={setSliceAxis}
                   sliceGizmoMode={sliceGizmoMode}

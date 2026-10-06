@@ -78,7 +78,7 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <h1 className="text-2xl font-bold text-gray-900">3D分析</h1>
+      <h1 className="text-2xl font-bold text-gray-900">3D解析</h1>
       <div className="mt-4 border-b border-gray-200" />
 
       <div className="mt-6 flex max-w-md flex-col gap-3">
