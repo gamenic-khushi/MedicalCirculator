@@ -594,11 +594,16 @@ export function LesionAnalysisPage() {
 
   function handleDragEnd(id: string, x: number, y: number) {
     const worldPoint = canvasRef.current?.getWorldPoint(x, y) ?? undefined
-    setAnnotations((prev) =>
-      orderByHeartProximity(
-        prev.map((annotation) => (annotation.id === id ? { ...annotation, x, y, worldPoint } : annotation)),
-      ),
+    const moved = annotations.map((annotation) =>
+      annotation.id === id ? { ...annotation, x, y, worldPoint } : annotation,
     )
+    const ordered = orderByHeartProximity(moved)
+    setAnnotations(ordered)
+    // Once the lesion has been measured, dragging a point re-measures it so
+    // the fields always match where the points are, without a reset.
+    if (ordered.length === 2 && selectedLesion.stenosisRate !== '') {
+      measureLesion(ordered[0], ordered[1])
+    }
   }
 
   // Manual override for the automatic ①/② (proximal/distal) guess — near a
@@ -639,7 +644,9 @@ export function LesionAnalysisPage() {
         referenceDiameter > 0 ? (1 - narrowestWidth / referenceDiameter) * 100 : 0
       const stenosisRate = Math.min(Math.max(rawStenosisRate, 0), 99)
       const mldValue = referenceDiameter * (1 - stenosisRate / 100)
-      const mlaValue = Math.PI * (mldValue / 2) ** 2
+      // Prefer the true area of the narrowest cut when it was measured in 3D;
+      // otherwise assume a circular lumen from the diameter.
+      const mlaValue = result.narrowestArea ?? Math.PI * (mldValue / 2) ** 2
       const lumenVolumeValue = segmentLength
         ? Math.PI * (referenceDiameter / 2) ** 2 * segmentLength
         : null
@@ -1084,7 +1091,7 @@ export function LesionAnalysisPage() {
 
                 <TwoPointMarkers
                   points={annotations}
-                  draggable={annotations.length === 2 && selectedLesion.stenosisRate === ''}
+                  draggable={annotations.length === 2 && (selectedLesion.stenosisRate === '' || !measurement)}
                   onDragPoint={handleDragAnnotation}
                   onDragEnd={handleDragEnd}
                   onDraggingChange={setIsDraggingPoint}

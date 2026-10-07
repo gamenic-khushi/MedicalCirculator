@@ -25,7 +25,7 @@ Vessel lesion measurement and FFR estimation. The user loads a 3D vessel model, 
 ## What still needs attention
 
 1. **Automatic ①/② ordering near bifurcations isn't reliable.** A branch root can look wider than the trunk. The walk now requires sustained width (`ModelCanvas.tsx`), but this hasn't been tested on a real bifurcation. The swap button is the fallback.
-2. **No realistic test model.** All available models measure about 100x too small (about 0.01–0.04mm), so a live successful FFR calculation can't be shown. We need a realistically scaled model, ideally with matching reference values from Aki-san.
+2. **Test model units.** The `NC6_*_KyosakuTest*.stl` files are authored in metres, but the app reads model units as millimetres, so every measurement comes out 1000x too small and FFR can never calculate. Decision (Aki-san, 10/6): use models exported in millimetres, not unit conversion in the app. `*_mm.stl` copies (x1000) of the V1P2 tests live next to the originals in `prototypes/vtkjs-lesion-test/aki_test_files/` (not tracked by git). Each V1P2 test contains one built-in stenosis (narrowest 1.54 / 1.29 / 0.62 mm); even then FFR only calculates when ① and ② are about 7–8 mm apart either side of it, on 3–5 mm vessel.
 3. **Aki-san's review.** He is reviewing the calculation and wants it checked against his reference values by changing inputs. A live end-to-end comparison is blocked by point 2.
 4. **Jev confidence data.** The tiebreak threshold is 0.5 (`PROXIMITY_TIEBREAK_MIN_CONFIDENCE` in `LesionAnalysisPage.tsx`). The function logs each decision's confidence, so the threshold can be tuned from real data.
 
@@ -38,6 +38,10 @@ Vessel lesion measurement and FFR estimation. The user loads a 3D vessel model, 
   ```
 - **Verifying changes:** use `npm run build`. Bare `tsc --noEmit` is a no-op on this repo's solution-style tsconfig and misses real errors.
 - **Text changes:** any UI text change must also update the Help page (`src/pages/HelpPage.tsx`) and the Translation Google Sheet.
+
+## Lesion measurement
+
+`src/lib/vesselSweep.ts` measures ①–② by sweeping a cutting plane along the vessel's centre line (reusing `computeCrossSection` from the slice tool), so diameters, the true narrowest area and the length don't depend on camera angle or exact click pixels. `twoPointLesionMeasurement.ts` uses it when both points have a `worldPoint` and falls back to the old screen-based width method if the sweep can't follow the vessel. On `NC6_V1P2_KyosakuTest1_mm.stl` it gives a narrowest diameter of about 1.56 mm from any click around the lesion (true 1.54 mm). Points stay draggable after a measurement until FFR is calculated; dragging re-measures.
 
 ## Appwrite projects
 

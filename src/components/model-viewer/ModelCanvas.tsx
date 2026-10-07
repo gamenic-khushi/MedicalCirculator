@@ -12,6 +12,7 @@ import { Bounds, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
+import { measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
@@ -33,6 +34,18 @@ export interface ModelCanvasHandle {
     direction: 1 | -1,
   ) => { width: number; y: number } | null
   measureLesionPosition: (xPercent: number, yPercent: number) => string | null
+  measureLesionSweep: (
+    proximalWorld: [number, number, number],
+    distalWorld: [number, number, number],
+  ) => {
+    proximalDiameter: number
+    distalDiameter: number
+    minArea: number
+    minDiameter: number
+    length: number
+    narrowestFraction: number
+    narrowestPoint: { x: number; y: number } | null
+  } | null
   measureDistance3D: (
     x1Percent: number,
     y1Percent: number,
@@ -697,6 +710,26 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return walkToStableReferenceWidth(xPercent, yPercent, direction, baseline)
     },
     measureLesionPosition: (xPercent, yPercent) => computeLesionPosition(xPercent, yPercent),
+    measureLesionSweep: (proximalWorld, distalWorld) => {
+      const modelGroup = modelGroupRef.current
+      if (!modelGroup) return null
+      modelGroup.updateMatrixWorld(true)
+      const result = measureVesselSweep(
+        modelGroup,
+        new THREE.Vector3(...proximalWorld),
+        new THREE.Vector3(...distalWorld),
+      )
+      if (!result) return null
+      return {
+        proximalDiameter: result.proximalDiameter,
+        distalDiameter: result.distalDiameter,
+        minArea: result.minArea,
+        minDiameter: result.minDiameter,
+        length: result.length,
+        narrowestFraction: result.narrowestFraction,
+        narrowestPoint: projectWorldPointToScreen(result.narrowestPoint),
+      }
+    },
     getWorldPoint: (xPercent, yPercent) => {
       const hit = getHitResult(xPercent, yPercent)
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
