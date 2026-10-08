@@ -96,6 +96,7 @@ interface ModelCanvasProps {
   sliceMode?: boolean
   sliceAxis?: SliceAxis | null
   sliceFocus?: { point: [number, number, number]; direction: [number, number, number] } | null
+  sliceResetKey?: number
   sliceGizmoMode?: SliceGizmoMode
   onSliceAreaChange?: (area: number | null) => void
 }
@@ -186,6 +187,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     sliceMode = false,
     sliceAxis = null,
     sliceFocus = null,
+    sliceResetKey = 0,
     sliceGizmoMode = 'translate',
     onSliceAreaChange,
   },
@@ -938,6 +940,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           boundingBox={modelBoundingBox}
           axisPreset={sliceAxis}
           focus={sliceFocus}
+          resetKey={sliceResetKey}
           onPlaneChange={handleSlicePlaneChange}
         />
         {sliceMode && (

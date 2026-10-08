@@ -20,6 +20,7 @@ export interface LesionMeasurementCanvas {
   // True 3D measurement along the vessel's centre line between two surface
   // points. Preferred when both points carry a worldPoint; the screen-based
   // width methods below remain the fallback when it can't follow the vessel.
+  getWorldPoint?: (xPercent: number, yPercent: number) => [number, number, number] | null
   measureLesionSweep?: (
     proximalWorld: [number, number, number],
     distalWorld: [number, number, number],
@@ -134,6 +135,23 @@ export function measureTwoPointLesion(
   const ratio = narrowestStep / SCAN_STEPS
   const lesionPosition = ratio < 1 / 3 ? '近位' : ratio > 2 / 3 ? '遠位' : '中間'
 
+  // Even without the 3D sweep, give the slice tool somewhere sensible to start:
+  // the surface point under the narrowest sample, cutting along the line
+  // between the two picked points.
+  const narrowestWorld = canvas.getWorldPoint?.(narrowestPoint.x, narrowestPoint.y) ?? null
+  let focus: TwoPointLesionResult['focus']
+  if (narrowestWorld && proximal.worldPoint && distal.worldPoint) {
+    const d = [
+      distal.worldPoint[0] - proximal.worldPoint[0],
+      distal.worldPoint[1] - proximal.worldPoint[1],
+      distal.worldPoint[2] - proximal.worldPoint[2],
+    ]
+    const length = Math.hypot(d[0], d[1], d[2])
+    if (length > 0) {
+      focus = { point: narrowestWorld, direction: [d[0] / length, d[1] / length, d[2] / length] }
+    }
+  }
+
   return {
     proximal,
     distal,
@@ -141,6 +159,7 @@ export function measureTwoPointLesion(
     distalWidth,
     narrowestWidth,
     narrowestPoint,
+    focus,
     segmentLength,
     lesionPosition,
   }

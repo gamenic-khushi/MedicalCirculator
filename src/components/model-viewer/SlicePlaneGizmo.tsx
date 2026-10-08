@@ -19,6 +19,9 @@ interface SlicePlaneGizmoProps {
   // there. When set, the plane starts on that spot, cutting across the vessel,
   // instead of at the middle of the model.
   focus?: { point: [number, number, number]; direction: [number, number, number] } | null
+  // Bumped to put the plane back on the lesion (or the model centre when
+  // there is no lesion) after it has been dragged away.
+  resetKey?: number
   onPlaneChange: (plane: SlicePlaneValue) => void
 }
 
@@ -51,7 +54,15 @@ function planeFromAnchor(anchor: THREE.Object3D): SlicePlaneValue {
 // <TransformControls> mutates the same object directly while dragging —
 // both paths funnel through the same planeFromAnchor() conversion, so there
 // is no separate "preset" vs "gizmo" plane representation to keep in sync.
-export function SlicePlaneGizmo({ enabled, mode, boundingBox, axisPreset, focus, onPlaneChange }: SlicePlaneGizmoProps) {
+export function SlicePlaneGizmo({
+  enabled,
+  mode,
+  boundingBox,
+  axisPreset,
+  focus,
+  resetKey = 0,
+  onPlaneChange,
+}: SlicePlaneGizmoProps) {
   const anchorRef = useRef<THREE.Group>(null)
   const [planeSize, setPlaneSize] = useState(1)
   // The axis the plane was last aimed with, to tell "slice mode was just
@@ -90,7 +101,7 @@ export function SlicePlaneGizmo({ enabled, mode, boundingBox, axisPreset, focus,
     // unrelated re-render of the parent, not just when the plane actually
     // needs to move.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, boundingBox, axisPreset, focusKey])
+  }, [enabled, boundingBox, axisPreset, focusKey, resetKey])
 
   if (!enabled) return null
 

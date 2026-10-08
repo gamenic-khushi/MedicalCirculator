@@ -265,6 +265,7 @@ export function LesionAnalysisPage() {
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [sliceAxis, setSliceAxis] = useState<SliceAxis>('z')
+  const [sliceResetKey, setSliceResetKey] = useState(0)
   // Where the measured lesion is narrowest, so the slice tool can start there.
   const [sliceFocus, setSliceFocus] = useState<{
     point: [number, number, number]
@@ -416,6 +417,8 @@ export function LesionAnalysisPage() {
   }
 
   function handleToolChange(tool: ViewerTool) {
+    // Clicking the scissors again while slicing puts the plane back on the lesion.
+    if (tool === 'slice' && activeTool === 'slice') setSliceResetKey((key) => key + 1)
     setActiveTool(tool)
     canvasRef.current?.setTool(tool)
   }
@@ -1093,6 +1096,7 @@ export function LesionAnalysisPage() {
                   sliceMode={activeTool === 'slice'}
                   sliceAxis={sliceAxis}
                   sliceFocus={sliceFocus}
+                  sliceResetKey={sliceResetKey}
                   sliceGizmoMode={sliceGizmoMode}
                   onSliceAreaChange={setSliceCrossSectionArea}
                 />
