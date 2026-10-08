@@ -12,6 +12,8 @@ export interface LesionSweepMeasurement {
   length: number
   narrowestFraction: number
   narrowestPoint: PercentPoint | null
+  narrowestWorld?: [number, number, number]
+  narrowestDirection?: [number, number, number]
 }
 
 export interface LesionMeasurementCanvas {
@@ -40,6 +42,8 @@ export interface TwoPointLesionResult {
   narrowestPoint: PercentPoint
   /** True area of the narrowest cut, when measured in 3D. */
   narrowestArea?: number
+  /** Where (and along which direction) the narrowest cut sits, in world space. */
+  focus?: { point: [number, number, number]; direction: [number, number, number] }
   segmentLength: number | null
   lesionPosition: '近位' | '中間' | '遠位'
 }
@@ -95,6 +99,10 @@ export function measureTwoPointLesion(
         narrowestWidth: sweep.minDiameter,
         narrowestPoint: sweep.narrowestPoint,
         narrowestArea: sweep.minArea,
+        focus:
+          sweep.narrowestWorld && sweep.narrowestDirection
+            ? { point: sweep.narrowestWorld, direction: sweep.narrowestDirection }
+            : undefined,
         segmentLength: sweep.length,
         lesionPosition: sweepRatio < 1 / 3 ? '近位' : sweepRatio > 2 / 3 ? '遠位' : '中間',
       }

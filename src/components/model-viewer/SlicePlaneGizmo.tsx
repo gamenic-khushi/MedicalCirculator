@@ -15,6 +15,10 @@ interface SlicePlaneGizmoProps {
   mode: SliceGizmoMode
   boundingBox: THREE.Box3 | null
   axisPreset: SliceAxis | null
+  // Where the measured lesion is narrowest and which way the vessel runs
+  // there. When set, the plane starts on that spot, cutting across the vessel,
+  // instead of at the middle of the model.
+  focus?: { point: [number, number, number]; direction: [number, number, number] } | null
   onPlaneChange: (plane: SlicePlaneValue) => void
 }
 
@@ -47,27 +51,46 @@ function planeFromAnchor(anchor: THREE.Object3D): SlicePlaneValue {
 // <TransformControls> mutates the same object directly while dragging —
 // both paths funnel through the same planeFromAnchor() conversion, so there
 // is no separate "preset" vs "gizmo" plane representation to keep in sync.
-export function SlicePlaneGizmo({ enabled, mode, boundingBox, axisPreset, onPlaneChange }: SlicePlaneGizmoProps) {
+export function SlicePlaneGizmo({ enabled, mode, boundingBox, axisPreset, focus, onPlaneChange }: SlicePlaneGizmoProps) {
   const anchorRef = useRef<THREE.Group>(null)
   const [planeSize, setPlaneSize] = useState(1)
+  // The axis the plane was last aimed with, to tell "slice mode was just
+  // switched on" (aim along the vessel at the lesion) apart from "the user
+  // picked X/Y/Z" (honour that axis, still centred on the lesion).
+  const lastAxisRef = useRef<SliceAxis | null | undefined>(undefined)
+  const focusKey = focus ? focus.point.join(',') : ''
 
   useEffect(() => {
+    if (!enabled) {
+      lastAxisRef.current = undefined
+      return
+    }
     const anchor = anchorRef.current
-    if (!enabled || !anchor || !boundingBox) return
+    if (!anchor || !boundingBox) return
 
-    const center = boundingBox.getCenter(new THREE.Vector3())
     const size = boundingBox.getSize(new THREE.Vector3())
     setPlaneSize(Math.max(size.x, size.y, size.z, 1e-6) * PLANE_SIZE_MARGIN)
 
-    anchor.position.copy(center)
-    anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, AXIS_UNIT_VECTORS[axisPreset ?? 'z'])
+    const axisChosenByUser = lastAxisRef.current !== undefined && lastAxisRef.current !== axisPreset
+    lastAxisRef.current = axisPreset
+
+    if (focus) {
+      anchor.position.set(...focus.point)
+      const target = axisChosenByUser
+        ? AXIS_UNIT_VECTORS[axisPreset ?? 'z']
+        : new THREE.Vector3(...focus.direction).normalize()
+      anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, target)
+    } else {
+      anchor.position.copy(boundingBox.getCenter(new THREE.Vector3()))
+      anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, AXIS_UNIT_VECTORS[axisPreset ?? 'z'])
+    }
     onPlaneChange(planeFromAnchor(anchor))
     // onPlaneChange is a fresh closure every render (LesionAnalysisPage
     // doesn't memoize it) — depending on it would refire this on every
     // unrelated re-render of the parent, not just when the plane actually
     // needs to move.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, boundingBox, axisPreset])
+  }, [enabled, boundingBox, axisPreset, focusKey])
 
   if (!enabled) return null
 

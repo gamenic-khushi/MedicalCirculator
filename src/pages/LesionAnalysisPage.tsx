@@ -265,6 +265,11 @@ export function LesionAnalysisPage() {
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [sliceAxis, setSliceAxis] = useState<SliceAxis>('z')
+  // Where the measured lesion is narrowest, so the slice tool can start there.
+  const [sliceFocus, setSliceFocus] = useState<{
+    point: [number, number, number]
+    direction: [number, number, number]
+  } | null>(null)
   const [sliceGizmoMode, setSliceGizmoMode] = useState<SliceGizmoMode>('translate')
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   const [cameraState, setCameraState] = useState<CameraState | null>(
@@ -435,6 +440,7 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
     setSelectedLesion(EMPTY_SELECTED_LESION)
+    setSliceFocus(null)
     setSnapshotImage(null)
     canvasRef.current?.clearSelection()
   }
@@ -677,6 +683,7 @@ export function LesionAnalysisPage() {
         lesionPosition,
       }
       setSelectedLesion(measuredLesion)
+      setSliceFocus(result.focus ?? null)
 
       setIsMeasuring(false)
       afterMeasure?.(measuredLesion)
@@ -1085,6 +1092,7 @@ export function LesionAnalysisPage() {
                   onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
                   sliceAxis={sliceAxis}
+                  sliceFocus={sliceFocus}
                   sliceGizmoMode={sliceGizmoMode}
                   onSliceAreaChange={setSliceCrossSectionArea}
                 />

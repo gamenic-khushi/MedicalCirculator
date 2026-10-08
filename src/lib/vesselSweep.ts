@@ -12,6 +12,8 @@ export interface VesselSweepResult {
   /** Where along the centre line the narrowest cut sits, 0 (proximal) to 1 (distal). */
   narrowestFraction: number
   narrowestPoint: THREE.Vector3
+  /** Vessel direction at the narrowest cut (the cutting plane's normal there). */
+  narrowestDirection: THREE.Vector3
 }
 
 interface LoopStats {
@@ -153,11 +155,11 @@ export function measureVesselSweep(
   let stats: LoopStats = startLoop
   let previousCentre: THREE.Vector3 | null = null
 
-  const profile: { area: number; centre: THREE.Vector3; arc: number }[] = []
+  const profile: { area: number; centre: THREE.Vector3; arc: number; direction: THREE.Vector3 }[] = []
   let arc = 0
 
   for (let i = 0; i < MAX_STEPS; i++) {
-    profile.push({ area: stats.area, centre: stats.centroid.clone(), arc })
+    profile.push({ area: stats.area, centre: stats.centroid.clone(), arc, direction: direction.clone() })
 
     const toEnd = new THREE.Vector3().subVectors(endCentre, stats.centroid)
     const diameter = equivalentDiameter(stats.area)
@@ -196,5 +198,6 @@ export function measureVesselSweep(
     length: totalArc,
     narrowestFraction: totalArc > 0 ? narrowest.arc / totalArc : 0.5,
     narrowestPoint: narrowest.centre.clone(),
+    narrowestDirection: narrowest.direction.clone(),
   }
 }

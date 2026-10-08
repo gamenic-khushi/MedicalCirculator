@@ -189,7 +189,7 @@ function planeBasis(normal: THREE.Vector3): { u: THREE.Vector3; v: THREE.Vector3
   return { u, v }
 }
 
-function loopArea(loop: THREE.Vector3[], normal: THREE.Vector3): number {
+export function loopArea(loop: THREE.Vector3[], normal: THREE.Vector3): number {
   const { u, v } = planeBasis(normal)
   let area = 0
   for (let i = 0; i < loop.length; i++) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
 
-import { computeCrossSection, triangulateFan } from '@/lib/slicePlane'
+import { computeCrossSection, loopArea, triangulateFan } from '@/lib/slicePlane'
 
 interface CapGeometryEntry {
   key: string
@@ -13,6 +13,10 @@ interface SliceCapMeshesProps {
   plane: THREE.Plane | null
   color: string
   onAreaChange?: (area: number | null) => void
+  // The measured lesion's narrowest point. While the plane is cutting through
+  // it, only that vessel's own cut is shown and counted, so the area matches
+  // the lesion instead of also adding any other vessel the plane crosses.
+  focusPoint?: [number, number, number] | null
 }
 
 // Renders a solid, non-clipped cap over whatever cross-section the current
@@ -22,7 +26,7 @@ interface SliceCapMeshesProps {
 // move during a drag would be visibly janky, so recomputation is coalesced
 // to at most once per rendered frame — the plain clipping-plane visual
 // already gives smooth feedback while the cap trails a frame or two behind.
-export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange }: SliceCapMeshesProps) {
+export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focusPoint }: SliceCapMeshesProps) {
   const [caps, setCaps] = useState<CapGeometryEntry[]>([])
   const frameRef = useRef<number | null>(null)
 
@@ -42,22 +46,46 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange }: Sl
       const nextCaps: CapGeometryEntry[] = []
       let totalArea = 0
       let meshIndex = 0
+      const allLoops: { key: string; loop: THREE.Vector3[] }[] = []
       modelGroup.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return
         const meshKey = `mesh-${meshIndex++}`
         const crossSection = computeCrossSection(child, plane)
         if (!crossSection) return
         totalArea += crossSection.area
-
-        crossSection.loops.forEach((loop, loopIndex) => {
-          const { positions, indices } = triangulateFan(loop)
-          const geometry = new THREE.BufferGeometry()
-          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-          geometry.setIndex(indices)
-          geometry.computeVertexNormals()
-          nextCaps.push({ key: `${meshKey}-${loopIndex}`, geometry })
-        })
+        crossSection.loops.forEach((loop, loopIndex) => allLoops.push({ key: `${meshKey}-${loopIndex}`, loop }))
       })
+
+      // While the plane passes through the lesion's narrowest point, keep
+      // just the loop that point sits in; otherwise keep every loop.
+      let shown = allLoops
+      if (focusPoint && allLoops.length > 0) {
+        const focus = new THREE.Vector3(...focusPoint)
+        const scale = Math.max(...allLoops.flatMap(({ loop }) => loop.map((p) => p.distanceTo(focus))), 1e-9)
+        let nearest = allLoops[0]
+        let nearestDistance = Infinity
+        for (const entry of allLoops) {
+          const distance = Math.min(...entry.loop.map((p) => p.distanceTo(focus)))
+          if (distance < nearestDistance) {
+            nearestDistance = distance
+            nearest = entry
+          }
+        }
+        // "On the lesion" = the plane is essentially at the focus point.
+        if (Math.abs(plane.distanceToPoint(focus)) < scale * 1e-3) {
+          shown = [nearest]
+          totalArea = loopArea(nearest.loop, plane.normal)
+        }
+      }
+
+      for (const { key, loop } of shown) {
+        const { positions, indices } = triangulateFan(loop)
+        const geometry = new THREE.BufferGeometry()
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+        geometry.setIndex(indices)
+        geometry.computeVertexNormals()
+        nextCaps.push({ key, geometry })
+      }
       setCaps(nextCaps)
       onAreaChange?.(nextCaps.length > 0 ? totalArea : null)
     })

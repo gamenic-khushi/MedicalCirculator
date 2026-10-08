@@ -45,6 +45,8 @@ export interface ModelCanvasHandle {
     length: number
     narrowestFraction: number
     narrowestPoint: { x: number; y: number } | null
+    narrowestWorld: [number, number, number]
+    narrowestDirection: [number, number, number]
   } | null
   measureDistance3D: (
     x1Percent: number,
@@ -93,6 +95,7 @@ interface ModelCanvasProps {
   onCameraMove?: () => void
   sliceMode?: boolean
   sliceAxis?: SliceAxis | null
+  sliceFocus?: { point: [number, number, number]; direction: [number, number, number] } | null
   sliceGizmoMode?: SliceGizmoMode
   onSliceAreaChange?: (area: number | null) => void
 }
@@ -182,6 +185,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     onCameraMove,
     sliceMode = false,
     sliceAxis = null,
+    sliceFocus = null,
     sliceGizmoMode = 'translate',
     onSliceAreaChange,
   },
@@ -728,6 +732,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         length: result.length,
         narrowestFraction: result.narrowestFraction,
         narrowestPoint: projectWorldPointToScreen(result.narrowestPoint),
+        narrowestWorld: result.narrowestPoint.toArray() as [number, number, number],
+        narrowestDirection: result.narrowestDirection.toArray() as [number, number, number],
       }
     },
     getWorldPoint: (xPercent, yPercent) => {
@@ -931,6 +937,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           mode={sliceGizmoMode}
           boundingBox={modelBoundingBox}
           axisPreset={sliceAxis}
+          focus={sliceFocus}
           onPlaneChange={handleSlicePlaneChange}
         />
         {sliceMode && (
@@ -939,6 +946,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
             plane={slicePlane}
             color={color}
             onAreaChange={onSliceAreaChange}
+            focusPoint={sliceFocus?.point ?? null}
           />
         )}
         <OrbitControls
