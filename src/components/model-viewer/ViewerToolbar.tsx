@@ -4,11 +4,10 @@ import { useEffect } from 'react'
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 
-import type { SliceAxis, SliceGizmoMode } from './SlicePlaneGizmo'
+import type { SliceAxis } from './SlicePlaneGizmo'
 import type { ViewerTool } from './ModelCanvas'
 
 const AXIS_OPTIONS: SliceAxis[] = ['x', 'y', 'z']
-const GIZMO_MODE_LABELS: Record<SliceGizmoMode, string> = { translate: '移動', rotate: '回転' }
 
 interface ViewerToolbarProps {
   activeTool: ViewerTool
@@ -20,8 +19,6 @@ interface ViewerToolbarProps {
   // and axis buttons don't render at all.
   sliceAxis?: SliceAxis | null
   onSliceAxisChange?: (axis: SliceAxis) => void
-  sliceGizmoMode?: SliceGizmoMode
-  onSliceGizmoModeChange?: (mode: SliceGizmoMode) => void
   // The guidance bubbles for these buttons are held back until the page says
   // the user has finished the first step, so a freshly loaded model only
   // shows the one hint about what to do first.
@@ -35,8 +32,6 @@ export function ViewerToolbar({
   onReset,
   sliceAxis = null,
   onSliceAxisChange,
-  sliceGizmoMode = 'translate',
-  onSliceGizmoModeChange,
   showHints = true,
 }: ViewerToolbarProps) {
   // Self-contained (not lifted into the page) since this component already
@@ -132,25 +127,6 @@ export function ViewerToolbar({
                   {axis}
                 </button>
               ))}
-              {onSliceGizmoModeChange && (
-                <div className="flex items-center gap-1 border-l border-gray-100 pl-1">
-                  {(Object.keys(GIZMO_MODE_LABELS) as SliceGizmoMode[]).map((gizmoMode) => (
-                    <button
-                      key={gizmoMode}
-                      type="button"
-                      onClick={() => onSliceGizmoModeChange(gizmoMode)}
-                      aria-pressed={sliceGizmoMode === gizmoMode}
-                      className={`rounded-full px-2 py-1.5 text-xs font-medium transition ${
-                        sliceGizmoMode === gizmoMode
-                          ? 'bg-indigo-50 text-indigo-600'
-                          : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      {GIZMO_MODE_LABELS[gizmoMode]}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           )}
         </>

@@ -2,8 +2,12 @@ interface VesselShapeDiagramProps {
   proximalDiameter: number
   minDiameter: number
   distalDiameter: number
+  // Drawn to the same mm-per-pixel scale as the diameters, so editing the
+  // length visibly stretches or shortens the narrowed stretch.
+  stenosisLength?: number
 }
 
+const MIN_LESION_WIDTH = 24
 const WIDTH = 320
 const HEIGHT = 110
 const X_MARGIN = 16
@@ -21,6 +25,7 @@ export function VesselShapeDiagram({
   proximalDiameter,
   minDiameter,
   distalDiameter,
+  stenosisLength,
 }: VesselShapeDiagramProps) {
   const maxDiameter = Math.max(proximalDiameter, distalDiameter, minDiameter, 0.001)
   const hProximal = halfHeightFor(proximalDiameter, maxDiameter)
@@ -30,18 +35,30 @@ export function VesselShapeDiagram({
   const x0 = X_MARGIN
   const xMid = WIDTH / 2
   const x1 = WIDTH - X_MARGIN
-  const leftBend = x0 + (xMid - x0) * 0.6
-  const midLeftBend = xMid - (xMid - x0) * 0.6
-  const midRightBend = xMid + (x1 - xMid) * 0.6
-  const rightBend = x1 - (x1 - xMid) * 0.6
+  const fullWidth = x1 - x0
+  const pxPerMm = (MAX_HALF_HEIGHT * 2) / maxDiameter
+  const lesionWidth =
+    stenosisLength && stenosisLength > 0
+      ? Math.min(fullWidth, Math.max(MIN_LESION_WIDTH, stenosisLength * pxPerMm))
+      : fullWidth
+  const xa = xMid - lesionWidth / 2
+  const xb = xMid + lesionWidth / 2
+  const leftBend = xa + (xMid - xa) * 0.6
+  const midLeftBend = xMid - (xMid - xa) * 0.6
+  const midRightBend = xMid + (xb - xMid) * 0.6
+  const rightBend = xb - (xb - xMid) * 0.6
 
   const outline = [
     `M ${x0} ${CENTER_Y - hProximal}`,
+    `L ${xa} ${CENTER_Y - hProximal}`,
     `C ${leftBend} ${CENTER_Y - hProximal}, ${midLeftBend} ${CENTER_Y - hMin}, ${xMid} ${CENTER_Y - hMin}`,
-    `C ${midRightBend} ${CENTER_Y - hMin}, ${rightBend} ${CENTER_Y - hDistal}, ${x1} ${CENTER_Y - hDistal}`,
+    `C ${midRightBend} ${CENTER_Y - hMin}, ${rightBend} ${CENTER_Y - hDistal}, ${xb} ${CENTER_Y - hDistal}`,
+    `L ${x1} ${CENTER_Y - hDistal}`,
     `L ${x1} ${CENTER_Y + hDistal}`,
+    `L ${xb} ${CENTER_Y + hDistal}`,
     `C ${rightBend} ${CENTER_Y + hDistal}, ${midRightBend} ${CENTER_Y + hMin}, ${xMid} ${CENTER_Y + hMin}`,
-    `C ${midLeftBend} ${CENTER_Y + hMin}, ${leftBend} ${CENTER_Y + hProximal}, ${x0} ${CENTER_Y + hProximal}`,
+    `C ${midLeftBend} ${CENTER_Y + hMin}, ${leftBend} ${CENTER_Y + hProximal}, ${xa} ${CENTER_Y + hProximal}`,
+    `L ${x0} ${CENTER_Y + hProximal}`,
     'Z',
   ].join(' ')
 

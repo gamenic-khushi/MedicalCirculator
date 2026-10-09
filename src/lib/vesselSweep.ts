@@ -115,6 +115,65 @@ function equivalentDiameter(area: number): number {
   return 2 * Math.sqrt(area / Math.PI)
 }
 
+function fibonacciDirections(count: number): THREE.Vector3[] {
+  const directions: THREE.Vector3[] = []
+  const golden = Math.PI * (3 - Math.sqrt(5))
+  for (let i = 0; i < count; i++) {
+    // Upper hemisphere only — a plane's normal and its opposite are the same cut.
+    const y = (i + 0.5) / count
+    const radius = Math.sqrt(1 - y * y)
+    const theta = golden * i
+    directions.push(new THREE.Vector3(Math.cos(theta) * radius, y, Math.sin(theta) * radius))
+  }
+  return directions
+}
+
+const LOCATE_COARSE_DIRECTIONS = fibonacciDirections(64)
+
+/**
+ * Finds the centre and direction of the vessel at a point on its surface: the
+ * cut through that point with the smallest area is the one square across the
+ * vessel, and its normal is the vessel direction. Used to drop the slice plane
+ * onto a spot the user clicked.
+ */
+export function locateVesselAt(
+  modelRoot: THREE.Object3D,
+  surfacePoint: THREE.Vector3,
+): { point: THREE.Vector3; direction: THREE.Vector3 } | null {
+  const meshes = collectMeshes(modelRoot)
+  if (meshes.length === 0) return null
+
+  let best: { area: number; centroid: THREE.Vector3; direction: THREE.Vector3 } | null = null
+  const tryDirection = (direction: THREE.Vector3) => {
+    const stats = pickLoop(loopsAt(meshes, surfacePoint, direction), direction, surfacePoint, 'surface')
+    if (!stats) return
+    if (!best || stats.area < best.area) {
+      best = { area: stats.area, centroid: stats.centroid, direction: direction.clone() }
+    }
+  }
+
+  for (const direction of LOCATE_COARSE_DIRECTIONS) tryDirection(direction)
+  if (!best) return null
+
+  // Refine around the best coarse direction with a small cone of tilts.
+  const coarse = (best as { direction: THREE.Vector3 }).direction
+  const { u, v } = planeBasis(coarse)
+  for (const tilt of [0.08, 0.16]) {
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2
+      const candidate = coarse
+        .clone()
+        .addScaledVector(u, Math.cos(angle) * tilt)
+        .addScaledVector(v, Math.sin(angle) * tilt)
+        .normalize()
+      tryDirection(candidate)
+    }
+  }
+
+  const result = best as { centroid: THREE.Vector3; direction: THREE.Vector3 }
+  return { point: result.centroid, direction: result.direction }
+}
+
 /**
  * Measures the vessel between two points picked on its surface by sweeping a
  * cutting plane along the vessel's own centre line, so the result depends on

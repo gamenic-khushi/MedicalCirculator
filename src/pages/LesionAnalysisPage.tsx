@@ -13,7 +13,6 @@ import {
   ModelCanvas,
   type ModelCanvasHandle,
   type SliceAxis,
-  type SliceGizmoMode,
   type ViewerTool,
 } from '@/components/model-viewer/ModelCanvas'
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
@@ -202,12 +201,14 @@ function LesionSnapshotPanel({
   proximalDiameter,
   minDiameter,
   distalDiameter,
+  stenosisLength,
   isMeasuring,
   awaitingConfirm,
 }: {
   proximalDiameter: number
   minDiameter: number
   distalDiameter: number
+  stenosisLength: number
   isMeasuring: boolean
   awaitingConfirm: boolean
 }) {
@@ -227,6 +228,7 @@ function LesionSnapshotPanel({
             proximalDiameter={proximalDiameter}
             minDiameter={minDiameter}
             distalDiameter={distalDiameter}
+            stenosisLength={stenosisLength}
           />
         </div>
       ) : (
@@ -272,7 +274,6 @@ export function LesionAnalysisPage() {
     point: [number, number, number]
     direction: [number, number, number]
   } | null>(null)
-  const [sliceGizmoMode, setSliceGizmoMode] = useState<SliceGizmoMode>('translate')
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   const [cameraState, setCameraState] = useState<CameraState | null>(
     navigationState?.cameraState ?? null,
@@ -310,6 +311,22 @@ export function LesionAnalysisPage() {
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      void canvasAreaRef.current?.requestFullscreen()
+    }
+  }
 
   // Once the user has actually started (or already has) a lesion selection,
   // they've found the button — showing the hint again on a future upload
@@ -570,8 +587,25 @@ export function LesionAnalysisPage() {
     })
   }
 
+  function handleViewerMouseDown(event: MouseEvent<HTMLDivElement>) {
+    pointerDownRef.current = { x: event.clientX, y: event.clientY }
+  }
+
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
-    if (activeTool === 'slice') return
+    if (activeTool === 'slice') {
+      // A click on the vessel (not a drag to rotate, not a button or ①②)
+      // moves the cutting plane there, across the vessel at that spot.
+      const down = pointerDownRef.current
+      if (!(event.target instanceof HTMLCanvasElement)) return
+      if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 4) return
+      const bounds = event.currentTarget.getBoundingClientRect()
+      const located = canvasRef.current?.locateVesselAt(
+        ((event.clientX - bounds.left) / bounds.width) * 100,
+        ((event.clientY - bounds.top) / bounds.height) * 100,
+      )
+      if (located) setSliceFocus(located)
+      return
+    }
     if (!isAnnotating) return
     if (annotations.length >= 2) return
     if ((event.target as HTMLElement).closest('button')) return
@@ -757,7 +791,9 @@ export function LesionAnalysisPage() {
     })
   }
 
-  function applySelectedLesion(data: SelectedLesionFormData) {
+  // `silent` is for live edits: a half-typed number is often out of range for
+  // a moment, and the red range hint already says so without a toast per key.
+  function applySelectedLesion(data: SelectedLesionFormData, silent = false) {
     const stenosisRate = Math.min(Math.max(Number(data.stenosisRate) || 0, 0), 99)
 
     setSelectedLesion(data)
@@ -779,7 +815,9 @@ export function LesionAnalysisPage() {
     }
     const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
     if (outOfRange.length > 0) {
-      showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error', { persistent: true })
+      if (!silent) {
+        showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error', { persistent: true })
+      }
       return
     }
 
@@ -802,27 +840,31 @@ export function LesionAnalysisPage() {
   // measureLesion does whenever a diameter changes, so a manually corrected
   // width actually changes what FFRを計算 uses.
   function handleSelectedLesionFieldChange(key: keyof SelectedLesionFormData, value: string) {
-    setSelectedLesion((prev) => {
-      const next = { ...prev, [key]: value }
-      const isDiameterField =
-        key === 'lesionProximalDiameter' ||
-        key === 'lesionDistalDiameter' ||
-        key === 'minVesselDiameter'
-      if (!isDiameterField) return next
+    const next = { ...selectedLesion, [key]: value }
+    const isDiameterField =
+      key === 'lesionProximalDiameter' ||
+      key === 'lesionDistalDiameter' ||
+      key === 'minVesselDiameter'
 
+    if (isDiameterField) {
       const proximal = Number(next.lesionProximalDiameter)
       const distal = Number(next.lesionDistalDiameter)
       const minVessel = Number(next.minVesselDiameter)
       const referenceDiameter = (proximal + distal) / 2
-      if (!(proximal > 0) || !(distal > 0) || !(minVessel >= 0) || !(referenceDiameter > 0)) {
-        return next
+      if (proximal > 0 && distal > 0 && minVessel >= 0 && referenceDiameter > 0) {
+        const stenosisRate = Math.min(Math.max((1 - minVessel / referenceDiameter) * 100, 0), 99)
+        next.stenosisRate = String(Math.round(stenosisRate))
+        // Only the narrowest diameter defines the area; changing a reference
+        // diameter must not replace the measured area with a circle estimate.
+        if (key === 'minVesselDiameter') {
+          next.minCrossSectionArea = formatMeasurement(Math.PI * (minVessel / 2) ** 2)
+        }
       }
+    }
 
-      const stenosisRate = Math.min(Math.max((1 - minVessel / referenceDiameter) * 100, 0), 99)
-      next.stenosisRate = String(Math.round(stenosisRate))
-      next.minCrossSectionArea = formatMeasurement(Math.PI * (minVessel / 2) ** 2)
-      return next
-    })
+    // Pushes the edit everywhere that shows it: the params behind the saved
+    // values and, once FFR has been calculated, the FFR result and Pd too.
+    applySelectedLesion(next, true)
   }
 
   // 最小断面積 is normally derived from 最小血管径 via a circular assumption
@@ -1034,15 +1076,21 @@ export function LesionAnalysisPage() {
 
   const hasMeasurement = selectedLesion.stenosisRate !== ''
   const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
-  const lesionFfrOutOfRange = canCalculate
-    ? findOutOfRangeFfrInputs({
-        dp: Number(selectedLesion.lesionProximalDiameter),
-        dd: Number(selectedLesion.lesionDistalDiameter),
-        a: Number(selectedLesion.minCrossSectionArea),
-        l: Number(selectedLesion.stenosisLength),
-        p: Number(bloodPressure),
-      })
-    : []
+  const lesionFfrInputs: FfrCubicInputs = {
+    dp: Number(selectedLesion.lesionProximalDiameter),
+    dd: Number(selectedLesion.lesionDistalDiameter),
+    a: Number(selectedLesion.minCrossSectionArea),
+    l: Number(selectedLesion.stenosisLength),
+    p: Number(bloodPressure),
+  }
+  const lesionFfrOutOfRange = canCalculate ? findOutOfRangeFfrInputs(lesionFfrInputs) : []
+  // The Pa/Pd cards follow the lesion fields and blood pressure as soon as the
+  // lesion is measured, instead of waiting for 「FFRを計算」.
+  const livePa = bloodPressure.trim()
+  const livePd =
+    canCalculate && lesionFfrOutOfRange.length === 0
+      ? (Number(livePa) * computeFfrCubic(lesionFfrInputs)).toFixed(1)
+      : ''
   const canSaveToHistory = canCalculate && lesionFfrOutOfRange.length === 0 && !isSavingHistory
   const saveToHistoryHint = !hasMeasurement
     ? '先に2点を選択してください'
@@ -1106,15 +1154,16 @@ export function LesionAnalysisPage() {
           </p>
           <div
             ref={canvasAreaRef}
+            onMouseDown={handleViewerMouseDown}
             onClick={handleViewerClick}
             style={{
               backgroundColor: '#737373',
               backgroundImage:
                 'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
             }}
-            className={`relative h-[360px] overflow-hidden sm:h-[420px] lg:h-[480px] ${
-              isAnnotating ? 'cursor-crosshair' : ''
-            }`}
+            className={`relative overflow-hidden ${
+              isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
+            } ${isAnnotating ? 'cursor-crosshair' : ''}`}
           >
             {viewFrame ? (
               <>
@@ -1141,13 +1190,15 @@ export function LesionAnalysisPage() {
                   sliceAxis={sliceAxis}
                   sliceFocus={sliceFocus}
                   sliceResetKey={sliceResetKey}
-                  sliceGizmoMode={sliceGizmoMode}
                   onSliceAreaChange={setSliceCrossSectionArea}
                 />
 
                 <TwoPointMarkers
                   points={annotations}
-                  draggable={annotations.length === 2 && (selectedLesion.stenosisRate === '' || !measurement)}
+                  draggable={
+                    annotations.length === 2 &&
+                    (selectedLesion.stenosisRate === '' || !measurement)
+                  }
                   onDragPoint={handleDragAnnotation}
                   onDragEnd={handleDragEnd}
                   onDraggingChange={setIsDraggingPoint}
@@ -1216,10 +1267,7 @@ export function LesionAnalysisPage() {
 
                 {measurement && <FfrResultOverlay {...measurement} />}
 
-                <PressurePointsPanel
-                  pa={measurement ? params.pa : ''}
-                  pd={measurement ? params.pd : ''}
-                />
+                <PressurePointsPanel pa={livePa} pd={livePd} />
                 <AnatomyGuideThumbnail />
                 {activeTool === 'slice' && sliceCrossSectionArea != null && (
                   <div className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white py-1.5 pl-4 pr-1.5 shadow-sm">
@@ -1238,13 +1286,11 @@ export function LesionAnalysisPage() {
                 <ViewerToolbar
                   activeTool={activeTool}
                   onToolChange={handleToolChange}
-                  onToggleFullscreen={() => {}}
+                  onToggleFullscreen={toggleFullscreen}
                   onReset={handleResetAnnotations}
                   showHints={annotations.length === 2}
                   sliceAxis={sliceAxis}
                   onSliceAxisChange={setSliceAxis}
-                  sliceGizmoMode={sliceGizmoMode}
-                  onSliceGizmoModeChange={setSliceGizmoMode}
                 />
               </>
             )}
@@ -1330,6 +1376,7 @@ export function LesionAnalysisPage() {
             proximalDiameter={Number(selectedLesion.lesionProximalDiameter) || 0}
             minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
             distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
+            stenosisLength={Number(selectedLesion.stenosisLength) || 0}
             isMeasuring={isMeasuring}
             awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />

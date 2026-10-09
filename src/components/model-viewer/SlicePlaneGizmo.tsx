@@ -3,7 +3,6 @@ import { TransformControls } from '@react-three/drei'
 import * as THREE from 'three'
 
 export type SliceAxis = 'x' | 'y' | 'z'
-export type SliceGizmoMode = 'translate' | 'rotate'
 
 export interface SlicePlaneValue {
   normal: [number, number, number]
@@ -12,7 +11,6 @@ export interface SlicePlaneValue {
 
 interface SlicePlaneGizmoProps {
   enabled: boolean
-  mode: SliceGizmoMode
   boundingBox: THREE.Box3 | null
   axisPreset: SliceAxis | null
   // Where the measured lesion is narrowest and which way the vessel runs
@@ -56,7 +54,6 @@ function planeFromAnchor(anchor: THREE.Object3D): SlicePlaneValue {
 // is no separate "preset" vs "gizmo" plane representation to keep in sync.
 export function SlicePlaneGizmo({
   enabled,
-  mode,
   boundingBox,
   axisPreset,
   focus,
@@ -105,17 +102,23 @@ export function SlicePlaneGizmo({
 
   if (!enabled) return null
 
+  // drei types `object` as RefObject<Object3D> (non-nullable current), but a
+  // ref only settles after mount — this cast is safe because every read of
+  // anchorRef.current below is already null-guarded.
+  const anchorObject = anchorRef as unknown as RefObject<THREE.Object3D>
+  const handleObjectChange = () => {
+    if (anchorRef.current) onPlaneChange(planeFromAnchor(anchorRef.current))
+  }
+
+  // Two controls on the same anchor so both are visible at once, both in the
+  // plane's own frame (its local Z is the plane normal, i.e. the vessel
+  // direction at the lesion). Arrows move the plane, rings turn it:
+  //  - blue arrow: along the vessel (changes where the cut is, not its angle)
+  //  - red / green arrows: sideways inside the plane (the cut stays the same)
+  //  - red / green rings: tilt the plane (changes the cutting angle)
+  //  - blue ring: spins the plane in its own surface (the cut stays the same)
   return (
-    <TransformControls
-      // drei types `object` as RefObject<Object3D> (non-nullable current),
-      // but a ref only settles after mount — this cast is safe because every
-      // read of anchorRef.current below is already null-guarded.
-      object={anchorRef as unknown as RefObject<THREE.Object3D>}
-      mode={mode}
-      onObjectChange={() => {
-        if (anchorRef.current) onPlaneChange(planeFromAnchor(anchorRef.current))
-      }}
-    >
+    <>
       <group ref={anchorRef}>
         <mesh>
           <planeGeometry args={[planeSize, planeSize]} />
@@ -128,6 +131,19 @@ export function SlicePlaneGizmo({
           />
         </mesh>
       </group>
-    </TransformControls>
+      <TransformControls
+        object={anchorObject}
+        mode="translate"
+        space="local"
+        onObjectChange={handleObjectChange}
+      />
+      <TransformControls
+        object={anchorObject}
+        mode="rotate"
+        space="local"
+        size={0.6}
+        onObjectChange={handleObjectChange}
+      />
+    </>
   )
 }

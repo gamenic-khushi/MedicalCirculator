@@ -12,14 +12,14 @@ import { Bounds, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
-import { measureVesselSweep } from '@/lib/vesselSweep'
+import { locateVesselAt, measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
 import { SliceCapMeshes } from './SliceCapMeshes'
-import { SlicePlaneGizmo, type SliceAxis, type SliceGizmoMode } from './SlicePlaneGizmo'
+import { SlicePlaneGizmo, type SliceAxis } from './SlicePlaneGizmo'
 
-export type { SliceAxis, SliceGizmoMode } from './SlicePlaneGizmo'
+export type { SliceAxis } from './SlicePlaneGizmo'
 export type ViewerTool = 'rotate' | 'pan' | 'slice'
 
 export interface ModelCanvasHandle {
@@ -77,6 +77,12 @@ export interface ModelCanvasHandle {
   hideHighlight: () => void
   showHighlight: () => void
   getWorldPoint: (xPercent: number, yPercent: number) => [number, number, number] | null
+  // Centre and direction of the vessel under a screen point, for dropping the
+  // slice plane there. Null when the point isn't on the model.
+  locateVesselAt: (
+    xPercent: number,
+    yPercent: number,
+  ) => { point: [number, number, number]; direction: [number, number, number] } | null
   projectWorldPoint: (point: [number, number, number]) => { x: number; y: number } | null
   getCameraState: () => CameraState | null
 }
@@ -97,7 +103,6 @@ interface ModelCanvasProps {
   sliceAxis?: SliceAxis | null
   sliceFocus?: { point: [number, number, number]; direction: [number, number, number] } | null
   sliceResetKey?: number
-  sliceGizmoMode?: SliceGizmoMode
   onSliceAreaChange?: (area: number | null) => void
 }
 
@@ -188,7 +193,6 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     sliceAxis = null,
     sliceFocus = null,
     sliceResetKey = 0,
-    sliceGizmoMode = 'translate',
     onSliceAreaChange,
   },
   ref,
@@ -274,9 +278,11 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     emitCameraChange()
   }
 
-  function hitAt(xPct: number, yPct: number) {
+  // `root` narrows the ray to one object (the model itself), so overlays such
+  // as the slice plane can't be hit instead of the vessel behind them.
+  function hitAt(xPct: number, yPct: number, root?: THREE.Object3D) {
     const camera = threeStateRef.current?.camera
-    const scene = threeStateRef.current?.scene
+    const scene = root ?? threeStateRef.current?.scene
     if (!camera || !scene || !(camera instanceof THREE.PerspectiveCamera)) return null
 
     // The canvas can resize (viewport change, layout shift from an annotation
@@ -742,6 +748,19 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const hit = getHitResult(xPercent, yPercent)
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
     },
+    locateVesselAt: (xPercent, yPercent) => {
+      const modelGroup = modelGroupRef.current
+      if (!modelGroup) return null
+      modelGroup.updateMatrixWorld(true)
+      const hit = hitAt(xPercent, yPercent, modelGroup)
+      if (!hit) return null
+      const located = locateVesselAt(modelGroup, hit.point)
+      if (!located) return null
+      return {
+        point: located.point.toArray() as [number, number, number],
+        direction: located.direction.toArray() as [number, number, number],
+      }
+    },
     projectWorldPoint: (point) => projectWorldPointToScreen(new THREE.Vector3(...point)),
     getCameraState: () => {
       const camera = threeStateRef.current?.camera
@@ -936,7 +955,6 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
             fit transform <Bounds> applies to the model. */}
         <SlicePlaneGizmo
           enabled={sliceMode}
-          mode={sliceGizmoMode}
           boundingBox={modelBoundingBox}
           axisPreset={sliceAxis}
           focus={sliceFocus}
