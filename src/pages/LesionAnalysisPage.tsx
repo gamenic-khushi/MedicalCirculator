@@ -179,8 +179,8 @@ const SELECTED_LESION_FIELDS: {
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
-  { key: 'lesionPosition', label: '病変位置', unit: '' },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
+  { key: 'lesionPosition', label: '病変位置', unit: '', readOnly: true },
 ]
 
 // Rounded inward (min up, max down) so the shortened display never claims a
@@ -266,6 +266,7 @@ export function LesionAnalysisPage() {
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
   const [sliceAxis, setSliceAxis] = useState<SliceAxis>('z')
   const [sliceResetKey, setSliceResetKey] = useState(0)
+  const [isSavingHistory, setIsSavingHistory] = useState(false)
   // Where the measured lesion is narrowest, so the slice tool can start there.
   const [sliceFocus, setSliceFocus] = useState<{
     point: [number, number, number]
@@ -974,27 +975,52 @@ export function LesionAnalysisPage() {
     reportWindow.onload = () => reportWindow.print()
   }
 
+  // Saves what is on screen right now — the lesion fields and the blood
+  // pressure — and works out FFR/Pd from them at save time, instead of
+  // depending on the FFR result overlay (which disappears whenever the blood
+  // pressure is retyped or the view is reset, and used to leave this button
+  // greyed out for no visible reason).
   async function handleSaveToLearningData() {
-    if (!measurement) return
+    if (isSavingHistory || !hasMeasurement) return
+    if (bloodPressure.trim() === '') return
+    const ffrInputs: FfrCubicInputs = {
+      dp: Number(selectedLesion.lesionProximalDiameter),
+      dd: Number(selectedLesion.lesionDistalDiameter),
+      a: Number(selectedLesion.minCrossSectionArea),
+      l: Number(selectedLesion.stenosisLength),
+      p: Number(bloodPressure),
+    }
+    const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
+    if (outOfRange.length > 0) {
+      showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error', { persistent: true })
+      return
+    }
+
+    const pa = bloodPressure.trim()
+    const ffrValue = computeFfrCubic(ffrInputs)
+    const pd = (Number(pa) * ffrValue).toFixed(1)
+    const parameter = Math.abs(Number(pa) - Number(pd)).toFixed(1)
+    const averageDiameter = (ffrInputs.dp + ffrInputs.dd) / 2
     const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
 
+    setIsSavingHistory(true)
     try {
       const row = await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
         ...(dataRecordId ? { dataRecordId } : {}),
         image,
-        upstreamSize: params.upstreamSize ? `${params.upstreamSize} mm` : '—',
-        downstreamSize: params.downstreamSize ? `${params.downstreamSize} mm` : '—',
-        pa: params.pa ? `${params.pa} mmHg` : '—',
-        pd: params.pd ? `${params.pd} mmHg` : '—',
-        parameter: params.parameter ? `${params.parameter} mmHg` : '—',
-        mld: params.mld ? `${params.mld} mm` : '—',
-        mla: params.mla ? `${params.mla} mm²` : '—',
-        stenosisRate: params.stenosisRate ? `${params.stenosisRate} %` : '—',
-        avgDiameter: params.avgDiameter ? `${params.avgDiameter} mm` : '—',
+        upstreamSize: `${selectedLesion.lesionProximalDiameter} mm`,
+        downstreamSize: `${selectedLesion.lesionDistalDiameter} mm`,
+        pa: `${pa} mmHg`,
+        pd: `${pd} mmHg`,
+        parameter: `${parameter} mmHg`,
+        mld: selectedLesion.minVesselDiameter ? `${selectedLesion.minVesselDiameter} mm` : '—',
+        mla: `${selectedLesion.minCrossSectionArea} mm²`,
+        stenosisRate: `${selectedLesion.stenosisRate} %`,
+        avgDiameter: `${formatMeasurement(averageDiameter)} mm`,
         lumenVolume: params.lumenVolume ? `${params.lumenVolume} mm³` : '—',
         calcificationVolume: params.calcificationVolume || '—',
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
-        segmentLength: selectedLesion.stenosisLength ? `${selectedLesion.stenosisLength} mm` : '—',
+        segmentLength: `${selectedLesion.stenosisLength} mm`,
         lesionPosition: selectedLesion.lesionPosition || '—',
       })
       setSavedSnapshots((prev) => [toSavedSnapshot(row), ...prev])
@@ -1002,11 +1028,29 @@ export function LesionAnalysisPage() {
     } catch (error) {
       console.error(error)
       showToast(SAVE_FAILED, 'error')
+      setIsSavingHistory(false)
     }
   }
 
   const hasMeasurement = selectedLesion.stenosisRate !== ''
   const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
+  const lesionFfrOutOfRange = canCalculate
+    ? findOutOfRangeFfrInputs({
+        dp: Number(selectedLesion.lesionProximalDiameter),
+        dd: Number(selectedLesion.lesionDistalDiameter),
+        a: Number(selectedLesion.minCrossSectionArea),
+        l: Number(selectedLesion.stenosisLength),
+        p: Number(bloodPressure),
+      })
+    : []
+  const canSaveToHistory = canCalculate && lesionFfrOutOfRange.length === 0 && !isSavingHistory
+  const saveToHistoryHint = !hasMeasurement
+    ? '先に2点を選択してください'
+    : bloodPressure.trim() === ''
+      ? '先に血圧の値を入力してください'
+      : lesionFfrOutOfRange.length > 0
+        ? '学習範囲外の値があるため保存できません（赤い項目を修正してください）'
+        : undefined
   const disabledReason = !hasMeasurement
     ? '先に2点を選択してください'
     : bloodPressure.trim() === ''
@@ -1338,7 +1382,9 @@ export function LesionAnalysisPage() {
           onDelete={handleDeleteSnapshot}
           onDownloadPdf={handleDownloadPdf}
           onSaveToHistory={isAdmin && !viewFrame ? handleSaveToLearningData : undefined}
-          canSaveToHistory={!!measurement}
+          canSaveToHistory={canSaveToHistory}
+          saveToHistoryHint={saveToHistoryHint}
+          isSavingToHistory={isSavingHistory}
         />
       </div>
 

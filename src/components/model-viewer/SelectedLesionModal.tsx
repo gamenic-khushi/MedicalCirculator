@@ -29,7 +29,7 @@ const NUMBER_FIELDS: {
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
 ]
 
 export function SelectedLesionModal({ initialValues, onClose, onSave }: SelectedLesionModalProps) {
@@ -45,7 +45,7 @@ export function SelectedLesionModal({ initialValues, onClose, onSave }: Selected
     <Modal title="選択病変" onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <p className="text-xs text-gray-400">
-          3Dモデルから自動計測された値です。径と病変位置は修正できます。この値はFFRの計算にも使用されます。
+          3Dモデルから自動計測された値です。径と狭窄長は修正できます。この値はFFRの計算にも使用されます。
         </p>
 
         {NUMBER_FIELDS.map(({ key, label, unit, readOnly }) => (
@@ -79,11 +79,9 @@ export function SelectedLesionModal({ initialValues, onClose, onSave }: Selected
           <input
             type="text"
             value={values.lesionPosition}
-            onChange={(event) =>
-              setValues((prev) => ({ ...prev, lesionPosition: event.target.value }))
-            }
-            placeholder="例：LAD近位部"
-            className="w-full rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-indigo-400"
+            readOnly
+            title="自動計算される値です（直接編集はできません）"
+            className="w-full cursor-default rounded-lg bg-gray-50 px-4 py-2.5 text-sm text-gray-400 outline-none"
           />
         </label>
 

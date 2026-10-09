@@ -10,6 +10,9 @@ interface SavedSnapshotsPanelProps {
   onDownloadPdf?: () => void
   onSaveToHistory?: () => void
   canSaveToHistory?: boolean
+  // Shown as the button's hover text while it is disabled, so it's clear why.
+  saveToHistoryHint?: string
+  isSavingToHistory?: boolean
 }
 
 export function SavedSnapshotsPanel({
@@ -18,6 +21,8 @@ export function SavedSnapshotsPanel({
   onDownloadPdf,
   onSaveToHistory,
   canSaveToHistory,
+  saveToHistoryHint,
+  isSavingToHistory,
 }: SavedSnapshotsPanelProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
@@ -37,10 +42,14 @@ export function SavedSnapshotsPanel({
           type="button"
           onClick={onSaveToHistory}
           disabled={!canSaveToHistory}
-          title="この計測結果を永続的に保存します（一覧の「仮保存」と異なり、ページを離れても残ります）"
+          title={
+            !canSaveToHistory && saveToHistoryHint
+              ? saveToHistoryHint
+              : 'この計測結果を永続的に保存します（一覧の「仮保存」と異なり、ページを離れても残ります）'
+          }
           className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          解析履歴に保存
+          {isSavingToHistory ? '保存中...' : '解析履歴に保存'}
         </button>
       )}
     </div>
