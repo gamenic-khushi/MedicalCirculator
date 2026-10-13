@@ -802,6 +802,10 @@ export function LesionAnalysisPage() {
     setParams((prev) => ({
       ...prev,
       stenosisRate: String(Math.round(stenosisRate)),
+      // The temporary list (仮保存) reads these, so an edited diameter must
+      // reach them too, not only the lesion panel and the FFR result.
+      upstreamSize: data.lesionProximalDiameter || prev.upstreamSize,
+      downstreamSize: data.lesionDistalDiameter || prev.downstreamSize,
       mld: data.minVesselDiameter || prev.mld,
       mla: data.minCrossSectionArea || prev.mla,
     }))
