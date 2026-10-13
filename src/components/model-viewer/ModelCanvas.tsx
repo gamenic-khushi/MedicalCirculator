@@ -17,9 +17,9 @@ import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
 import { SliceCapMeshes } from './SliceCapMeshes'
-import { SlicePlaneGizmo, type SliceAxis } from './SlicePlaneGizmo'
+import { SlicePlaneGizmo, type SliceAxis, type SliceAxisRequest } from './SlicePlaneGizmo'
 
-export type { SliceAxis } from './SlicePlaneGizmo'
+export type { SliceAxis, SliceAxisRequest } from './SlicePlaneGizmo'
 export type ViewerTool = 'rotate' | 'pan' | 'slice'
 
 export interface ModelCanvasHandle {
@@ -100,7 +100,11 @@ interface ModelCanvasProps {
   // the mesh instead of visibly drifting during the rotate/pan/zoom itself.
   onCameraMove?: () => void
   sliceMode?: boolean
-  sliceAxis?: SliceAxis | null
+  sliceAxisRequest?: SliceAxisRequest | null
+  // Which of X / Y / Z the plane currently faces exactly, or null when it is
+  // aimed anywhere else (along the vessel, tilted with a ring, ...). Lets the
+  // toolbar light a button only while it is really true.
+  onSliceAlignedAxisChange?: (axis: SliceAxis | null) => void
   sliceFocus?: { point: [number, number, number]; direction: [number, number, number] } | null
   sliceResetKey?: number
   onSliceAreaChange?: (area: number | null) => void
@@ -111,6 +115,9 @@ interface ThreeState {
   scene: THREE.Scene
 }
 
+// cos of the largest angle (about 1.8°) at which the slice plane still counts as
+// facing exactly along X, Y or Z.
+const ALIGNED_AXIS_DOT = 0.9995
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
 // A highlight sized strictly to the vessel's real width becomes imperceptible
 // (a handful of pixels) once the camera is framing the whole model — which is
@@ -190,7 +197,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     onCameraChange,
     onCameraMove,
     sliceMode = false,
-    sliceAxis = null,
+    sliceAxisRequest = null,
+    onSliceAlignedAxisChange,
     sliceFocus = null,
     sliceResetKey = 0,
     onSliceAreaChange,
@@ -224,6 +232,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
 
   function handleSlicePlaneChange({ normal, constant }: { normal: [number, number, number]; constant: number }) {
     setSlicePlane(new THREE.Plane(new THREE.Vector3(...normal), constant))
+    const aligned = (['x', 'y', 'z'] as const).find(
+      (_axis, index) => Math.abs(normal[index]) > ALIGNED_AXIS_DOT,
+    )
+    onSliceAlignedAxisChange?.(aligned ?? null)
   }
 
   function resetMeshColors(mesh: THREE.Mesh) {
@@ -956,7 +968,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <SlicePlaneGizmo
           enabled={sliceMode}
           boundingBox={modelBoundingBox}
-          axisPreset={sliceAxis}
+          axisRequest={sliceAxisRequest}
           focus={sliceFocus}
           resetKey={sliceResetKey}
           onPlaneChange={handleSlicePlaneChange}

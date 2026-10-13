@@ -13,6 +13,7 @@ import {
   ModelCanvas,
   type ModelCanvasHandle,
   type SliceAxis,
+  type SliceAxisRequest,
   type ViewerTool,
 } from '@/components/model-viewer/ModelCanvas'
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
@@ -266,7 +267,8 @@ export function LesionAnalysisPage() {
       : null
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
-  const [sliceAxis, setSliceAxis] = useState<SliceAxis>('z')
+  const [sliceAxisRequest, setSliceAxisRequest] = useState<SliceAxisRequest | null>(null)
+  const [sliceAlignedAxis, setSliceAlignedAxis] = useState<SliceAxis | null>(null)
   const [sliceResetKey, setSliceResetKey] = useState(0)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   // Where the measured lesion is narrowest, so the slice tool can start there.
@@ -1187,7 +1189,8 @@ export function LesionAnalysisPage() {
                   onCameraChange={setCameraState}
                   onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
-                  sliceAxis={sliceAxis}
+                  sliceAxisRequest={sliceAxisRequest}
+                  onSliceAlignedAxisChange={setSliceAlignedAxis}
                   sliceFocus={sliceFocus}
                   sliceResetKey={sliceResetKey}
                   onSliceAreaChange={setSliceCrossSectionArea}
@@ -1289,8 +1292,8 @@ export function LesionAnalysisPage() {
                   onToggleFullscreen={toggleFullscreen}
                   onReset={handleResetAnnotations}
                   showHints={annotations.length === 2}
-                  sliceAxis={sliceAxis}
-                  onSliceAxisChange={setSliceAxis}
+                  sliceAxis={sliceAlignedAxis}
+                  onSliceAxisChange={(axis) => setSliceAxisRequest({ axis, nonce: Date.now() })}
                 />
               </>
             )}

@@ -4,6 +4,14 @@ import * as THREE from 'three'
 
 export type SliceAxis = 'x' | 'y' | 'z'
 
+// A click on the X / Y / Z button. The nonce makes every click a new request,
+// so pressing the same axis again (after the plane was moved or tilted)
+// still snaps the plane back to it.
+export interface SliceAxisRequest {
+  axis: SliceAxis
+  nonce: number
+}
+
 export interface SlicePlaneValue {
   normal: [number, number, number]
   constant: number
@@ -12,7 +20,7 @@ export interface SlicePlaneValue {
 interface SlicePlaneGizmoProps {
   enabled: boolean
   boundingBox: THREE.Box3 | null
-  axisPreset: SliceAxis | null
+  axisRequest: SliceAxisRequest | null
   // Where the measured lesion is narrowest and which way the vessel runs
   // there. When set, the plane starts on that spot, cutting across the vessel,
   // instead of at the middle of the model.
@@ -55,22 +63,23 @@ function planeFromAnchor(anchor: THREE.Object3D): SlicePlaneValue {
 export function SlicePlaneGizmo({
   enabled,
   boundingBox,
-  axisPreset,
+  axisRequest,
   focus,
   resetKey = 0,
   onPlaneChange,
 }: SlicePlaneGizmoProps) {
   const anchorRef = useRef<THREE.Group>(null)
   const [planeSize, setPlaneSize] = useState(1)
-  // The axis the plane was last aimed with, to tell "slice mode was just
-  // switched on" (aim along the vessel at the lesion) apart from "the user
-  // picked X/Y/Z" (honour that axis, still centred on the lesion).
-  const lastAxisRef = useRef<SliceAxis | null | undefined>(undefined)
+  // The last axis request already applied, to tell "the user just clicked
+  // X/Y/Z" (snap to that axis, still centred on the lesion) apart from every
+  // other reason to re-aim (slice mode switched on, lesion moved, reset),
+  // which aim along the vessel instead.
+  const handledNonceRef = useRef(0)
   const focusKey = focus ? focus.point.join(',') : ''
 
   useEffect(() => {
     if (!enabled) {
-      lastAxisRef.current = undefined
+      handledNonceRef.current = axisRequest?.nonce ?? 0
       return
     }
     const anchor = anchorRef.current
@@ -79,18 +88,19 @@ export function SlicePlaneGizmo({
     const size = boundingBox.getSize(new THREE.Vector3())
     setPlaneSize(Math.max(size.x, size.y, size.z, 1e-6) * PLANE_SIZE_MARGIN)
 
-    const axisChosenByUser = lastAxisRef.current !== undefined && lastAxisRef.current !== axisPreset
-    lastAxisRef.current = axisPreset
+    const requestedAxis =
+      axisRequest && axisRequest.nonce !== handledNonceRef.current ? axisRequest.axis : null
+    handledNonceRef.current = axisRequest?.nonce ?? handledNonceRef.current
 
     if (focus) {
       anchor.position.set(...focus.point)
-      const target = axisChosenByUser
-        ? AXIS_UNIT_VECTORS[axisPreset ?? 'z']
+      const target = requestedAxis
+        ? AXIS_UNIT_VECTORS[requestedAxis]
         : new THREE.Vector3(...focus.direction).normalize()
       anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, target)
     } else {
       anchor.position.copy(boundingBox.getCenter(new THREE.Vector3()))
-      anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, AXIS_UNIT_VECTORS[axisPreset ?? 'z'])
+      anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, AXIS_UNIT_VECTORS[requestedAxis ?? 'z'])
     }
     onPlaneChange(planeFromAnchor(anchor))
     // onPlaneChange is a fresh closure every render (LesionAnalysisPage
@@ -98,7 +108,7 @@ export function SlicePlaneGizmo({
     // unrelated re-render of the parent, not just when the plane actually
     // needs to move.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, boundingBox, axisPreset, focusKey, resetKey])
+  }, [enabled, boundingBox, axisRequest?.nonce, focusKey, resetKey])
 
   if (!enabled) return null
 
