@@ -439,6 +439,13 @@ export function LesionAnalysisPage() {
   function handleToolChange(tool: ViewerTool) {
     // Clicking the scissors again while slicing puts the plane back on the lesion.
     if (tool === 'slice' && activeTool === 'slice') setSliceResetKey((key) => key + 1)
+    // ①② are placed but the lesion hasn't been measured yet: start the plane
+    // across the selected vessel at ①, so it doesn't open at the model centre
+    // and cut a different (usually larger) vessel.
+    if (tool === 'slice' && !sliceFocus && annotations.length >= 1) {
+      const located = canvasRef.current?.locateVesselAt(annotations[0].x, annotations[0].y)
+      if (located) setSliceFocus(located)
+    }
     setActiveTool(tool)
     canvasRef.current?.setTool(tool)
   }

@@ -117,7 +117,7 @@ export function ViewerToolbar({
                   type="button"
                   onClick={() => onSliceAxisChange(axis)}
                   aria-pressed={sliceAxis === axis}
-                  title={`切断面を${axis.toUpperCase()}軸に合わせる（病変の位置に戻ります）`}
+                  title={`切断面を${axis.toUpperCase()}軸の向きにします（位置は変わりません）`}
                   className={`h-8 w-8 rounded-full text-xs font-semibold uppercase transition ${
                     sliceAxis === axis
                       ? 'bg-indigo-50 text-indigo-600'

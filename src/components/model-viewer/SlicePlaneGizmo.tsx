@@ -71,15 +71,19 @@ export function SlicePlaneGizmo({
   const anchorRef = useRef<THREE.Group>(null)
   const [planeSize, setPlaneSize] = useState(1)
   // The last axis request already applied, to tell "the user just clicked
-  // X/Y/Z" (snap to that axis, still centred on the lesion) apart from every
+  // X/Y/Z" (turn to that axis, staying where the plane is) apart from every
   // other reason to re-aim (slice mode switched on, lesion moved, reset),
-  // which aim along the vessel instead.
+  // which put the plane on the lesion along the vessel instead.
   const handledNonceRef = useRef(0)
+  // Whether the plane has been placed yet in this slice session, so the first
+  // axis click can still start from the lesion but later ones don't move it.
+  const placedRef = useRef(false)
   const focusKey = focus ? focus.point.join(',') : ''
 
   useEffect(() => {
     if (!enabled) {
       handledNonceRef.current = axisRequest?.nonce ?? 0
+      placedRef.current = false
       return
     }
     const anchor = anchorRef.current
@@ -92,16 +96,20 @@ export function SlicePlaneGizmo({
       axisRequest && axisRequest.nonce !== handledNonceRef.current ? axisRequest.axis : null
     handledNonceRef.current = axisRequest?.nonce ?? handledNonceRef.current
 
-    if (focus) {
-      anchor.position.set(...focus.point)
-      const target = requestedAxis
-        ? AXIS_UNIT_VECTORS[requestedAxis]
-        : new THREE.Vector3(...focus.direction).normalize()
-      anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, target)
-    } else {
-      anchor.position.copy(boundingBox.getCenter(new THREE.Vector3()))
-      anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, AXIS_UNIT_VECTORS[requestedAxis ?? 'z'])
+    // An X / Y / Z click only turns the plane; it stays exactly where it is, so
+    // the gizmo doesn't jump away each time the axis changes.
+    const keepPosition = requestedAxis !== null && placedRef.current
+    if (!keepPosition) {
+      if (focus) anchor.position.set(...focus.point)
+      else anchor.position.copy(boundingBox.getCenter(new THREE.Vector3()))
     }
+    const target = requestedAxis
+      ? AXIS_UNIT_VECTORS[requestedAxis]
+      : focus
+        ? new THREE.Vector3(...focus.direction).normalize()
+        : AXIS_UNIT_VECTORS.z
+    anchor.quaternion.setFromUnitVectors(LOCAL_NORMAL, target)
+    placedRef.current = true
     onPlaneChange(planeFromAnchor(anchor))
     // onPlaneChange is a fresh closure every render (LesionAnalysisPage
     // doesn't memoize it) — depending on it would refire this on every
