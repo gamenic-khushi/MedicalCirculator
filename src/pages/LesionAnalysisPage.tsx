@@ -596,6 +596,26 @@ export function LesionAnalysisPage() {
     })
   }
 
+  // A marker only follows the vessel while zooming or rotating if it has a 3D
+  // anchor. If the ray found nothing when it was placed, try again shortly
+  // (same screen spot, camera unchanged) and keep the result on the marker.
+  function retryWorldPoint(id: string, x: number, y: number, attemptsLeft = 3) {
+    setTimeout(() => {
+      const found = canvasRef.current?.getWorldPoint(x, y)
+      if (found) {
+        setAnnotations((prev) =>
+          prev.map((annotation) =>
+            annotation.id === id && !annotation.worldPoint
+              ? { ...annotation, worldPoint: found }
+              : annotation,
+          ),
+        )
+      } else if (attemptsLeft > 1) {
+        retryWorldPoint(id, x, y, attemptsLeft - 1)
+      }
+    }, 150)
+  }
+
   function handleViewerMouseDown(event: MouseEvent<HTMLDivElement>) {
     pointerDownRef.current = { x: event.clientX, y: event.clientY }
   }
@@ -622,7 +642,9 @@ export function LesionAnalysisPage() {
     const x = ((event.clientX - bounds.left) / bounds.width) * 100
     const y = ((event.clientY - bounds.top) / bounds.height) * 100
     const worldPoint = canvasRef.current?.getWorldPoint(x, y) ?? undefined
-    const next = [...annotations, { id: generateId(), x, y, worldPoint }]
+    const placedId = generateId()
+    const next = [...annotations, { id: placedId, x, y, worldPoint }]
+    if (!worldPoint) retryWorldPoint(placedId, x, y)
     if (next.length === 2) {
       // Don't measure yet — let the user drag either point to fine-tune the
       // selected area first; 測定範囲を更新 below the viewer runs the
@@ -687,15 +709,29 @@ export function LesionAnalysisPage() {
       // click missed the mesh for a moment, or the ray hit something else)
       // would silently skip the accurate 3D sweep and fall back to the
       // screen-width method, which fails on thin vessels. Look it up again now.
-      const withWorldPoint = (point: PercentPoint): PercentPoint =>
-        point.worldPoint
-          ? point
-          : { ...point, worldPoint: canvasRef.current?.getWorldPoint(point.x, point.y) ?? undefined }
+      const looked: Record<string, [number, number, number]> = {}
+      const withWorldPoint = (point: PercentPoint): PercentPoint => {
+        if (point.worldPoint) return point
+        const found = canvasRef.current?.getWorldPoint(point.x, point.y) ?? undefined
+        if (found && 'id' in point && typeof point.id === 'string') looked[point.id] = found
+        return { ...point, worldPoint: found }
+      }
       const result = measureTwoPointLesion(
         canvasRef.current!,
         withWorldPoint(proximal),
         withWorldPoint(distal),
       )
+      // Keep any position found here on the markers too, so they track the
+      // vessel from now on instead of staying fixed on screen when zooming.
+      if (Object.keys(looked).length > 0) {
+        setAnnotations((prev) =>
+          prev.map((annotation) =>
+            looked[annotation.id] && !annotation.worldPoint
+              ? { ...annotation, worldPoint: looked[annotation.id] }
+              : annotation,
+          ),
+        )
+      }
 
       if (!result) {
         setIsMeasuring(false)
