@@ -21,7 +21,7 @@ export function ConferencePage() {
 
   useEffect(() => {
     databaseService
-      .list<ConferencePaperRow>('conference_papers')
+      .listAll<ConferencePaperRow>('conference_papers')
       .then(({ rows }) => {
         setPapers(rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })))
       })

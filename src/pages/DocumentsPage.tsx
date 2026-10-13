@@ -36,8 +36,8 @@ export function DocumentsPage() {
     async function load() {
       try {
         const [documentsResult, foldersResult] = await Promise.all([
-          databaseService.list<DocumentRow>('documents'),
-          databaseService.list<DocumentFolderRow>('document_folders'),
+          databaseService.listAll<DocumentRow>('documents'),
+          databaseService.listAll<DocumentFolderRow>('document_folders'),
         ])
         const loaded = documentsResult.rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
         setDocuments(loaded)

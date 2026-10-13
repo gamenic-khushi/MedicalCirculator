@@ -36,7 +36,7 @@ export function UserManagementPage() {
 
   useEffect(() => {
     databaseService
-      .list<UserRow>('users')
+      .listAll<UserRow>('users')
       .then(({ rows }) => {
         setUsers(rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })))
       })

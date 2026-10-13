@@ -14,7 +14,7 @@ export function NotificationsPage() {
 
   useEffect(() => {
     databaseService
-      .list<NotificationRow>('notifications')
+      .listAll<NotificationRow>('notifications')
       .then(({ rows }) => {
         setNotifications(rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })))
       })

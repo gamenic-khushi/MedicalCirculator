@@ -32,7 +32,7 @@ export function DataManagementPage() {
 
   useEffect(() => {
     databaseService
-      .list<DataRecordRow>('data_records')
+      .listAll<DataRecordRow>('data_records')
       .then(({ rows }) => {
         const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
         setRecords(loaded)
