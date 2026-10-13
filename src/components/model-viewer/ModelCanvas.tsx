@@ -757,6 +757,14 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       }
     },
     getWorldPoint: (xPercent, yPercent) => {
+      // Against the model only, so the slice plane or its gizmo can't be hit
+      // instead of the vessel behind them; the whole scene is the fallback.
+      const modelGroup = modelGroupRef.current
+      if (modelGroup) {
+        modelGroup.updateMatrixWorld(true)
+        const direct = hitAt(xPercent, yPercent, modelGroup)
+        if (direct) return [direct.point.x, direct.point.y, direct.point.z]
+      }
       const hit = getHitResult(xPercent, yPercent)
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
     },

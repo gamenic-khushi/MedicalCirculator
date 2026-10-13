@@ -683,7 +683,19 @@ export function LesionAnalysisPage() {
     if (!canvasRef.current) return
     setIsMeasuring(true)
     setTimeout(() => {
-      const result = measureTwoPointLesion(canvasRef.current!, proximal, distal)
+      // A point whose 3D position wasn't captured when it was placed (the
+      // click missed the mesh for a moment, or the ray hit something else)
+      // would silently skip the accurate 3D sweep and fall back to the
+      // screen-width method, which fails on thin vessels. Look it up again now.
+      const withWorldPoint = (point: PercentPoint): PercentPoint =>
+        point.worldPoint
+          ? point
+          : { ...point, worldPoint: canvasRef.current?.getWorldPoint(point.x, point.y) ?? undefined }
+      const result = measureTwoPointLesion(
+        canvasRef.current!,
+        withWorldPoint(proximal),
+        withWorldPoint(distal),
+      )
 
       if (!result) {
         setIsMeasuring(false)
