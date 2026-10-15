@@ -76,6 +76,9 @@ export interface ModelCanvasHandle {
   hideHighlight: () => void
   showHighlight: () => void
   getWorldPoint: (xPercent: number, yPercent: number) => [number, number, number] | null
+  // Smoothly turns and moves the view so `center` is in the middle of the
+  // screen and the vessel running along `direction` lies left-to-right.
+  alignViewToVessel: (center: [number, number, number], direction: [number, number, number]) => void
   projectWorldPoint: (point: [number, number, number]) => { x: number; y: number } | null
   getCameraState: () => CameraState | null
 }
@@ -134,6 +137,7 @@ const SEGMENT_HIGHLIGHT_STEPS = 30
 const REFERENCE_PLATEAU_STABLE_STEPS = 3
 const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 const LOCATE_INTERVAL_MS = 120
+const ALIGN_DURATION_MS = 500
 const HEART_PROXIMITY_STEP_PERCENT = 1
 const HEART_PROXIMITY_MAX_STEPS = 20
 const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.4
@@ -202,10 +206,16 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   } | null>(null)
   const slicePlaneRef = useRef<THREE.Plane | null>(null)
   const locateTimerRef = useRef<number | null>(null)
+  const alignFrameRef = useRef<number | null>(null)
+  const sliceModeRef = useRef(sliceMode)
 
   useEffect(() => {
     slicePlaneRef.current = slicePlane
   }, [slicePlane])
+
+  useEffect(() => {
+    sliceModeRef.current = sliceMode
+  }, [sliceMode])
 
   // Re-aim the plane at whatever vessel is under the crosshair now. Looking
   // the vessel up is real work (many trial cuts through the mesh), so while
@@ -304,6 +314,85 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       position: controls.object.position.toArray() as [number, number, number],
       target: controls.target.toArray() as [number, number, number],
     })
+  }
+
+  function cancelAlign() {
+    if (alignFrameRef.current !== null) {
+      cancelAnimationFrame(alignFrameRef.current)
+      alignFrameRef.current = null
+    }
+  }
+
+  // OrbitControls bakes its "up" axis in once, at construction, so a camera
+  // whose up has been turned has to tell it, or the next drag would snap back.
+  function syncControlsUp(controls: OrbitControlsImpl) {
+    const internal = controls as unknown as { _quat: THREE.Quaternion; _quatInverse: THREE.Quaternion }
+    if (!internal._quat || !internal._quatInverse) return
+    internal._quat.setFromUnitVectors(controls.object.up, new THREE.Vector3(0, 1, 0))
+    internal._quatInverse.copy(internal._quat).invert()
+  }
+
+  // Puts the lesion in the middle of the view with the vessel running left to
+  // right, looking at it from the side nearest the current view (so the model
+  // turns as little as possible and never flips upside down). Keeps the user's
+  // zoom distance. Slightly curved vessels only: the direction is the vessel's
+  // direction at the lesion, so a strongly curved one is only straight there.
+  function alignViewToVessel(center: [number, number, number], direction: [number, number, number]) {
+    const controls = controlsRef.current
+    if (!controls) return
+    const camera = controls.object
+    const target = new THREE.Vector3(...center)
+    const vessel = new THREE.Vector3(...direction)
+    if (vessel.lengthSq() < 1e-12) return
+    vessel.normalize()
+
+    const offset = camera.position.clone().sub(controls.target)
+    const distance = offset.length() || 1
+    // Look at the vessel from the side: remove the part of the current view
+    // direction that runs along the vessel.
+    const back = offset.clone().addScaledVector(vessel, -offset.dot(vessel))
+    if (back.lengthSq() < 1e-8) {
+      back.set(0, 0, 1)
+      back.addScaledVector(vessel, -back.dot(vessel))
+      if (back.lengthSq() < 1e-8) back.set(0, 1, 0).addScaledVector(vessel, -vessel.y)
+    }
+    back.normalize()
+
+    // Screen-right is the vessel direction (either way); take the way that
+    // keeps the picture the right way up.
+    let up = new THREE.Vector3().crossVectors(back, vessel)
+    if (up.dot(camera.up) < 0) {
+      vessel.negate()
+      up = new THREE.Vector3().crossVectors(back, vessel)
+    }
+    up.normalize()
+    const endQuat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vessel, up, back))
+    const startQuat = camera.quaternion.clone()
+    const startTarget = controls.target.clone()
+
+    cancelAlign()
+    const startTime = performance.now()
+    const step = (now: number) => {
+      const raw = Math.min((now - startTime) / ALIGN_DURATION_MS, 1)
+      const t = raw * raw * (3 - 2 * raw)
+      const quat = startQuat.clone().slerp(endQuat, t)
+      const nextTarget = startTarget.clone().lerp(target, t)
+      camera.up.set(0, 1, 0).applyQuaternion(quat)
+      camera.position.copy(nextTarget).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(quat), distance)
+      controls.target.copy(nextTarget)
+      syncControlsUp(controls)
+      controls.update()
+      onCameraMove?.()
+      if (raw < 1) {
+        alignFrameRef.current = requestAnimationFrame(step)
+      } else {
+        alignFrameRef.current = null
+        emitCameraChange()
+        // Re-aim the cut at whatever is now under the cross.
+        if (sliceModeRef.current) locateAtCentre()
+      }
+    }
+    alignFrameRef.current = requestAnimationFrame(step)
   }
 
   function dolly(factor: number) {
@@ -798,6 +887,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const hit = getHitResult(xPercent, yPercent)
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
     },
+    alignViewToVessel: (center, direction) => alignViewToVessel(center, direction),
     projectWorldPoint: (point) => projectWorldPointToScreen(new THREE.Vector3(...point)),
     getCameraState: () => {
       const camera = threeStateRef.current?.camera
@@ -1011,6 +1101,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           makeDefault
           enabled={controlsEnabled}
           onChange={handleControlsChange}
+          onStart={cancelAlign}
           onEnd={emitCameraChange}
         />
       </Canvas>

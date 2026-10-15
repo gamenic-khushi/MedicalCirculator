@@ -94,6 +94,11 @@ function stripUnit(value: string | undefined): string {
 // Number(value) === 0 further downstream (e.g. the reference-diameter check
 // before highlighting the measured segment), silently skipping real
 // behavior. Scale the decimal count to the value's own magnitude instead.
+interface LesionFocus {
+  point: [number, number, number]
+  direction: [number, number, number]
+}
+
 function formatMeasurement(value: number): string {
   const abs = Math.abs(value)
   if (abs === 0) return '0'
@@ -268,6 +273,9 @@ export function LesionAnalysisPage() {
   // Rotate vs move for the left mouse button while the slice tool is on
   // (activeTool is 'slice' then, so it can't carry that choice itself).
   const [slicePan, setSlicePan] = useState(false)
+  // Where the measured lesion is narrowest and which way the vessel runs
+  // there; the scissors turns the view onto it.
+  const [lesionFocus, setLesionFocus] = useState<LesionFocus | null>(null)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   const [cameraState, setCameraState] = useState<CameraState | null>(
@@ -428,6 +436,19 @@ export function LesionAnalysisPage() {
     return <Navigate to="/data/3d-analysis" state={{ dataRecordId }} replace />
   }
 
+  // Before the lesion has been measured there is no narrowest point yet, so
+  // use the middle of ①② and the direction from ① to ② (needs both 3D positions).
+  function focusFromSelectedPoints(): LesionFocus | null {
+    const [first, second] = annotations
+    if (annotations.length !== 2 || !first.worldPoint || !second.worldPoint) return null
+    const point = first.worldPoint.map((value, index) => (value + second.worldPoint![index]) / 2)
+    const direction = second.worldPoint.map((value, index) => value - first.worldPoint![index])
+    return {
+      point: point as [number, number, number],
+      direction: direction as [number, number, number],
+    }
+  }
+
   function handleToolChange(tool: ViewerTool) {
     if (activeTool === 'slice') {
       if (tool === 'slice') {
@@ -448,6 +469,16 @@ export function LesionAnalysisPage() {
       // Slice mode keeps whichever of rotate / move was already active.
       setSlicePan(activeTool === 'pan')
       setActiveTool('slice')
+      // Bring the selected lesion to the middle of the view with the vessel
+      // running left to right, so the cross is already on it.
+      // Centre on the narrowest point once measured (the middle of ①② before
+      // that); lay the vessel left to right along the line the user picked,
+      // ① to ②, which is the vessel as it looks on screen. The narrowest
+      // point's own direction can differ a lot from it near a branch.
+      const picked = focusFromSelectedPoints()
+      const focus = lesionFocus ?? picked
+      const direction = picked?.direction ?? focus?.direction
+      if (focus && direction) canvasRef.current?.alignViewToVessel(focus.point, direction)
       return
     }
     setActiveTool(tool)
@@ -474,6 +505,7 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
     setSelectedLesion(EMPTY_SELECTED_LESION)
+    setLesionFocus(null)
     setSnapshotImage(null)
     canvasRef.current?.clearSelection()
   }
@@ -768,6 +800,7 @@ export function LesionAnalysisPage() {
         lesionPosition,
       }
       setSelectedLesion(measuredLesion)
+      setLesionFocus(result.focus ?? null)
 
       setIsMeasuring(false)
       afterMeasure?.(measuredLesion)
