@@ -12,8 +12,6 @@ import { FfrResultOverlay } from '@/components/model-viewer/FfrResultOverlay'
 import {
   ModelCanvas,
   type ModelCanvasHandle,
-  type SliceAxis,
-  type SliceAxisRequest,
   type ViewerTool,
 } from '@/components/model-viewer/ModelCanvas'
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
@@ -267,15 +265,10 @@ export function LesionAnalysisPage() {
       : null
 
   const [activeTool, setActiveTool] = useState<ViewerTool>('rotate')
-  const [sliceAxisRequest, setSliceAxisRequest] = useState<SliceAxisRequest | null>(null)
-  const [sliceAlignedAxis, setSliceAlignedAxis] = useState<SliceAxis | null>(null)
-  const [sliceResetKey, setSliceResetKey] = useState(0)
+  // Rotate vs move for the left mouse button while the slice tool is on
+  // (activeTool is 'slice' then, so it can't carry that choice itself).
+  const [slicePan, setSlicePan] = useState(false)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
-  // Where the measured lesion is narrowest, so the slice tool can start there.
-  const [sliceFocus, setSliceFocus] = useState<{
-    point: [number, number, number]
-    direction: [number, number, number]
-  } | null>(null)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   const [cameraState, setCameraState] = useState<CameraState | null>(
     navigationState?.cameraState ?? null,
@@ -313,7 +306,6 @@ export function LesionAnalysisPage() {
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
-  const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
@@ -437,14 +429,26 @@ export function LesionAnalysisPage() {
   }
 
   function handleToolChange(tool: ViewerTool) {
-    // Clicking the scissors again while slicing puts the plane back on the lesion.
-    if (tool === 'slice' && activeTool === 'slice') setSliceResetKey((key) => key + 1)
-    // ①② are placed but the lesion hasn't been measured yet: start the plane
-    // across the selected vessel at ①, so it doesn't open at the model centre
-    // and cut a different (usually larger) vessel.
-    if (tool === 'slice' && !sliceFocus && annotations.length >= 1) {
-      const located = canvasRef.current?.locateVesselAt(annotations[0].x, annotations[0].y)
-      if (located) setSliceFocus(located)
+    if (activeTool === 'slice') {
+      if (tool === 'slice') {
+        // The scissors again leaves slice mode, keeping the drag mode in use.
+        const back: ViewerTool = slicePan ? 'pan' : 'rotate'
+        setActiveTool(back)
+        canvasRef.current?.setTool(back)
+        return
+      }
+      // The rotate / move button keeps working while slicing: the model is
+      // what moves under the fixed crosshair, so the user can choose between
+      // turning it and sliding it.
+      setSlicePan(tool === 'pan')
+      canvasRef.current?.setTool(tool)
+      return
+    }
+    if (tool === 'slice') {
+      // Slice mode keeps whichever of rotate / move was already active.
+      setSlicePan(activeTool === 'pan')
+      setActiveTool('slice')
+      return
     }
     setActiveTool(tool)
     canvasRef.current?.setTool(tool)
@@ -470,7 +474,6 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
     setSelectedLesion(EMPTY_SELECTED_LESION)
-    setSliceFocus(null)
     setSnapshotImage(null)
     canvasRef.current?.clearSelection()
   }
@@ -616,25 +619,7 @@ export function LesionAnalysisPage() {
     }, 150)
   }
 
-  function handleViewerMouseDown(event: MouseEvent<HTMLDivElement>) {
-    pointerDownRef.current = { x: event.clientX, y: event.clientY }
-  }
-
   function handleViewerClick(event: MouseEvent<HTMLDivElement>) {
-    if (activeTool === 'slice') {
-      // A click on the vessel (not a drag to rotate, not a button or ①②)
-      // moves the cutting plane there, across the vessel at that spot.
-      const down = pointerDownRef.current
-      if (!(event.target instanceof HTMLCanvasElement)) return
-      if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 4) return
-      const bounds = event.currentTarget.getBoundingClientRect()
-      const located = canvasRef.current?.locateVesselAt(
-        ((event.clientX - bounds.left) / bounds.width) * 100,
-        ((event.clientY - bounds.top) / bounds.height) * 100,
-      )
-      if (located) setSliceFocus(located)
-      return
-    }
     if (!isAnnotating) return
     if (annotations.length >= 2) return
     if ((event.target as HTMLElement).closest('button')) return
@@ -672,7 +657,12 @@ export function LesionAnalysisPage() {
     const moved = annotations.map((annotation) =>
       annotation.id === id ? { ...annotation, x, y, worldPoint } : annotation,
     )
-    const ordered = orderByHeartProximity(moved)
+    // The order was decided when the pair was placed. Re-deciding it after
+    // every drag made ① and ② trade places on their own after a few
+    // operations, so from the first drag on the order is locked and only the
+    // swap button changes it.
+    if (moved.length === 2) manualSwapPairRef.current = pointPairKey(moved[0].id, moved[1].id)
+    const ordered = moved
     setAnnotations(ordered)
     // Once the lesion has been measured, dragging a point re-measures it so
     // the fields always match where the points are, without a reset.
@@ -778,7 +768,6 @@ export function LesionAnalysisPage() {
         lesionPosition,
       }
       setSelectedLesion(measuredLesion)
-      setSliceFocus(result.focus ?? null)
 
       setIsMeasuring(false)
       afterMeasure?.(measuredLesion)
@@ -938,10 +927,31 @@ export function LesionAnalysisPage() {
   // exists to avoid.
   function handleUseSliceCrossSectionArea() {
     if (sliceCrossSectionArea == null) return
+    // A cut through the wrong (much larger) vessel, or a model in the wrong
+    // unit, gives an area far outside anything the FFR model was trained on —
+    // reflecting it would silently produce a meaningless result, so block
+    // the extreme case and only warn for a mild miss.
+    const [minArea, maxArea] = ffrRangeFor('a', Number(bloodPressure) || 100)
+    if (sliceCrossSectionArea > maxArea * 10) {
+      showToast(
+        `スライスの断面積(${formatMeasurement(sliceCrossSectionArea)}mm²)が学習範囲(${minArea}〜${maxArea}mm²)を大きく超えています。選択した血管ではなく太い血管を切っている可能性があるため、最小断面積には反映しませんでした`,
+        'error',
+        { persistent: true },
+      )
+      return
+    }
     setSelectedLesion((prev) => ({
       ...prev,
       minCrossSectionArea: formatMeasurement(sliceCrossSectionArea),
     }))
+    if (sliceCrossSectionArea < minArea || sliceCrossSectionArea > maxArea) {
+      showToast(
+        `スライスの断面積(${formatMeasurement(sliceCrossSectionArea)}mm²)は学習範囲(${minArea}〜${maxArea}mm²)の外です。最小断面積に反映しましたが、FFR計算はできません`,
+        'error',
+        { persistent: true },
+      )
+      return
+    }
     showToast('スライスの断面積を最小断面積に反映しました')
   }
 
@@ -950,6 +960,9 @@ export function LesionAnalysisPage() {
   // already calculated, it's refreshed from the restored values.
   function handleUpdateSelectedLesion() {
     if (annotations.length === 2) {
+      // Measuring commits to this ①/② order; a slow background guess must not
+      // swap them afterwards.
+      manualSwapPairRef.current = pointPairKey(annotations[0].id, annotations[1].id)
       measureLesion(annotations[0], annotations[1], measurement ? applySelectedLesion : undefined)
       return
     }
@@ -1215,7 +1228,6 @@ export function LesionAnalysisPage() {
           </p>
           <div
             ref={canvasAreaRef}
-            onMouseDown={handleViewerMouseDown}
             onClick={handleViewerClick}
             style={{
               backgroundColor: '#737373',
@@ -1243,15 +1255,11 @@ export function LesionAnalysisPage() {
                   url={validModel!.objectUrl}
                   extension={validModel!.extension}
                   color={MODEL_COLOR}
-                  controlsEnabled={activeTool !== 'slice' && !isAnnotating && !isDraggingPoint}
+                  controlsEnabled={!isAnnotating && !isDraggingPoint}
                   initialCamera={cameraState}
                   onCameraChange={setCameraState}
                   onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
-                  sliceAxisRequest={sliceAxisRequest}
-                  onSliceAlignedAxisChange={setSliceAlignedAxis}
-                  sliceFocus={sliceFocus}
-                  sliceResetKey={sliceResetKey}
                   onSliceAreaChange={setSliceCrossSectionArea}
                 />
 
@@ -1331,6 +1339,20 @@ export function LesionAnalysisPage() {
 
                 <PressurePointsPanel pa={livePa} pd={livePd} />
                 <AnatomyGuideThumbnail />
+                {activeTool === 'slice' && (
+                  // Fixed to the middle of the 3D view: the cut is made where
+                  // the cross sits, so the model is moved, not the cross.
+                  <div className="pointer-events-none absolute inset-0">
+                    <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-indigo-500/70" />
+                    <div className="absolute bottom-0 top-0 left-1/2 w-px -translate-x-1/2 bg-indigo-500/70" />
+                    <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60" />
+                    {sliceCrossSectionArea == null && (
+                      <p className="absolute left-1/2 top-1/2 mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm">
+                        十字の中心に血管を合わせてください
+                      </p>
+                    )}
+                  </div>
+                )}
                 {activeTool === 'slice' && sliceCrossSectionArea != null && (
                   <div className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white py-1.5 pl-4 pr-1.5 shadow-sm">
                     <span className="text-xs text-gray-500">
@@ -1347,12 +1369,12 @@ export function LesionAnalysisPage() {
                 )}
                 <ViewerToolbar
                   activeTool={activeTool}
+                  isPanning={activeTool === 'pan' || (activeTool === 'slice' && slicePan)}
                   onToolChange={handleToolChange}
                   onToggleFullscreen={toggleFullscreen}
                   onReset={handleResetAnnotations}
                   showHints={annotations.length === 2}
-                  sliceAxis={sliceAlignedAxis}
-                  onSliceAxisChange={(axis) => setSliceAxisRequest({ axis, nonce: Date.now() })}
+                  showSlice
                 />
               </>
             )}

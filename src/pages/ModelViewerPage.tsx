@@ -596,6 +596,7 @@ export function ModelViewerPage() {
             <AnatomyGuideThumbnail />
             <ViewerToolbar
               activeTool={activeTool}
+              isPanning={activeTool === 'pan'}
               onToolChange={handleToolChange}
               onToggleFullscreen={toggleFullscreen}
               onReset={handleResetAnnotations}

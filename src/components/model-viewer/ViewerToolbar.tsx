@@ -4,21 +4,20 @@ import { useEffect } from 'react'
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 
-import type { SliceAxis } from './SlicePlaneGizmo'
 import type { ViewerTool } from './ModelCanvas'
-
-const AXIS_OPTIONS: SliceAxis[] = ['x', 'y', 'z']
 
 interface ViewerToolbarProps {
   activeTool: ViewerTool
+  // Whether dragging currently moves the model rather than turning it. Passed
+  // in because while slicing, activeTool is 'slice' and can't say which.
+  isPanning: boolean
   onToolChange: (tool: ViewerTool) => void
   onToggleFullscreen: () => void
   onReset: () => void
-  // Slicing is only wired up on pages that pass onSliceAxisChange (currently
-  // just the lesion-measurement viewer) — omit it elsewhere and the toggle
-  // and axis buttons don't render at all.
-  sliceAxis?: SliceAxis | null
-  onSliceAxisChange?: (axis: SliceAxis) => void
+  // Slicing is only wired up on pages that pass showSlice (currently just the
+  // lesion-measurement viewer) — omit it elsewhere and the scissors button
+  // doesn't render at all.
+  showSlice?: boolean
   // The guidance bubbles for these buttons are held back until the page says
   // the user has finished the first step, so a freshly loaded model only
   // shows the one hint about what to do first.
@@ -27,16 +26,16 @@ interface ViewerToolbarProps {
 
 export function ViewerToolbar({
   activeTool,
+  isPanning,
   onToolChange,
   onToggleFullscreen,
   onReset,
-  sliceAxis = null,
-  onSliceAxisChange,
+  showSlice = false,
   showHints = true,
 }: ViewerToolbarProps) {
   // Self-contained (not lifted into the page) since this component already
   // decides on its own whether the slice button renders at all based on
-  // onSliceAxisChange — the hint about that button belongs with it, so pages
+  // showSlice — the hint about that button belongs with it, so pages
   // that don't wire up slicing (e.g. ModelViewerPage) never show it either.
   const { isDismissed: isSliceHintDismissed, dismiss: dismissSliceHint } =
     useGuidanceDismissed('slice-mode-hint')
@@ -57,7 +56,7 @@ export function ViewerToolbar({
           the toolbar — with both hints visible at once (a fresh session that
           hasn't touched either button yet), flush positioning put them at
           the same height and they overlapped each other. */}
-      {showHints && onSliceAxisChange && activeTool !== 'slice' && !isSliceHintDismissed && (
+      {showHints && showSlice && activeTool !== 'slice' && !isSliceHintDismissed && (
         <GuidanceBubble
           anchor="bottom-left"
           className="bottom-full left-1/2 -translate-x-1/2"
@@ -85,51 +84,27 @@ export function ViewerToolbar({
       <button
         type="button"
         onClick={() => {
-          onToolChange(activeTool === 'pan' ? 'rotate' : 'pan')
+          onToolChange(isPanning ? 'rotate' : 'pan')
           if (!isRotatePanHintDismissed) dismissRotatePanHint()
         }}
-        aria-pressed={activeTool !== 'slice'}
-        title={activeTool === 'pan' ? 'クリックして回転モードに切り替え' : 'クリックして移動モードに切り替え'}
-        className={`rounded-full p-2 transition ${
-          activeTool === 'slice' ? 'text-gray-500 hover:bg-gray-50' : 'bg-indigo-50 text-indigo-600'
-        }`}
+        aria-pressed
+        title={isPanning ? 'クリックして回転モードに切り替え' : 'クリックして移動モードに切り替え'}
+        className="rounded-full bg-indigo-50 p-2 text-indigo-600 transition"
       >
-        {activeTool === 'pan' ? <Move className="h-4 w-4" /> : <Rotate3d className="h-4 w-4" />}
+        {isPanning ? <Move className="h-4 w-4" /> : <Rotate3d className="h-4 w-4" />}
       </button>
-      {onSliceAxisChange && (
-        <>
-          <button
-            type="button"
-            onClick={() => onToolChange('slice')}
-            aria-pressed={activeTool === 'slice'}
-            title="断面を表示"
-            className={`rounded-full p-2 transition ${
-              activeTool === 'slice' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            <Scissors className="h-4 w-4" />
-          </button>
-          {activeTool === 'slice' && (
-            <div className="flex items-center gap-1 border-l border-gray-100 pl-1">
-              {AXIS_OPTIONS.map((axis) => (
-                <button
-                  key={axis}
-                  type="button"
-                  onClick={() => onSliceAxisChange(axis)}
-                  aria-pressed={sliceAxis === axis}
-                  title={`切断面を${axis.toUpperCase()}軸の向きにします（位置は変わりません）`}
-                  className={`h-8 w-8 rounded-full text-xs font-semibold uppercase transition ${
-                    sliceAxis === axis
-                      ? 'bg-indigo-50 text-indigo-600'
-                      : 'text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  {axis}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
+      {showSlice && (
+        <button
+          type="button"
+          onClick={() => onToolChange('slice')}
+          aria-pressed={activeTool === 'slice'}
+          title="断面を表示"
+          className={`rounded-full p-2 transition ${
+            activeTool === 'slice' ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
+          }`}
+        >
+          <Scissors className="h-4 w-4" />
+        </button>
       )}
       <button
         type="button"
