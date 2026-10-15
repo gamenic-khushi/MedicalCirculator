@@ -13,9 +13,9 @@ interface SliceCapMeshesProps {
   plane: THREE.Plane | null
   color: string
   onAreaChange?: (area: number | null) => void
-  // The measured lesion's narrowest point. While the plane is cutting through
-  // it, only that vessel's own cut is shown and counted, so the area matches
-  // the lesion instead of also adding any other vessel the plane crosses.
+  // The surface point under the middle of the view (it lies on the plane).
+  // Only the vessel whose cut passes through it is shown and counted, not
+  // every other vessel the plane crosses. Null shows nothing.
   focusPoint?: [number, number, number] | null
 }
 
@@ -56,12 +56,14 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focu
         crossSection.loops.forEach((loop, loopIndex) => allLoops.push({ key: `${meshKey}-${loopIndex}`, loop }))
       })
 
-      // While the plane passes through the lesion's narrowest point, keep
-      // just the loop that point sits in; otherwise keep every loop.
-      let shown = allLoops
+      // The plane cuts every vessel it crosses; only the one under the middle
+      // of the view counts. That surface point lies on the plane (the line of
+      // sight is in it), so it sits on that vessel's cut outline — take the
+      // loop nearest to it. With nothing under the middle, nothing is shown.
+      let shown: typeof allLoops = []
+      totalArea = 0
       if (focusPoint && allLoops.length > 0) {
         const focus = new THREE.Vector3(...focusPoint)
-        const scale = Math.max(...allLoops.flatMap(({ loop }) => loop.map((p) => p.distanceTo(focus))), 1e-9)
         let nearest = allLoops[0]
         let nearestDistance = Infinity
         for (const entry of allLoops) {
@@ -71,11 +73,8 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focu
             nearest = entry
           }
         }
-        // "On the lesion" = the plane is essentially at the focus point.
-        if (Math.abs(plane.distanceToPoint(focus)) < scale * 1e-3) {
-          shown = [nearest]
-          totalArea = loopArea(nearest.loop, plane.normal)
-        }
+        shown = [nearest]
+        totalArea = loopArea(nearest.loop, plane.normal)
       }
 
       for (const { key, loop } of shown) {
@@ -97,7 +96,7 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focu
     // doesn't memoize it) — depending on it would refire this expensive
     // recompute on every unrelated re-render of the parent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plane, modelGroupRef])
+  }, [plane, focusPoint, modelGroupRef])
 
   // Leaving slice mode unmounts this component entirely (see ModelCanvas's
   // `{sliceMode && <SliceCapMeshes .../>}`) — without this, the parent would

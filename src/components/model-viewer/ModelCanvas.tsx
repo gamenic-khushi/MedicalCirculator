@@ -12,12 +12,11 @@ import { Bounds, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
-import { locateVesselAt, measureVesselSweep } from '@/lib/vesselSweep'
+import { measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
 import { SliceCapMeshes } from './SliceCapMeshes'
-import { SlicePlaneVisual, type SlicePlaneValue } from './SlicePlaneVisual'
 
 export type ViewerTool = 'rotate' | 'pan' | 'slice'
 
@@ -136,7 +135,6 @@ const SEGMENT_HIGHLIGHT_STEPS = 30
 // finds the actual healthy vessel next to the lesion, regardless of either.
 const REFERENCE_PLATEAU_STABLE_STEPS = 3
 const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
-const LOCATE_INTERVAL_MS = 120
 const ALIGN_DURATION_MS = 500
 const HEART_PROXIMITY_STEP_PERCENT = 1
 const HEART_PROXIMITY_MAX_STEPS = 20
@@ -197,81 +195,70 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const paintedMeshRef = useRef<THREE.Mesh | null>(null)
   const lastHighlightRef = useRef<{ points: THREE.Vector3[]; radius: number } | null>(null)
   const modelGroupRef = useRef<THREE.Group>(null)
-  const [modelBoundingBox, setModelBoundingBox] = useState<THREE.Box3 | null>(null)
   const [slicePlane, setSlicePlane] = useState<THREE.Plane | null>(null)
-  // The vessel under the screen-centre crosshair; the plane sits on it.
-  const [sliceFocus, setSliceFocus] = useState<{
-    point: [number, number, number]
-    direction: [number, number, number]
-  } | null>(null)
-  const slicePlaneRef = useRef<THREE.Plane | null>(null)
-  const locateTimerRef = useRef<number | null>(null)
+  // Where the screen-centre line of sight meets the model; that surface point
+  // lies on the cutting plane, so the cut through it is the vessel to measure.
+  const [sliceFocusPoint, setSliceFocusPoint] = useState<[number, number, number] | null>(null)
+  const sliceFrameRef = useRef<number | null>(null)
   const alignFrameRef = useRef<number | null>(null)
   const sliceModeRef = useRef(sliceMode)
-
-  useEffect(() => {
-    slicePlaneRef.current = slicePlane
-  }, [slicePlane])
 
   useEffect(() => {
     sliceModeRef.current = sliceMode
   }, [sliceMode])
 
-  // Re-aim the plane at whatever vessel is under the crosshair now. Looking
-  // the vessel up is real work (many trial cuts through the mesh), so while
-  // the model is being moved it runs at most every LOCATE_INTERVAL_MS, with a
-  // final run just after the camera stops. When the crosshair is off the
-  // model, the plane stays where it was.
-  function locateAtCentre() {
+  // The cutting plane is fixed to the screen: it is the vertical plane through
+  // the middle of the view that contains the line of sight (seen edge-on, it is
+  // the vertical line of the cross), so its normal is the camera's right
+  // direction. The model is what moves under it (rotate / move / zoom change
+  // which cut it makes), so it is recomputed whenever the camera changes.
+  function updateSlice() {
+    const camera = threeStateRef.current?.camera
+    if (!camera) return
+    camera.updateMatrixWorld()
+    const normal = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize()
+    setSlicePlane(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, camera.position))
+
+    let focus: [number, number, number] | null = null
     const modelGroup = modelGroupRef.current
-    if (!modelGroup) return
-    modelGroup.updateMatrixWorld(true)
-    const hit = hitAt(50, 50, modelGroup, true)
-    if (!hit) return
-    const located = locateVesselAt(modelGroup, hit.point)
-    if (!located) return
-    setSliceFocus({
-      point: located.point.toArray() as [number, number, number],
-      direction: located.direction.toArray() as [number, number, number],
+    if (modelGroup) {
+      modelGroup.updateMatrixWorld(true)
+      const hit = hitAt(50, 50, modelGroup)
+      if (hit) focus = hit.point.toArray() as [number, number, number]
+    }
+    setSliceFocusPoint(focus)
+  }
+
+  // At most once per frame, however many camera changes arrive.
+  function scheduleSliceUpdate() {
+    if (sliceFrameRef.current !== null) return
+    sliceFrameRef.current = requestAnimationFrame(() => {
+      sliceFrameRef.current = null
+      if (sliceModeRef.current) updateSlice()
     })
   }
 
   function handleControlsChange() {
     onCameraMove?.()
-    if (!sliceMode || locateTimerRef.current !== null) return
-    locateTimerRef.current = window.setTimeout(() => {
-      locateTimerRef.current = null
-      locateAtCentre()
-    }, LOCATE_INTERVAL_MS)
+    if (sliceMode) scheduleSliceUpdate()
   }
 
-  // The model has already been visible (and any <Bounds> auto-fit already
-  // settled) by the time a user switches into slice mode, so measuring the
-  // bounding box synchronously here — rather than tracking it continuously
-  // every frame — is enough to size the plane, at no ongoing cost while
-  // slicing isn't in use. Clearing the plane on exit also restores the
-  // un-clipped model rather than leaving a stale cut applied.
+  // Leaving slice mode removes the plane, which also restores the un-clipped
+  // model rather than leaving a stale cut applied.
   useEffect(() => {
     if (!sliceMode) {
-      if (locateTimerRef.current !== null) {
-        window.clearTimeout(locateTimerRef.current)
-        locateTimerRef.current = null
+      if (sliceFrameRef.current !== null) {
+        cancelAnimationFrame(sliceFrameRef.current)
+        sliceFrameRef.current = null
       }
       setSlicePlane(null)
-      setSliceFocus(null)
+      setSliceFocusPoint(null)
       return
     }
-    if (modelGroupRef.current) {
-      setModelBoundingBox(new THREE.Box3().setFromObject(modelGroupRef.current))
-    }
-    locateAtCentre()
-    // locateAtCentre only reads refs, so it doesn't need to be a dependency.
+    updateSlice()
+    // updateSlice only reads refs, so it doesn't need to be a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sliceMode])
-
-  function handleSlicePlaneChange(plane: SlicePlaneValue | null) {
-    setSlicePlane(plane ? new THREE.Plane(new THREE.Vector3(...plane.normal), plane.constant) : null)
-  }
 
   function resetMeshColors(mesh: THREE.Mesh) {
     const colorAttr = mesh.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
@@ -388,8 +375,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       } else {
         alignFrameRef.current = null
         emitCameraChange()
-        // Re-aim the cut at whatever is now under the cross.
-        if (sliceModeRef.current) locateAtCentre()
+        if (sliceModeRef.current) updateSlice()
       }
     }
     alignFrameRef.current = requestAnimationFrame(step)
@@ -406,9 +392,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
 
   // `root` narrows the ray to one object (the model itself), so overlays such
   // as the slice plane can't be hit instead of the vessel behind them.
-  // `visibleOnly` skips surfaces the slice plane has clipped away, so the
-  // crosshair only ever picks geometry the user can actually see.
-  function hitAt(xPct: number, yPct: number, root?: THREE.Object3D, visibleOnly = false) {
+  function hitAt(xPct: number, yPct: number, root?: THREE.Object3D) {
     const camera = threeStateRef.current?.camera
     const scene = root ?? threeStateRef.current?.scene
     if (!camera || !scene || !(camera instanceof THREE.PerspectiveCamera)) return null
@@ -435,10 +419,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const ndc = new THREE.Vector2()
     ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
     raycaster.setFromCamera(ndc, camera)
-    const hits = raycaster.intersectObject(scene, true)
-    const plane = slicePlaneRef.current
-    if (visibleOnly && plane) return hits.find((hit) => plane.distanceToPoint(hit.point) >= 0) ?? null
-    return hits[0] ?? null
+    return raycaster.intersectObject(scene, true)[0] ?? null
   }
 
   function findNearestHit(xPercent: number, yPercent: number) {
@@ -1072,28 +1053,20 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <Suspense fallback={null}>
           <Bounds fit={!initialCamera} clip margin={1.3} maxDuration={0}>
             <group ref={modelGroupRef}>
-              <Model3D url={url} extension={extension} color={color} clippingPlane={slicePlane} />
+              {/* No clipping plane: the whole model stays visible while slicing;
+                  the plane is only used to measure the cut. */}
+              <Model3D url={url} extension={extension} color={color} />
             </group>
           </Bounds>
           <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />
         </Suspense>
-        {/* Sibling to <Bounds>, not a child of it, so the slice plane's pose
-            lives in true scene-root world space rather than inside whatever
-            fit transform <Bounds> applies to the model. */}
-        {sliceMode && (
-          <SlicePlaneVisual
-            focus={sliceFocus}
-            boundingBox={modelBoundingBox}
-            onPlaneChange={handleSlicePlaneChange}
-          />
-        )}
         {sliceMode && (
           <SliceCapMeshes
             modelGroupRef={modelGroupRef}
             plane={slicePlane}
             color={color}
             onAreaChange={onSliceAreaChange}
-            focusPoint={sliceFocus?.point ?? null}
+            focusPoint={sliceFocusPoint}
           />
         )}
         <OrbitControls

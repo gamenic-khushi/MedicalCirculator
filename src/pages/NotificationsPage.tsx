@@ -2,7 +2,7 @@ import type { Models } from 'appwrite'
 import { useEffect, useState } from 'react'
 
 import { NotificationCard } from '@/components/notifications/NotificationCard'
-import { LOAD_FAILED } from '@/lib/messages'
+import { HARD_REFRESH_NOTICE, LOAD_FAILED } from '@/lib/messages'
 import { databaseService } from '@/services/appwrite/database'
 import type { Notification } from '@/types/notification'
 
@@ -26,7 +26,15 @@ export function NotificationsPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
-      <h1 className="text-2xl font-bold text-gray-900">通知</h1>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="text-2xl font-bold text-gray-900">通知</h1>
+        <p
+          role="alert"
+          className="rounded border border-red-500 px-3 py-1 text-xs font-medium text-red-600"
+        >
+          {HARD_REFRESH_NOTICE}
+        </p>
+      </div>
       <p className="mt-1 text-sm text-gray-500">システム更新情報とアクティビティログ</p>
 
       <div className="mt-4 border-b border-gray-200" />

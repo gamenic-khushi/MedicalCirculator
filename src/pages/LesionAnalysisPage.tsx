@@ -471,14 +471,12 @@ export function LesionAnalysisPage() {
       setActiveTool('slice')
       // Bring the selected lesion to the middle of the view with the vessel
       // running left to right, so the cross is already on it.
-      // Centre on the narrowest point once measured (the middle of ①② before
-      // that); lay the vessel left to right along the line the user picked,
-      // ① to ②, which is the vessel as it looks on screen. The narrowest
-      // point's own direction can differ a lot from it near a branch.
-      const picked = focusFromSelectedPoints()
-      const focus = lesionFocus ?? picked
-      const direction = picked?.direction ?? focus?.direction
-      if (focus && direction) canvasRef.current?.alignViewToVessel(focus.point, direction)
+      // Centre on the narrowest point and lay the vessel there left to right,
+      // so the fixed cutting plane is square across it and the area read is the
+      // lesion's. Before the lesion is measured, use the middle of ① and ② and
+      // the line from ① to ②.
+      const focus = lesionFocus ?? focusFromSelectedPoints()
+      if (focus) canvasRef.current?.alignViewToVessel(focus.point, focus.direction)
       return
     }
     setActiveTool(tool)
@@ -1373,12 +1371,18 @@ export function LesionAnalysisPage() {
                 <PressurePointsPanel pa={livePa} pd={livePd} />
                 <AnatomyGuideThumbnail />
                 {activeTool === 'slice' && (
-                  // Fixed to the middle of the 3D view: the cut is made where
-                  // the cross sits, so the model is moved, not the cross.
+                  // Fixed to the middle of the 3D view; the model is what moves.
+                  // The vertical line is the cutting plane seen edge-on (X is
+                  // across it, Y up the line, Z the line of sight); the
+                  // horizontal line is the X axis the vessel is laid along.
                   <div className="pointer-events-none absolute inset-0">
-                    <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-indigo-500/70" />
-                    <div className="absolute bottom-0 top-0 left-1/2 w-px -translate-x-1/2 bg-indigo-500/70" />
+                    <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-500/50" />
+                    <div className="absolute bottom-0 top-0 left-1/2 w-0.5 -translate-x-1/2 bg-indigo-500/80" />
                     <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60" />
+                    <span className="absolute right-2 top-1/2 mt-1 text-[10px] font-semibold text-gray-500">X</span>
+                    <span className="absolute left-1/2 top-1 ml-1.5 text-[10px] font-semibold text-gray-500">Y</span>
+                    <span className="absolute left-1/2 top-1/2 ml-3 mt-1 text-[10px] font-semibold text-gray-500">Z</span>
+                    <span className="absolute left-1/2 bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600">切断面</span>
                     {sliceCrossSectionArea == null && (
                       <p className="absolute left-1/2 top-1/2 mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm">
                         十字の中心に血管を合わせてください
