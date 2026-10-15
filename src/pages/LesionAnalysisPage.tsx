@@ -1,5 +1,5 @@
 import { Query, type Models } from 'appwrite'
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
 
@@ -94,6 +94,11 @@ function stripUnit(value: string | undefined): string {
 // Number(value) === 0 further downstream (e.g. the reference-diameter check
 // before highlighting the measured segment), silently skipping real
 // behavior. Scale the decimal count to the value's own magnitude instead.
+// Keeps a slidable line inside the view, away from the very edges.
+function clampLineX(value: number): number {
+  return Math.min(Math.max(value, 3), 97)
+}
+
 interface LesionFocus {
   point: [number, number, number]
   direction: [number, number, number]
@@ -278,6 +283,18 @@ export function LesionAnalysisPage() {
   const [lesionFocus, setLesionFocus] = useState<LesionFocus | null>(null)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
+  // The two slidable lines (proximal ①, distal ②) on the horizontal axis, as a
+  // percentage of the view's width. null = not moved yet, so the line sits at
+  // its default (30% for ①, 70% for ②), either side of the fixed plane.
+  const [diameterLineX, setDiameterLineX] = useState<{ proximal: number | null; distal: number | null }>({
+    proximal: null,
+    distal: null,
+  })
+  // The vessel's diameter where each line cuts it.
+  const [lineDiameters, setLineDiameters] = useState<{ proximal: number | null; distal: number | null }>({
+    proximal: null,
+    distal: null,
+  })
   const [cameraState, setCameraState] = useState<CameraState | null>(
     navigationState?.cameraState ?? null,
   )
@@ -432,8 +449,84 @@ export function LesionAnalysisPage() {
     return () => observer.disconnect()
   }, [])
 
+  const proximalLineX = clampLineX(diameterLineX.proximal ?? 30)
+  const distalLineX = clampLineX(diameterLineX.distal ?? 70)
+  const lineXRef = useRef({ proximal: proximalLineX, distal: distalLineX })
+  const lineFrameRef = useRef<number | null>(null)
+  const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
+  const activeToolRef = useRef(activeTool)
+
+  useEffect(() => {
+    activeToolRef.current = activeTool
+  }, [activeTool])
+
+  useEffect(() => {
+    lineXRef.current = { proximal: proximalLineX, distal: distalLineX }
+  }, [proximalLineX, distalLineX])
+
+  useEffect(() => {
+    if (activeTool !== 'slice') {
+      setLineDiameters({ proximal: null, distal: null })
+      return
+    }
+    scheduleLineMeasure()
+    // scheduleLineMeasure only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTool, proximalLineX, distalLineX])
+
   if (!validModel && !viewFrame) {
     return <Navigate to="/data/3d-analysis" state={{ dataRecordId }} replace />
+  }
+
+  // Measures the vessel where each line sits (at most once per frame, since
+  // the camera can change many times a frame while the model is moved).
+  function measureLines() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    setLineDiameters({
+      proximal: canvas.measureDiameterAtScreenX(lineXRef.current.proximal)?.diameter ?? null,
+      distal: canvas.measureDiameterAtScreenX(lineXRef.current.distal)?.diameter ?? null,
+    })
+  }
+
+  function scheduleLineMeasure() {
+    if (lineFrameRef.current !== null) return
+    lineFrameRef.current = requestAnimationFrame(() => {
+      lineFrameRef.current = null
+      if (activeToolRef.current === 'slice') measureLines()
+    })
+  }
+
+  function handleLinePointerDown(which: 'proximal' | 'distal', event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    draggingLineRef.current = which
+  }
+
+  // Sliding a line along the horizontal axis re-measures the vessel there and,
+  // once the lesion has been measured, writes it into that diameter field.
+  function handleLinePointerMove(event: PointerEvent<HTMLDivElement>) {
+    const which = draggingLineRef.current
+    const bounds = canvasAreaRef.current?.getBoundingClientRect()
+    if (!which || !bounds) return
+    const x = clampLineX(((event.clientX - bounds.left) / bounds.width) * 100)
+    lineXRef.current = { ...lineXRef.current, [which]: x }
+    setDiameterLineX((prev) => ({ ...prev, [which]: x }))
+    const result = canvasRef.current?.measureDiameterAtScreenX(x)
+    setLineDiameters((prev) => ({ ...prev, [which]: result?.diameter ?? null }))
+    if (result && selectedLesion.stenosisRate !== '') {
+      handleSelectedLesionFieldChange(
+        which === 'proximal' ? 'lesionProximalDiameter' : 'lesionDistalDiameter',
+        formatMeasurement(result.diameter),
+      )
+    }
+  }
+
+  function handleLinePointerUp(event: PointerEvent<HTMLDivElement>) {
+    draggingLineRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   // Before the lesion has been measured there is no narrowest point yet, so
@@ -453,6 +546,7 @@ export function LesionAnalysisPage() {
     if (activeTool === 'slice') {
       if (tool === 'slice') {
         // The scissors again leaves slice mode, keeping the drag mode in use.
+        setDiameterLineX({ proximal: null, distal: null })
         const back: ViewerTool = slicePan ? 'pan' : 'rotate'
         setActiveTool(back)
         canvasRef.current?.setTool(back)
@@ -475,8 +569,16 @@ export function LesionAnalysisPage() {
       // so the fixed cutting plane is square across it and the area read is the
       // lesion's. Before the lesion is measured, use the middle of ① and ② and
       // the line from ① to ②.
-      const focus = lesionFocus ?? focusFromSelectedPoints()
-      if (focus) canvasRef.current?.alignViewToVessel(focus.point, focus.direction)
+      const picked = focusFromSelectedPoints()
+      const focus = lesionFocus ?? picked
+      if (focus) {
+        // Point the direction from ① towards ② so ① (proximal) is on the left.
+        const d = focus.direction
+        const c = picked?.direction
+        const flip = c && d[0] * c[0] + d[1] * c[1] + d[2] * c[2] < 0
+        const direction: [number, number, number] = flip ? [-d[0], -d[1], -d[2]] : d
+        canvasRef.current?.alignViewToVessel(focus.point, direction)
+      }
       return
     }
     setActiveTool(tool)
@@ -1289,7 +1391,10 @@ export function LesionAnalysisPage() {
                   controlsEnabled={!isAnnotating && !isDraggingPoint}
                   initialCamera={cameraState}
                   onCameraChange={setCameraState}
-                  onCameraMove={syncAnnotationPositions}
+                  onCameraMove={() => {
+                    syncAnnotationPositions()
+                    scheduleLineMeasure()
+                  }}
                   sliceMode={activeTool === 'slice'}
                   onSliceAreaChange={setSliceCrossSectionArea}
                 />
@@ -1383,6 +1488,35 @@ export function LesionAnalysisPage() {
                     <span className="absolute left-1/2 top-1 ml-1.5 text-[10px] font-semibold text-gray-500">Y</span>
                     <span className="absolute left-1/2 top-1/2 ml-3 mt-1 text-[10px] font-semibold text-gray-500">Z</span>
                     <span className="absolute left-1/2 bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600">切断面</span>
+                    {(['proximal', 'distal'] as const).map((which) => {
+                      const isProximal = which === 'proximal'
+                      const diameter = lineDiameters[which]
+                      return (
+                        <div
+                          key={which}
+                          className="pointer-events-auto absolute bottom-0 top-0 w-3 -translate-x-1/2 cursor-ew-resize touch-none"
+                          style={{ left: `${isProximal ? proximalLineX : distalLineX}%` }}
+                          title={isProximal ? '病変近位径の位置（左右にドラッグ）' : '病変遠位径の位置（左右にドラッグ）'}
+                          onPointerDown={(event) => handleLinePointerDown(which, event)}
+                          onPointerMove={handleLinePointerMove}
+                          onPointerUp={handleLinePointerUp}
+                          onPointerCancel={handleLinePointerUp}
+                        >
+                          <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-gray-700/70" />
+                          <div
+                            className={`absolute left-1/2 top-12 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border text-[10px] font-bold text-white ${
+                              isProximal ? 'border-red-500 bg-red-500/80' : 'border-blue-500 bg-blue-500/80'
+                            }`}
+                          >
+                            {isProximal ? 1 : 2}
+                          </div>
+                          <span className="absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-gray-700 shadow-sm">
+                            {isProximal ? '近位径' : '遠位径'}{' '}
+                            {diameter != null ? `${formatMeasurement(diameter)} mm` : '—'}
+                          </span>
+                        </div>
+                      )
+                    })}
                     {sliceCrossSectionArea == null && (
                       <p className="absolute left-1/2 top-1/2 mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm">
                         十字の中心に血管を合わせてください

@@ -12,6 +12,7 @@ import { Bounds, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
+import { computeCrossSection, loopArea } from '@/lib/slicePlane'
 import { measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
@@ -78,6 +79,10 @@ export interface ModelCanvasHandle {
   // Smoothly turns and moves the view so `center` is in the middle of the
   // screen and the vessel running along `direction` lies left-to-right.
   alignViewToVessel: (center: [number, number, number], direction: [number, number, number]) => void
+  // Diameter of the vessel cut by a vertical plane through the screen column
+  // at `xPercent` (on the horizontal axis), as the equivalent circle of the
+  // cut's area. Null when nothing is there.
+  measureDiameterAtScreenX: (xPercent: number) => { diameter: number; area: number } | null
   projectWorldPoint: (point: [number, number, number]) => { x: number; y: number } | null
   getCameraState: () => CameraState | null
 }
@@ -136,6 +141,9 @@ const SEGMENT_HIGHLIGHT_STEPS = 30
 const REFERENCE_PLATEAU_STABLE_STEPS = 3
 const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 const ALIGN_DURATION_MS = 500
+// Heights (percent of the view, either side of the horizontal axis) tried in
+// turn when looking for the vessel a diameter line cuts.
+const LINE_SEARCH_OFFSETS_PERCENT = [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12, 15, -15, 18, -18]
 const HEART_PROXIMITY_STEP_PERCENT = 1
 const HEART_PROXIMITY_MAX_STEPS = 20
 const HEART_PROXIMITY_DECISIVE_WIDTH_RATIO = 1.4
@@ -345,11 +353,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     }
     back.normalize()
 
-    // Screen-right is the vessel direction (either way); take the way that
-    // keeps the picture the right way up.
+    // Screen-right is the vessel direction as given (the caller passes ① to
+    // ②, so ① ends up on the left); look from whichever side keeps the
+    // picture the right way up.
     let up = new THREE.Vector3().crossVectors(back, vessel)
     if (up.dot(camera.up) < 0) {
-      vessel.negate()
+      back.negate()
       up = new THREE.Vector3().crossVectors(back, vessel)
     }
     up.normalize()
@@ -869,6 +878,47 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
     },
     alignViewToVessel: (center, direction) => alignViewToVessel(center, direction),
+    measureDiameterAtScreenX: (xPercent) => {
+      const camera = threeStateRef.current?.camera
+      const modelGroup = modelGroupRef.current
+      if (!camera || !modelGroup) return null
+      modelGroup.updateMatrixWorld(true)
+      // The vessel is seldom exactly on the horizontal axis, so take the
+      // nearest vessel in a band around it (the plane for a screen column is
+      // the same whatever the height, so only the hit point depends on it).
+      let hit: THREE.Intersection | null = null
+      for (const offset of LINE_SEARCH_OFFSETS_PERCENT) {
+        hit = hitAt(xPercent, 50 + offset, modelGroup)
+        if (hit) break
+      }
+      if (!hit) return null
+      camera.updateMatrixWorld()
+      // The plane through the camera that contains the screen's vertical
+      // direction and the ray at that column: it is the vertical line on
+      // screen, seen edge-on, just like the fixed centre plane.
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize()
+      const ray = hit.point.clone().sub(camera.position).normalize()
+      const normal = new THREE.Vector3().crossVectors(ray, up)
+      if (normal.lengthSq() < 1e-12) return null
+      normal.normalize()
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, camera.position)
+
+      // The hit point is on the plane and on the surface, so the cut outline
+      // of that vessel passes through it: take the loop nearest to it.
+      let best: { loop: THREE.Vector3[]; distance: number } | null = null
+      modelGroup.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return
+        const cut = computeCrossSection(child, plane)
+        if (!cut) return
+        for (const loop of cut.loops) {
+          const distance = Math.min(...loop.map((point) => point.distanceTo(hit.point)))
+          if (!best || distance < best.distance) best = { loop, distance }
+        }
+      })
+      if (!best) return null
+      const area = loopArea((best as { loop: THREE.Vector3[] }).loop, normal)
+      return { area, diameter: 2 * Math.sqrt(area / Math.PI) }
+    },
     projectWorldPoint: (point) => projectWorldPointToScreen(new THREE.Vector3(...point)),
     getCameraState: () => {
       const camera = threeStateRef.current?.camera
