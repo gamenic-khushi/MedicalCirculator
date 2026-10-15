@@ -37,11 +37,13 @@ jobs:
           # update, which resets it to empty on the server, and the deployment
           # it then creates has no SPA fallback — so any page other than "/"
           # answered 404 on refresh. Set the site's settings explicitly,
-          # fallbackFile included, and then create the deployment ourselves so
-          # it is built with the fallback. The values mirror appwrite.config.json.
-          # If either call fails, fall back to the plain push so a deploy is
-          # never lost (the refresh 404 would just come back for that deploy).
-          if appwrite sites update \
+          # fallbackFile included, then create the deployment ourselves so it is
+          # built with the fallback, wait for the build and activate it (the
+          # upload's own activate flag did not switch it over). The values mirror
+          # appwrite.config.json. If any step fails, fall back to the plain push
+          # so a deploy is never lost (the refresh 404 would just come back).
+          deploy_site_with_fallback() {
+            appwrite sites update \
               --site-id medicalCirculator \
               --name medicalCirculator \
               --framework vite \
@@ -56,14 +58,37 @@ jobs:
               --fallback-file index.html \
               --build-specification s-8vcpu-8gb \
               --runtime-specification s-8vcpu-8gb \
-              --deployment-retention 0 \
-            && appwrite sites create-deployment \
-              --site-id medicalCirculator \
-              --code . \
-              --activate true; then
+              --deployment-retention 0 || return 1
+
+            created=$(appwrite --raw sites create-deployment \
+              --site-id medicalCirculator --code . --activate true) || return 1
+            echo "$created"
+            deployment_id=$(echo "$created" | grep -o '"$id": *"[A-Za-z0-9]*"' | head -1 | sed 's/.*"\([A-Za-z0-9]*\)"$/\1/')
+            [ -n "$deployment_id" ] || return 1
+            echo "New deployment: $deployment_id"
+
+            for _ in $(seq 1 60); do
+              details=$(appwrite --raw sites get-deployment \
+                --site-id medicalCirculator --deployment-id "$deployment_id") || return 1
+              if echo "$details" | grep -q '"status": *"ready"'; then
+                appwrite sites update-site-deployment \
+                  --site-id medicalCirculator --deployment-id "$deployment_id" || return 1
+                return 0
+              fi
+              if echo "$details" | grep -q '"status": *"failed"'; then
+                echo "Build failed"
+                return 1
+              fi
+              sleep 5
+            done
+            echo "Timed out waiting for the build"
+            return 1
+          }
+
+          if deploy_site_with_fallback; then
             echo "Site deployed with fallbackFile=index.html"
           else
-            echo "::warning::Site update/deploy with fallbackFile failed; using plain push (refresh on inner pages will 404)"
+            echo "::warning::Deploy with fallbackFile failed; using plain push (refresh on inner pages will 404)"
             appwrite push site --site-id medicalCirculator --activate=true --force
           fi
 
