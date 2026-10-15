@@ -39,7 +39,12 @@ import {
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
-import { DELETE_FAILED, SAVE_FAILED, VESSEL_WIDTH_MEASURE_FAILED } from '@/lib/messages'
+import {
+  DELETE_FAILED,
+  SAVE_FAILED,
+  VESSEL_WIDTH_MEASURE_FAILED,
+  ZOOM_IN_FOR_ACCURACY,
+} from '@/lib/messages'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { resolveProximalTiebreak } from '@/lib/typesafeProximity'
 import { measureTwoPointLesion, type PercentPoint } from '@/lib/twoPointLesionMeasurement'
@@ -94,6 +99,10 @@ function stripUnit(value: string | undefined): string {
 // Number(value) === 0 further downstream (e.g. the reference-diameter check
 // before highlighting the measured segment), silently skipping real
 // behavior. Scale the decimal count to the value's own magnitude instead.
+// The lesion's reference vessel must cover at least this many screen pixels
+// for the view to count as zoomed in enough.
+const MIN_VESSEL_SCREEN_PX = 30
+
 // Keeps a slidable line inside the view, away from the very edges.
 function clampLineX(value: number): number {
   return Math.min(Math.max(value, 3), 97)
@@ -455,9 +464,30 @@ export function LesionAnalysisPage() {
   const lineFrameRef = useRef<number | null>(null)
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
   const activeToolRef = useRef(activeTool)
+  // Whether the last check found the view zoomed in enough, so the hint only
+  // shows when that changes to "not enough", not on every camera move.
+  const zoomOkRef = useRef(true)
+  const zoomCheckTimerRef = useRef<number | null>(null)
+
+  const selectedLesionRef = useRef(selectedLesion)
+  useEffect(() => {
+    selectedLesionRef.current = selectedLesion
+  }, [selectedLesion])
 
   useEffect(() => {
     activeToolRef.current = activeTool
+    if (zoomCheckTimerRef.current !== null) {
+      window.clearTimeout(zoomCheckTimerRef.current)
+      zoomCheckTimerRef.current = null
+    }
+    if (activeTool === 'slice') {
+      // After the scissors' automatic move has finished, tell the user if the
+      // view is too far out.
+      zoomOkRef.current = true
+      zoomCheckTimerRef.current = window.setTimeout(() => checkZoom(), 800)
+    }
+    // checkZoom only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTool])
 
   useEffect(() => {
@@ -495,6 +525,27 @@ export function LesionAnalysisPage() {
       lineFrameRef.current = null
       if (activeToolRef.current === 'slice') measureLines()
     })
+  }
+
+  // The reference vessel (average of the lesion's proximal and distal
+  // diameters) should cover at least this many screen pixels, or the view is
+  // too far out for the picking and the diameter lines to be accurate.
+  function checkZoom() {
+    const proximal = Number(selectedLesionRef.current.lesionProximalDiameter)
+    const distal = Number(selectedLesionRef.current.lesionDistalDiameter)
+    if (!(proximal > 0) || !(distal > 0)) return
+    const pixelsPerUnit = canvasRef.current?.getPixelsPerUnit()
+    if (!pixelsPerUnit) return
+    const enough = ((proximal + distal) / 2) * pixelsPerUnit >= MIN_VESSEL_SCREEN_PX
+    if (!enough && zoomOkRef.current) {
+      showToast(ZOOM_IN_FOR_ACCURACY, 'info', { durationMs: 4000 })
+    }
+    zoomOkRef.current = enough
+  }
+
+  function handleCameraChange(state: CameraState) {
+    setCameraState(state)
+    if (activeToolRef.current === 'slice') checkZoom()
   }
 
   function handleLinePointerDown(which: 'proximal' | 'distal', event: PointerEvent<HTMLDivElement>) {
@@ -1390,7 +1441,7 @@ export function LesionAnalysisPage() {
                   color={MODEL_COLOR}
                   controlsEnabled={!isAnnotating && !isDraggingPoint}
                   initialCamera={cameraState}
-                  onCameraChange={setCameraState}
+                  onCameraChange={handleCameraChange}
                   onCameraMove={() => {
                     syncAnnotationPositions()
                     scheduleLineMeasure()

@@ -83,6 +83,9 @@ export interface ModelCanvasHandle {
   // at `xPercent` (on the horizontal axis), as the equivalent circle of the
   // cut's area. Null when nothing is there.
   measureDiameterAtScreenX: (xPercent: number) => { diameter: number; area: number } | null
+  // How many screen pixels one model unit covers at the orbit target — grows as
+  // the user zooms in. Null before the view is ready.
+  getPixelsPerUnit: () => number | null
   projectWorldPoint: (point: [number, number, number]) => { x: number; y: number } | null
   getCameraState: () => CameraState | null
 }
@@ -878,6 +881,15 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
     },
     alignViewToVessel: (center, direction) => alignViewToVessel(center, direction),
+    getPixelsPerUnit: () => {
+      const camera = threeStateRef.current?.camera
+      const controls = controlsRef.current
+      const canvasElement = containerRef.current?.querySelector('canvas')
+      if (!camera || !controls || !canvasElement || !(camera instanceof THREE.PerspectiveCamera)) return null
+      const distance = camera.position.distanceTo(controls.target)
+      if (distance <= 0 || canvasElement.clientHeight <= 0) return null
+      return canvasElement.clientHeight / (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))
+    },
     measureDiameterAtScreenX: (xPercent) => {
       const camera = threeStateRef.current?.camera
       const modelGroup = modelGroupRef.current

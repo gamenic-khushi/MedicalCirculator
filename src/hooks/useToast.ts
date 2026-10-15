@@ -4,7 +4,7 @@ const TOAST_DURATION_MS = 1800
 
 export interface ToastState {
   message: string
-  variant: 'success' | 'error'
+  variant: 'success' | 'error' | 'info'
   persistent: boolean
 }
 
@@ -17,12 +17,14 @@ export function useToast() {
   function showToast(
     message: string,
     variant: ToastState['variant'] = 'success',
-    options: { persistent?: boolean } = {},
+    options: { persistent?: boolean; durationMs?: number } = {},
   ) {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     const persistent = options.persistent ?? false
     setToast({ message, variant, persistent })
-    timeoutRef.current = persistent ? null : setTimeout(() => setToast(null), TOAST_DURATION_MS)
+    timeoutRef.current = persistent
+      ? null
+      : setTimeout(() => setToast(null), options.durationMs ?? TOAST_DURATION_MS)
   }
 
   function dismissToast() {

@@ -4,5 +4,6 @@ export const VESSEL_WIDTH_MEASURE_FAILED = '血管の幅を測定できません
 export const SAVE_FAILED = '保存に失敗しました'
 export const DELETE_FAILED = '削除に失敗しました'
 export const LOAD_FAILED = 'データの読み込みに失敗しました'
+export const ZOOM_IN_FOR_ACCURACY = '精度を高めるため、ズームインしてください'
 export const HARD_REFRESH_NOTICE =
   '最新バージョンをご利用いただくために、ハードリフレッシュ（Ctrl+Shift+R）から操作をしてください'

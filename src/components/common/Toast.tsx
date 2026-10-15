@@ -1,8 +1,8 @@
-import { CheckCircle2, X, XCircle } from 'lucide-react'
+import { CheckCircle2, Info, X, XCircle } from 'lucide-react'
 
 interface ToastProps {
   message: string
-  variant?: 'success' | 'error'
+  variant?: 'success' | 'error' | 'info'
   // When set, the toast shows a close button and no longer blocks the page
   // behind it, since it stays visible until the user dismisses it.
   onDismiss?: () => void
@@ -12,12 +12,15 @@ export function Toast({ message, variant = 'success', onDismiss }: ToastProps) {
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center ${
-        onDismiss ? 'pointer-events-none' : 'bg-black/10'
+        // A hint (info) doesn't block the page, since the user is expected to keep working.
+        onDismiss || variant === 'info' ? 'pointer-events-none' : 'bg-black/10'
       }`}
     >
       <div className="pointer-events-auto flex max-w-[90vw] items-center gap-2 rounded-xl bg-white px-5 py-3 shadow-lg">
         {variant === 'error' ? (
           <XCircle className="h-5 w-5 shrink-0 text-red-500" />
+        ) : variant === 'info' ? (
+          <Info className="h-5 w-5 shrink-0 text-indigo-500" />
         ) : (
           <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
         )}
