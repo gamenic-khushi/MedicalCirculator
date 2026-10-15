@@ -33,5 +33,38 @@ jobs:
             --project-id "$APPWRITE_PROJECT_ID" \
             --key "$APPWRITE_API_KEY"
 
-          appwrite push site --site-id medicalCirculator --activate=true --force
+          # `appwrite push site` (CLI 17.4.0) leaves fallbackFile out of its site
+          # update, which resets it to empty on the server, and the deployment
+          # it then creates has no SPA fallback — so any page other than "/"
+          # answered 404 on refresh. Set the site's settings explicitly,
+          # fallbackFile included, and then create the deployment ourselves so
+          # it is built with the fallback. The values mirror appwrite.config.json.
+          # If either call fails, fall back to the plain push so a deploy is
+          # never lost (the refresh 404 would just come back for that deploy).
+          if appwrite sites update \
+              --site-id medicalCirculator \
+              --name medicalCirculator \
+              --framework vite \
+              --enabled true \
+              --logging true \
+              --timeout 30 \
+              --install-command "npm install" \
+              --build-command "npm run build" \
+              --output-directory ./dist \
+              --build-runtime node-22 \
+              --adapter static \
+              --fallback-file index.html \
+              --build-specification s-8vcpu-8gb \
+              --runtime-specification s-8vcpu-8gb \
+              --deployment-retention 0 \
+            && appwrite sites create-deployment \
+              --site-id medicalCirculator \
+              --code . \
+              --activate true; then
+            echo "Site deployed with fallbackFile=index.html"
+          else
+            echo "::warning::Site update/deploy with fallbackFile failed; using plain push (refresh on inner pages will 404)"
+            appwrite push site --site-id medicalCirculator --activate=true --force
+          fi
+
           appwrite push function --function-id resolveProximityTiebreak --activate=true --force
