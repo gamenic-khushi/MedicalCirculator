@@ -41,6 +41,7 @@ import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
 import {
   DELETE_FAILED,
+  MODEL_LOOKS_LIKE_METRES,
   SAVE_FAILED,
   VESSEL_WIDTH_MEASURE_FAILED,
   ZOOM_IN_FOR_ACCURACY,
@@ -99,6 +100,10 @@ function stripUnit(value: string | undefined): string {
 // Number(value) === 0 further downstream (e.g. the reference-diameter check
 // before highlighting the measured segment), silently skipping real
 // behavior. Scale the decimal count to the value's own magnitude instead.
+// A model whose largest dimension is below this (in model units) is treated
+// as metre-scale rather than millimetre-scale.
+const MIN_MODEL_SIZE_UNITS = 1
+
 // The lesion's reference vessel must cover at least this many screen pixels
 // for the view to count as zoomed in enough.
 const MIN_VESSEL_SCREEN_PX = 30
@@ -546,6 +551,15 @@ export function LesionAnalysisPage() {
   function handleCameraChange(state: CameraState) {
     setCameraState(state)
     if (activeToolRef.current === 'slice') checkZoom()
+  }
+
+  // A coronary tree is tens of millimetres across. Anything under 1 unit is
+  // almost certainly a model exported in metres, which makes every measured
+  // value 1000 times too small and so outside the trained ranges.
+  function handleModelSize(maxDimension: number) {
+    if (maxDimension < MIN_MODEL_SIZE_UNITS) {
+      showToast(MODEL_LOOKS_LIKE_METRES, 'error', { persistent: true })
+    }
   }
 
   function handleLinePointerDown(which: 'proximal' | 'distal', event: PointerEvent<HTMLDivElement>) {
@@ -1448,6 +1462,7 @@ export function LesionAnalysisPage() {
                   }}
                   sliceMode={activeTool === 'slice'}
                   onSliceAreaChange={setSliceCrossSectionArea}
+                  onModelSize={handleModelSize}
                 />
 
                 <TwoPointMarkers

@@ -7,7 +7,7 @@ import {
   useState,
   type MutableRefObject,
 } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Bounds, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -106,6 +106,9 @@ interface ModelCanvasProps {
   // (the page draws the crosshair there), so moving the model moves the cut.
   sliceMode?: boolean
   onSliceAreaChange?: (area: number | null) => void
+  // Called once, as soon as the model has loaded, with its largest dimension in
+  // model units — lets a page tell when a model is not in millimetres.
+  onModelSize?: (maxDimension: number) => void
 }
 
 interface ThreeState {
@@ -170,6 +173,30 @@ function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | n
   return null
 }
 
+// Reports the loaded model's size once. The model loads asynchronously (the
+// group is empty until then), so it keeps checking each frame until the group
+// has geometry.
+function ModelSizeReporter({
+  groupRef,
+  onSize,
+}: {
+  groupRef: MutableRefObject<THREE.Group | null>
+  onSize: (maxDimension: number) => void
+}) {
+  const reported = useRef(false)
+  useFrame(() => {
+    if (reported.current) return
+    const group = groupRef.current
+    if (!group) return
+    const box = new THREE.Box3().setFromObject(group)
+    if (box.isEmpty()) return
+    reported.current = true
+    const size = box.getSize(new THREE.Vector3())
+    onSize(Math.max(size.x, size.y, size.z))
+  })
+  return null
+}
+
 function CameraTargetRestorer({
   target,
   controlsRef,
@@ -197,6 +224,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     onCameraMove,
     sliceMode = false,
     onSliceAreaChange,
+    onModelSize,
   },
   ref,
 ) {
@@ -1109,6 +1137,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         gl={{ alpha: true, preserveDrawingBuffer: true, localClippingEnabled: true }}
       >
         <SceneAccessor stateRef={threeStateRef} />
+        {onModelSize && <ModelSizeReporter groupRef={modelGroupRef} onSize={onModelSize} />}
         <ambientLight intensity={0.7} />
         <directionalLight position={[5, 8, 5]} intensity={1.1} />
         <directionalLight position={[-5, -3, -5]} intensity={0.3} />
