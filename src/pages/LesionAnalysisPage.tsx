@@ -562,8 +562,10 @@ export function LesionAnalysisPage() {
 
   // Sliding a line moves its point (① or ②) along the vessel to where the line
   // now is, so the two never part; where the line finds no vessel, the point
-  // stays put. Once the lesion has been measured, the vessel's diameter there
-  // goes into that diameter field.
+  // stays put. The diameter fields are not written here: the line's own cut
+  // is a different measurement from the one along the vessel that 測定範囲を更新
+  // makes, and writing it made the values jump when that button was clicked.
+  // On release the lesion is measured again, exactly as that button does.
   function handleLinePointerMove(event: PointerEvent<HTMLDivElement>) {
     const which = draggingLineRef.current
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
@@ -582,24 +584,20 @@ export function LesionAnalysisPage() {
           : annotation,
       ),
     )
-    if (selectedLesion.stenosisRate !== '') {
-      handleSelectedLesionFieldChange(
-        which === 'proximal' ? 'lesionProximalDiameter' : 'lesionDistalDiameter',
-        formatMeasurement(result.diameter),
-      )
-    }
   }
 
   function handleLinePointerUp(event: PointerEvent<HTMLDivElement>) {
+    const wasDragging = draggingLineRef.current !== null
     draggingLineRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-    // A slide can carry ① past ②. Put the nearer one first again and, as the
-    // diameter fields followed the old order, measure again in the new one.
+    if (!wasDragging) return
+    // A slide can carry ① past ②. Put the nearer one first again, then measure
+    // the lesion again between the points as they are now, so the fields (and
+    // the lines' labels) match what 測定範囲を更新 would give.
     const ordered = keepNearerFirst(annotations)
-    if (ordered[0] === annotations[0]) return
-    setAnnotations(ordered)
+    if (ordered[0] !== annotations[0]) setAnnotations(ordered)
     if (selectedLesion.stenosisRate !== '') measureLesion(ordered[0], ordered[1])
   }
 
@@ -1578,7 +1576,18 @@ export function LesionAnalysisPage() {
                       const point = annotations.length === 2 ? annotations[index] : null
                       if (!point) return null
                       const isProximal = which === 'proximal'
-                      const diameter = lineDiameters[which]
+                      // Once the lesion is measured, the label shows the field's
+                      // own value, so they can never disagree; until then it is
+                      // the vessel's diameter where the line cuts it.
+                      const measuredValue = Number(
+                        isProximal
+                          ? selectedLesion.lesionProximalDiameter
+                          : selectedLesion.lesionDistalDiameter,
+                      )
+                      const diameter =
+                        selectedLesion.stenosisRate !== '' && measuredValue > 0
+                          ? measuredValue
+                          : lineDiameters[which]
                       return (
                         <div
                           key={which}
