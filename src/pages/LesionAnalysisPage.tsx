@@ -113,10 +113,10 @@ function clampLineX(value: number): number {
   return Math.min(Math.max(value, 3), 97)
 }
 
-interface LesionFocus {
-  point: [number, number, number]
-  direction: [number, number, number]
-}
+// Where the scissors brings ① and ② (percent of the view's width), either side
+// of the fixed cutting plane.
+const PROXIMAL_LINE_START_X = 30
+const DISTAL_LINE_START_X = 70
 
 function formatMeasurement(value: number): string {
   const abs = Math.abs(value)
@@ -292,19 +292,9 @@ export function LesionAnalysisPage() {
   // Rotate vs move for the left mouse button while the slice tool is on
   // (activeTool is 'slice' then, so it can't carry that choice itself).
   const [slicePan, setSlicePan] = useState(false)
-  // Where the measured lesion is narrowest and which way the vessel runs
-  // there; the scissors turns the view onto it.
-  const [lesionFocus, setLesionFocus] = useState<LesionFocus | null>(null)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
-  // The two slidable lines (proximal ①, distal ②) on the horizontal axis, as a
-  // percentage of the view's width. null = not moved yet, so the line sits at
-  // its default (30% for ①, 70% for ②), either side of the fixed plane.
-  const [diameterLineX, setDiameterLineX] = useState<{ proximal: number | null; distal: number | null }>({
-    proximal: null,
-    distal: null,
-  })
-  // The vessel's diameter where each line cuts it.
+  // The vessel's diameter where each slidable line (through ① and ②) cuts it.
   const [lineDiameters, setLineDiameters] = useState<{ proximal: number | null; distal: number | null }>({
     proximal: null,
     distal: null,
@@ -322,6 +312,10 @@ export function LesionAnalysisPage() {
   // of points always gets a new generateId()-based key, so this never needs
   // to be reset for a fresh placement.
   const manualSwapPairRef = useRef<string | null>(null)
+  // Key of the pair the user put in order with the swap button themselves:
+  // nothing automatic reorders that pair afterwards, not even the path from
+  // the heart.
+  const swappedByUserPairRef = useRef<string | null>(null)
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
   const [bloodPressure, setBloodPressure] = useState(
     initialBloodPressure ?? (viewFrame ? stripUnit(viewFrame.pa) : ''),
@@ -463,9 +457,8 @@ export function LesionAnalysisPage() {
     return () => observer.disconnect()
   }, [])
 
-  const proximalLineX = clampLineX(diameterLineX.proximal ?? 30)
-  const distalLineX = clampLineX(diameterLineX.distal ?? 70)
-  const lineXRef = useRef({ proximal: proximalLineX, distal: distalLineX })
+  // The points as of the last render, for the line measurement a frame later.
+  const annotationsRef = useRef(annotations)
   const lineFrameRef = useRef<number | null>(null)
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
   const activeToolRef = useRef(activeTool)
@@ -495,33 +488,32 @@ export function LesionAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTool])
 
+  // Each line goes through its point, so re-measure whenever a point moves on
+  // screen: placed, dragged, slid, swapped, or the model moved.
   useEffect(() => {
-    lineXRef.current = { proximal: proximalLineX, distal: distalLineX }
-  }, [proximalLineX, distalLineX])
-
-  useEffect(() => {
-    if (activeTool !== 'slice') {
-      setLineDiameters({ proximal: null, distal: null })
-      return
-    }
-    scheduleLineMeasure()
+    annotationsRef.current = annotations
+    if (activeTool === 'slice') scheduleLineMeasure()
     // scheduleLineMeasure only reads refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTool, proximalLineX, distalLineX])
+  }, [activeTool, annotations])
 
   if (!validModel && !viewFrame) {
     return <Navigate to="/data/3d-analysis" state={{ dataRecordId }} replace />
   }
 
-  // Measures the vessel where each line sits (at most once per frame, since
-  // the camera can change many times a frame while the model is moved).
+  // Measures the vessel where each line sits, at ① and ② (at most once per
+  // frame, since the camera can change many times a frame while the model is
+  // moved). Projects the points afresh, as the camera may have moved since.
   function measureLines() {
     const canvas = canvasRef.current
-    if (!canvas) return
-    setLineDiameters({
-      proximal: canvas.measureDiameterAtScreenX(lineXRef.current.proximal)?.diameter ?? null,
-      distal: canvas.measureDiameterAtScreenX(lineXRef.current.distal)?.diameter ?? null,
-    })
+    const [proximal, distal] = annotationsRef.current
+    if (!canvas || !proximal || !distal) return
+    const diameterAt = (point: Annotation) => {
+      const onScreen = point.worldPoint ? canvas.projectWorldPoint(point.worldPoint) : point
+      if (!onScreen) return null
+      return canvas.measureDiameterAtScreenX(onScreen.x, onScreen.y)?.diameter ?? null
+    }
+    setLineDiameters({ proximal: diameterAt(proximal), distal: diameterAt(distal) })
   }
 
   function scheduleLineMeasure() {
@@ -568,18 +560,29 @@ export function LesionAnalysisPage() {
     draggingLineRef.current = which
   }
 
-  // Sliding a line along the horizontal axis re-measures the vessel there and,
-  // once the lesion has been measured, writes it into that diameter field.
+  // Sliding a line moves its point (① or ②) along the vessel to where the line
+  // now is, so the two never part; where the line finds no vessel, the point
+  // stays put. Once the lesion has been measured, the vessel's diameter there
+  // goes into that diameter field.
   function handleLinePointerMove(event: PointerEvent<HTMLDivElement>) {
     const which = draggingLineRef.current
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
-    if (!which || !bounds) return
+    const canvas = canvasRef.current
+    const point = annotations[which === 'proximal' ? 0 : 1]
+    if (!which || !bounds || !canvas || !point) return
     const x = clampLineX(((event.clientX - bounds.left) / bounds.width) * 100)
-    lineXRef.current = { ...lineXRef.current, [which]: x }
-    setDiameterLineX((prev) => ({ ...prev, [which]: x }))
-    const result = canvasRef.current?.measureDiameterAtScreenX(x)
-    setLineDiameters((prev) => ({ ...prev, [which]: result?.diameter ?? null }))
-    if (result && selectedLesion.stenosisRate !== '') {
+    // Look near the point's own height, so it keeps to its own vessel.
+    const result = canvas.measureDiameterAtScreenX(x, point.y)
+    const onScreen = result && canvas.projectWorldPoint(result.point)
+    if (!result || !onScreen) return
+    setAnnotations((prev) =>
+      prev.map((annotation) =>
+        annotation.id === point.id
+          ? { ...annotation, x: onScreen.x, y: onScreen.y, worldPoint: result.point }
+          : annotation,
+      ),
+    )
+    if (selectedLesion.stenosisRate !== '') {
       handleSelectedLesionFieldChange(
         which === 'proximal' ? 'lesionProximalDiameter' : 'lesionDistalDiameter',
         formatMeasurement(result.diameter),
@@ -592,26 +595,19 @@ export function LesionAnalysisPage() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-  }
-
-  // Before the lesion has been measured there is no narrowest point yet, so
-  // use the middle of ①② and the direction from ① to ② (needs both 3D positions).
-  function focusFromSelectedPoints(): LesionFocus | null {
-    const [first, second] = annotations
-    if (annotations.length !== 2 || !first.worldPoint || !second.worldPoint) return null
-    const point = first.worldPoint.map((value, index) => (value + second.worldPoint![index]) / 2)
-    const direction = second.worldPoint.map((value, index) => value - first.worldPoint![index])
-    return {
-      point: point as [number, number, number],
-      direction: direction as [number, number, number],
-    }
+    // A slide can carry ① past ②. Put the nearer one first again and, as the
+    // diameter fields followed the old order, measure again in the new one.
+    const ordered = keepNearerFirst(annotations)
+    if (ordered[0] === annotations[0]) return
+    setAnnotations(ordered)
+    if (selectedLesion.stenosisRate !== '') measureLesion(ordered[0], ordered[1])
   }
 
   function handleToolChange(tool: ViewerTool) {
     if (activeTool === 'slice') {
       if (tool === 'slice') {
         // The scissors again leaves slice mode, keeping the drag mode in use.
-        setDiameterLineX({ proximal: null, distal: null })
+        setLineDiameters({ proximal: null, distal: null })
         const back: ViewerTool = slicePan ? 'pan' : 'rotate'
         setActiveTool(back)
         canvasRef.current?.setTool(back)
@@ -628,21 +624,17 @@ export function LesionAnalysisPage() {
       // Slice mode keeps whichever of rotate / move was already active.
       setSlicePan(activeTool === 'pan')
       setActiveTool('slice')
-      // Bring the selected lesion to the middle of the view with the vessel
-      // running left to right, so the cross is already on it.
-      // Centre on the narrowest point and lay the vessel there left to right,
-      // so the fixed cutting plane is square across it and the area read is the
-      // lesion's. Before the lesion is measured, use the middle of ① and ② and
-      // the line from ① to ②.
-      const picked = focusFromSelectedPoints()
-      const focus = lesionFocus ?? picked
-      if (focus) {
-        // Point the direction from ① towards ② so ① (proximal) is on the left.
-        const d = focus.direction
-        const c = picked?.direction
-        const flip = c && d[0] * c[0] + d[1] * c[1] + d[2] * c[2] < 0
-        const direction: [number, number, number] = flip ? [-d[0], -d[1], -d[2]] : d
-        canvasRef.current?.alignViewToVessel(focus.point, direction)
+      // Move the model so ① and ② land on the lines' starting positions with
+      // the vessel between them running left to right, so the cross is on the
+      // lesion between them (the lines follow the points from then on).
+      const [first, second] = annotations
+      if (first?.worldPoint && second?.worldPoint) {
+        canvasRef.current?.alignViewToVessel(
+          first.worldPoint,
+          second.worldPoint,
+          PROXIMAL_LINE_START_X,
+          DISTAL_LINE_START_X,
+        )
       }
       return
     }
@@ -670,7 +662,6 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
     setSelectedLesion(EMPTY_SELECTED_LESION)
-    setLesionFocus(null)
     setSnapshotImage(null)
     canvasRef.current?.clearSelection()
   }
@@ -720,12 +711,18 @@ export function LesionAnalysisPage() {
   // near-identical caliber either side of the narrowing, so there's often no
   // real width difference between them to compare, and comparing anyway just
   // amplifies raycasting noise into a wrong answer. The reliable signal is
-  // topology: walking away from the true proximal point (continuing past it,
-  // away from the other point) runs into the wider trunk; walking away from
-  // the true distal point runs off the end of a branch. canvas.determineProximalPoint
-  // does that walk. Only fall back to the width comparison (which at least
-  // sometimes helps when the walk itself is inconclusive, e.g. both points
-  // sit deep inside one long uniform segment) if the walk can't decide.
+  // topology: the path along the model from the heart is shorter to the true
+  // proximal point, whatever the camera (canvas.nearerToHeart). When the
+  // paths can't tell the points apart (e.g. on two branches equally far out),
+  // fall back to a walk on screen: walking away from the true proximal point
+  // (continuing past it, away from the other point) runs into the wider trunk;
+  // walking away from the true distal point runs off the end of a branch.
+  // canvas.determineProximalPoint does that walk. It covers a fixed share of
+  // the view, so zoomed in it sees only a few millimetres of vessel, which is
+  // why it is no longer the first choice. Only fall back to the width
+  // comparison (which at least sometimes helps when the walk itself is
+  // inconclusive, e.g. both points sit deep inside one long uniform segment)
+  // if the walk can't decide.
   //
   // When even that's inconclusive, order synchronously with the width
   // fallback (so placement never blocks on a network call) and kick off a
@@ -742,6 +739,9 @@ export function LesionAnalysisPage() {
     // back. Only an actual new pair of points (new generateId()s) escapes
     // this lock.
     if (manualSwapPairRef.current === pointPairKey(first.id, second.id)) return points
+
+    const byPath = orderByHeartPath(points)
+    if (byPath) return byPath
 
     const result = canvas.determineProximalPoint(first.x, first.y, second.x, second.y)
     // Ask for the AI tiebreak whenever both points resolved on the mesh at
@@ -765,6 +765,26 @@ export function LesionAnalysisPage() {
     return firstWidth == null || secondWidth == null || firstWidth >= secondWidth
       ? points
       : [second, first]
+  }
+
+  // ① and ② by their paths from the heart along the model; null when the paths
+  // can't tell them apart or a point has no 3D position.
+  function orderByHeartPath(points: Annotation[]): Annotation[] | null {
+    const [first, second] = points
+    if (points.length !== 2 || !first.worldPoint || !second.worldPoint) return null
+    const nearer = canvasRef.current?.nearerToHeart(first.worldPoint, second.worldPoint)
+    if (!nearer) return null
+    return nearer === 'first' ? points : [second, first]
+  }
+
+  // After a point moves, ① must still be the one nearer the heart. Only the
+  // path from the heart reorders here: it is the same for the same points,
+  // whereas re-running the screen walk after drags made ① and ② trade places
+  // on their own. A swap the user made themselves stands.
+  function keepNearerFirst(points: Annotation[]): Annotation[] {
+    if (points.length !== 2) return points
+    if (swappedByUserPairRef.current === pointPairKey(points[0].id, points[1].id)) return points
+    return orderByHeartPath(points) ?? points
   }
 
   // Fire-and-forget: asks Jev to break the tie using the same walk data the
@@ -854,12 +874,13 @@ export function LesionAnalysisPage() {
     const moved = annotations.map((annotation) =>
       annotation.id === id ? { ...annotation, x, y, worldPoint } : annotation,
     )
-    // The order was decided when the pair was placed. Re-deciding it after
-    // every drag made ① and ② trade places on their own after a few
-    // operations, so from the first drag on the order is locked and only the
-    // swap button changes it.
+    // The order was decided when the pair was placed. Re-deciding it by the
+    // screen walk after every drag made ① and ② trade places on their own
+    // after a few operations, so from the first drag on that order is locked
+    // (a late Jev answer can't change it either). Only the path from the
+    // heart, which is the same for the same points, still keeps ① nearer.
     if (moved.length === 2) manualSwapPairRef.current = pointPairKey(moved[0].id, moved[1].id)
-    const ordered = moved
+    const ordered = keepNearerFirst(moved)
     setAnnotations(ordered)
     // Once the lesion has been measured, dragging a point re-measures it so
     // the fields always match where the points are, without a reset.
@@ -877,6 +898,7 @@ export function LesionAnalysisPage() {
   function handleSwapAnnotations() {
     if (annotations.length !== 2) return
     manualSwapPairRef.current = pointPairKey(annotations[0].id, annotations[1].id)
+    swappedByUserPairRef.current = manualSwapPairRef.current
     const swapped: [Annotation, Annotation] = [annotations[1], annotations[0]]
     setAnnotations(swapped)
     if (selectedLesion.stenosisRate !== '') {
@@ -965,7 +987,6 @@ export function LesionAnalysisPage() {
         lesionPosition,
       }
       setSelectedLesion(measuredLesion)
-      setLesionFocus(result.focus ?? null)
 
       setIsMeasuring(false)
       afterMeasure?.(measuredLesion)
@@ -1456,10 +1477,7 @@ export function LesionAnalysisPage() {
                   controlsEnabled={!isAnnotating && !isDraggingPoint}
                   initialCamera={cameraState}
                   onCameraChange={handleCameraChange}
-                  onCameraMove={() => {
-                    syncAnnotationPositions()
-                    scheduleLineMeasure()
-                  }}
+                  onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
                   onSliceAreaChange={setSliceCrossSectionArea}
                   onModelSize={handleModelSize}
@@ -1554,14 +1572,18 @@ export function LesionAnalysisPage() {
                     <span className="absolute left-1/2 top-1 ml-1.5 text-[10px] font-semibold text-gray-500">Y</span>
                     <span className="absolute left-1/2 top-1/2 ml-3 mt-1 text-[10px] font-semibold text-gray-500">Z</span>
                     <span className="absolute left-1/2 bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600">切断面</span>
-                    {(['proximal', 'distal'] as const).map((which) => {
+                    {(['proximal', 'distal'] as const).map((which, index) => {
+                      // Each line goes through its own point, ① or ②, whose
+                      // marker is its only label: one ① and one ② on screen.
+                      const point = annotations.length === 2 ? annotations[index] : null
+                      if (!point) return null
                       const isProximal = which === 'proximal'
                       const diameter = lineDiameters[which]
                       return (
                         <div
                           key={which}
                           className="pointer-events-auto absolute bottom-0 top-0 w-3 -translate-x-1/2 cursor-ew-resize touch-none"
-                          style={{ left: `${isProximal ? proximalLineX : distalLineX}%` }}
+                          style={{ left: `${point.x}%` }}
                           title={isProximal ? '病変近位径の位置（左右にドラッグ）' : '病変遠位径の位置（左右にドラッグ）'}
                           onPointerDown={(event) => handleLinePointerDown(which, event)}
                           onPointerMove={handleLinePointerMove}
@@ -1569,13 +1591,6 @@ export function LesionAnalysisPage() {
                           onPointerCancel={handleLinePointerUp}
                         >
                           <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-gray-700/70" />
-                          <div
-                            className={`absolute left-1/2 top-12 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border text-[10px] font-bold text-white ${
-                              isProximal ? 'border-red-500 bg-red-500/80' : 'border-blue-500 bg-blue-500/80'
-                            }`}
-                          >
-                            {isProximal ? 1 : 2}
-                          </div>
                           <span className="absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-gray-700 shadow-sm">
                             {isProximal ? '近位径' : '遠位径'}{' '}
                             {diameter != null ? `${formatMeasurement(diameter)} mm` : '—'}

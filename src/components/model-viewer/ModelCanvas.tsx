@@ -12,6 +12,7 @@ import { Bounds, OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
+import { nearerToHeart } from '@/lib/heartDistance'
 import { computeCrossSection, loopArea } from '@/lib/slicePlane'
 import { measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
@@ -44,8 +45,6 @@ export interface ModelCanvasHandle {
     length: number
     narrowestFraction: number
     narrowestPoint: { x: number; y: number } | null
-    narrowestWorld: [number, number, number]
-    narrowestDirection: [number, number, number]
   } | null
   measureDistance3D: (
     x1Percent: number,
@@ -63,6 +62,12 @@ export interface ModelCanvasHandle {
     reach1: { maxWidth: number; stepsCompleted: number; hitDecisiveWidth: boolean }
     reach2: { maxWidth: number; stepsCompleted: number; hitDecisiveWidth: boolean }
   } | null
+  // Which of two points on the model lies nearer the heart along its vessels,
+  // whatever the camera; null when that can't be told.
+  nearerToHeart: (
+    first: [number, number, number],
+    second: [number, number, number],
+  ) => 'first' | 'second' | null
   measureBifurcationAngle: (xPercent: number, yPercent: number) => number | null
   highlightAt: (xPercent: number, yPercent: number, referenceWidth?: number) => boolean
   highlightSegment: (
@@ -76,13 +81,23 @@ export interface ModelCanvasHandle {
   hideHighlight: () => void
   showHighlight: () => void
   getWorldPoint: (xPercent: number, yPercent: number) => [number, number, number] | null
-  // Smoothly turns and moves the view so `center` is in the middle of the
-  // screen and the vessel running along `direction` lies left-to-right.
-  alignViewToVessel: (center: [number, number, number], direction: [number, number, number]) => void
+  // Smoothly turns, moves and zooms the view so the vessel from `first` to
+  // `second` lies left to right along the screen's horizontal centre line,
+  // with `first` at `firstX` and `second` at `secondX` (percent of the width).
+  alignViewToVessel: (
+    first: [number, number, number],
+    second: [number, number, number],
+    firstX: number,
+    secondX: number,
+  ) => void
   // Diameter of the vessel cut by a vertical plane through the screen column
-  // at `xPercent` (on the horizontal axis), as the equivalent circle of the
-  // cut's area. Null when nothing is there.
-  measureDiameterAtScreenX: (xPercent: number) => { diameter: number; area: number } | null
+  // at `xPercent`, as the equivalent circle of the cut's area: the vessel
+  // nearest `yPercent` in that column, found on its surface at `point`. Null
+  // when nothing is there.
+  measureDiameterAtScreenX: (
+    xPercent: number,
+    yPercent: number,
+  ) => { diameter: number; area: number; point: [number, number, number] } | null
   // How many screen pixels one model unit covers at the orbit target — grows as
   // the user zooms in. Null before the view is ready.
   getPixelsPerUnit: () => number | null
@@ -147,8 +162,8 @@ const SEGMENT_HIGHLIGHT_STEPS = 30
 const REFERENCE_PLATEAU_STABLE_STEPS = 3
 const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 const ALIGN_DURATION_MS = 500
-// Heights (percent of the view, either side of the horizontal axis) tried in
-// turn when looking for the vessel a diameter line cuts.
+// Heights (percent of the view, either side of the point being measured) tried
+// in turn when looking for the vessel a diameter line cuts.
 const LINE_SEARCH_OFFSETS_PERCENT = [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12, 15, -15, 18, -18]
 const HEART_PROXIMITY_STEP_PERCENT = 1
 const HEART_PROXIMITY_MAX_STEPS = 20
@@ -358,19 +373,35 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     internal._quatInverse.copy(internal._quat).invert()
   }
 
-  // Puts the lesion in the middle of the view with the vessel running left to
-  // right, looking at it from the side nearest the current view (so the model
-  // turns as little as possible and never flips upside down). Keeps the user's
-  // zoom distance. Slightly curved vessels only: the direction is the vessel's
-  // direction at the lesion, so a strongly curved one is only straight there.
-  function alignViewToVessel(center: [number, number, number], direction: [number, number, number]) {
+  // Lays the vessel from `first` to `second` left to right along the middle of
+  // the view, looking at it from the side nearest the current view (so the
+  // model turns as little as possible and never flips upside down), and zooms
+  // so `first` lands at `firstX` and `second` at `secondX`. Slightly curved
+  // vessels only: the vessel is taken to run straight from one point to the
+  // other.
+  function alignViewToVessel(
+    first: [number, number, number],
+    second: [number, number, number],
+    firstX: number,
+    secondX: number,
+  ) {
     const controls = controlsRef.current
-    if (!controls) return
-    const camera = controls.object
-    const target = new THREE.Vector3(...center)
-    const vessel = new THREE.Vector3(...direction)
-    if (vessel.lengthSq() < 1e-12) return
-    vessel.normalize()
+    const camera = controls?.object
+    if (!controls || !(camera instanceof THREE.PerspectiveCamera) || secondX <= firstX) return
+    const start = new THREE.Vector3(...first)
+    const vessel = new THREE.Vector3(...second).sub(start)
+    const length = vessel.length()
+    if (length < 1e-6) return
+    vessel.divideScalar(length)
+
+    // Spin left over from the user's last drag (OrbitControls damping) would
+    // keep turning the model after the move lands, taking ① and ② off their
+    // starting positions and the vessel off the horizontal. One update without
+    // damping applies it now and clears it.
+    const damping = controls.enableDamping
+    controls.enableDamping = false
+    controls.update()
+    controls.enableDamping = damping
 
     const offset = camera.position.clone().sub(controls.target)
     const distance = offset.length() || 1
@@ -384,9 +415,9 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     }
     back.normalize()
 
-    // Screen-right is the vessel direction as given (the caller passes ① to
-    // ②, so ① ends up on the left); look from whichever side keeps the
-    // picture the right way up.
+    // Screen-right is the vessel direction, from `first` to `second`, so
+    // `first` ends up on the left; look from whichever side keeps the picture
+    // the right way up.
     let up = new THREE.Vector3().crossVectors(back, vessel)
     if (up.dot(camera.up) < 0) {
       back.negate()
@@ -394,6 +425,15 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     }
     up.normalize()
     const endQuat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(vessel, up, back))
+
+    // Seen square-on, both points sit at the same depth, so the screen is
+    // linear between them: aim at the point that falls in the middle of the
+    // view, from the distance at which they span firstX to secondX (never
+    // inside the near clipping plane, which would cut the vessel away).
+    const span = secondX - firstX
+    const target = start.clone().addScaledVector(vessel, (length * (50 - firstX)) / span)
+    const widthPerDistance = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect
+    const endDistance = Math.max(camera.near * 2, length / ((span / 100) * widthPerDistance))
     const startQuat = camera.quaternion.clone()
     const startTarget = controls.target.clone()
 
@@ -405,7 +445,11 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const quat = startQuat.clone().slerp(endQuat, t)
       const nextTarget = startTarget.clone().lerp(target, t)
       camera.up.set(0, 1, 0).applyQuaternion(quat)
-      camera.position.copy(nextTarget).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(quat), distance)
+      // Zoom geometrically, so a large zoom doesn't all happen in the first frames.
+      const nextDistance = distance * (endDistance / distance) ** t
+      camera.position
+        .copy(nextTarget)
+        .addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(quat), nextDistance)
       controls.target.copy(nextTarget)
       syncControlsUp(controls)
       controls.update()
@@ -892,8 +936,6 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         length: result.length,
         narrowestFraction: result.narrowestFraction,
         narrowestPoint: projectWorldPointToScreen(result.narrowestPoint),
-        narrowestWorld: result.narrowestPoint.toArray() as [number, number, number],
-        narrowestDirection: result.narrowestDirection.toArray() as [number, number, number],
       }
     },
     getWorldPoint: (xPercent, yPercent) => {
@@ -908,7 +950,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const hit = getHitResult(xPercent, yPercent)
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
     },
-    alignViewToVessel: (center, direction) => alignViewToVessel(center, direction),
+    alignViewToVessel,
     getPixelsPerUnit: () => {
       const camera = threeStateRef.current?.camera
       const controls = controlsRef.current
@@ -918,17 +960,17 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       if (distance <= 0 || canvasElement.clientHeight <= 0) return null
       return canvasElement.clientHeight / (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))
     },
-    measureDiameterAtScreenX: (xPercent) => {
+    measureDiameterAtScreenX: (xPercent, yPercent) => {
       const camera = threeStateRef.current?.camera
       const modelGroup = modelGroupRef.current
       if (!camera || !modelGroup) return null
       modelGroup.updateMatrixWorld(true)
-      // The vessel is seldom exactly on the horizontal axis, so take the
-      // nearest vessel in a band around it (the plane for a screen column is
-      // the same whatever the height, so only the hit point depends on it).
+      // The vessel is seldom exactly at that height in this column, so take
+      // the nearest vessel in a band around it (the plane for a screen column
+      // is the same whatever the height, so only the hit point depends on it).
       let hit: THREE.Intersection | null = null
       for (const offset of LINE_SEARCH_OFFSETS_PERCENT) {
-        hit = hitAt(xPercent, 50 + offset, modelGroup)
+        hit = hitAt(xPercent, yPercent + offset, modelGroup)
         if (hit) break
       }
       if (!hit) return null
@@ -957,7 +999,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       })
       if (!best) return null
       const area = loopArea((best as { loop: THREE.Vector3[] }).loop, normal)
-      return { area, diameter: 2 * Math.sqrt(area / Math.PI) }
+      const point = hit.point.toArray() as [number, number, number]
+      return { area, diameter: 2 * Math.sqrt(area / Math.PI), point }
     },
     projectWorldPoint: (point) => projectWorldPointToScreen(new THREE.Vector3(...point)),
     getCameraState: () => {
@@ -977,6 +1020,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     },
     determineProximalPoint: (x1Percent, y1Percent, x2Percent, y2Percent) =>
       determineProximalPoint(x1Percent, y1Percent, x2Percent, y2Percent),
+    nearerToHeart: (first, second) => {
+      const modelGroup = modelGroupRef.current
+      if (!modelGroup) return null
+      modelGroup.updateMatrixWorld(true)
+      return nearerToHeart(modelGroup, new THREE.Vector3(...first), new THREE.Vector3(...second))
+    },
     measureBifurcationAngle: (xPercent, yPercent) => {
       const camera = threeStateRef.current?.camera
       const scene = threeStateRef.current?.scene
