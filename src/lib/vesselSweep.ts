@@ -28,6 +28,9 @@ const STEP_FRACTION_OF_DIAMETER = 0.15
 // The cut is considered to have "lost" the vessel when the next centre jumps
 // farther than this many diameters from the previous one.
 const MAX_CENTRE_JUMP_DIAMETERS = 1.2
+// How many sweep steps (each 0.15 of a diameter) are used to find the vessel's
+// direction at each end, for the square cut there.
+const END_DIRECTION_STEPS = 6
 
 function planeBasis(normal: THREE.Vector3) {
   const arbitrary = Math.abs(normal.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
@@ -139,7 +142,7 @@ const LOCATE_COARSE_DIRECTIONS = fibonacciDirections(64)
 export function locateVesselAt(
   modelRoot: THREE.Object3D,
   surfacePoint: THREE.Vector3,
-): { point: THREE.Vector3; direction: THREE.Vector3 } | null {
+): { point: THREE.Vector3; direction: THREE.Vector3; area: number } | null {
   const meshes = collectMeshes(modelRoot)
   if (meshes.length === 0) return null
 
@@ -170,8 +173,8 @@ export function locateVesselAt(
     }
   }
 
-  const result = best as { centroid: THREE.Vector3; direction: THREE.Vector3 }
-  return { point: result.centroid, direction: result.direction }
+  const result = best as { area: number; centroid: THREE.Vector3; direction: THREE.Vector3 }
+  return { point: result.centroid, direction: result.direction, area: result.area }
 }
 
 /**
@@ -249,9 +252,26 @@ export function measureVesselSweep(
   const last = profile[profile.length - 1]
   const totalArc = last.arc
 
+  // The first cut was made square to the straight line from ① to ②, and the
+  // last one square to the direction the sweep had reached, which is not the
+  // vessel's own direction where it bends or where ①/② sit off that line — an
+  // oblique cut reads too wide. Cut each end square to the vessel's direction
+  // there, taken from the centre line just followed, so the proximal and distal
+  // diameters are the vessel's true diameter at the two points.
+  const span = Math.min(END_DIRECTION_STEPS, profile.length - 1)
+  const squareCutArea = (centre: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3, fallback: number) => {
+    const direction = new THREE.Vector3().subVectors(to, from)
+    if (direction.lengthSq() === 0) return fallback
+    direction.normalize()
+    const loop = pickLoop(loopsAt(meshes, centre, direction), direction, centre, 'centre')
+    return loop ? loop.area : fallback
+  }
+  const proximalArea = squareCutArea(first.centre, first.centre, profile[span].centre, first.area)
+  const distalArea = squareCutArea(last.centre, profile[profile.length - 1 - span].centre, last.centre, last.area)
+
   return {
-    proximalDiameter: equivalentDiameter(first.area),
-    distalDiameter: equivalentDiameter(last.area),
+    proximalDiameter: equivalentDiameter(proximalArea),
+    distalDiameter: equivalentDiameter(distalArea),
     minArea: narrowest.area,
     minDiameter: equivalentDiameter(narrowest.area),
     length: totalArc,

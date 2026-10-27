@@ -460,6 +460,7 @@ export function LesionAnalysisPage() {
   // The points as of the last render, for the line measurement a frame later.
   const annotationsRef = useRef(annotations)
   const lineFrameRef = useRef<number | null>(null)
+  const lineMeasuredKeyRef = useRef('')
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
   const activeToolRef = useRef(activeTool)
   // Whether the last check found the view zoomed in enough, so the hint only
@@ -508,12 +509,21 @@ export function LesionAnalysisPage() {
     const canvas = canvasRef.current
     const [proximal, distal] = annotationsRef.current
     if (!canvas || !proximal || !distal) return
-    const diameterAt = (point: Annotation) => {
-      const onScreen = point.worldPoint ? canvas.projectWorldPoint(point.worldPoint) : point
-      if (!onScreen) return null
-      return canvas.measureDiameterAtScreenX(onScreen.x, onScreen.y)?.diameter ?? null
-    }
-    setLineDiameters({ proximal: diameterAt(proximal), distal: diameterAt(distal) })
+    // The two diameters are the ends of the same centre-line measurement that
+    // 測定範囲を更新 makes, so the lines show exactly the numbers the list will get.
+    // They do not depend on the view, so they are only measured again when a
+    // point has really moved on the vessel, not each time the model is turned.
+    const key = [proximal, distal].map((point) => point.worldPoint?.join(',') ?? '').join('|')
+    if (key === lineMeasuredKeyRef.current) return
+    lineMeasuredKeyRef.current = key
+    const sweep =
+      proximal.worldPoint && distal.worldPoint
+        ? canvas.measureLesionSweep(proximal.worldPoint, distal.worldPoint)
+        : null
+    setLineDiameters({
+      proximal: sweep?.proximalDiameter ?? null,
+      distal: sweep?.distalDiameter ?? null,
+    })
   }
 
   function scheduleLineMeasure() {
@@ -606,6 +616,7 @@ export function LesionAnalysisPage() {
       if (tool === 'slice') {
         // The scissors again leaves slice mode, keeping the drag mode in use.
         setLineDiameters({ proximal: null, distal: null })
+        lineMeasuredKeyRef.current = ''
         const back: ViewerTool = slicePan ? 'pan' : 'rotate'
         setActiveTool(back)
         canvasRef.current?.setTool(back)
