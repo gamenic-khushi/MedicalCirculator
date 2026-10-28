@@ -23,6 +23,12 @@ export function DocumentUploadModal({ folders, onClose, onSave }: DocumentUpload
     }
   }, [folders, folder])
 
+  // The preview's blob URL holds the image in memory until it is revoked.
+  useEffect(() => {
+    if (!previewUrl) return
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
+
   function handleFilesSelected(files: FileList) {
     const file = files[0]
     if (!file) return

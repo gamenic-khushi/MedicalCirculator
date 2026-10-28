@@ -80,6 +80,42 @@ function ensureVertexColorAttribute(geometry: THREE.BufferGeometry) {
   geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3))
 }
 
+// useLoader keeps every loaded model in its cache for the whole session, keyed
+// by URL, and each uploaded file has its own blob URL — so without this, every
+// model the user ever opened would stay in memory (triangles, vertex colours
+// and the BVH) after it was replaced. The cached asset of each URL is noted
+// here so releaseModelAssets() can free it when the model goes away.
+const loadedAssets = new Map<string, THREE.BufferGeometry | THREE.Object3D>()
+
+function disposeGeometry(geometry: THREE.BufferGeometry) {
+  geometry.disposeBoundsTree()
+  geometry.dispose()
+}
+
+function disposeMaterials(material: THREE.Material | THREE.Material[]) {
+  for (const entry of Array.isArray(material) ? material : [material]) entry.dispose()
+}
+
+/**
+ * Frees everything kept for the model loaded from this URL: the loader's cache
+ * entry, the geometry with its bounding-volume tree, and the materials.
+ */
+export function releaseModelAssets(url: string) {
+  const asset = loadedAssets.get(url)
+  loadedAssets.delete(url)
+  for (const loader of [STLLoader, OBJLoader, FBXLoader, GLTFLoader]) useLoader.clear(loader, url)
+  if (!asset) return
+  if (asset instanceof THREE.BufferGeometry) {
+    disposeGeometry(asset)
+    return
+  }
+  asset.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    disposeGeometry(child.geometry)
+    disposeMaterials(child.material)
+  })
+}
+
 function StlModel({
   url,
   color,
@@ -96,8 +132,9 @@ function StlModel({
     geometry.center()
     ensureVertexColorAttribute(geometry)
     buildBoundsTree(geometry)
+    loadedAssets.set(url, geometry)
     return geometry
-  }, [geometry])
+  }, [geometry, url])
 
   return (
     <mesh geometry={centered} rotation={[-Math.PI / 2, 0, 0]}>
@@ -142,7 +179,10 @@ function ObjModel({
 }) {
   const object = useLoader(OBJLoader, url)
   const clippingPlanes = useClippingPlanes(clippingPlane)
-  useMemo(() => applyMaterial(object, color), [object, color])
+  useMemo(() => {
+    applyMaterial(object, color)
+    loadedAssets.set(url, object)
+  }, [object, color, url])
   useEffect(() => applyClippingPlanes(object, clippingPlanes), [object, clippingPlanes])
   return <primitive object={object} />
 }
@@ -161,7 +201,8 @@ function FbxModel({
   useMemo(() => {
     disableAnimations(object)
     applyMaterial(object, color)
-  }, [object, color])
+    loadedAssets.set(url, object)
+  }, [object, color, url])
   useEffect(() => applyClippingPlanes(object, clippingPlanes), [object, clippingPlanes])
   return <primitive object={object} />
 }
@@ -193,7 +234,8 @@ function GltfModel({
   useMemo(() => {
     disableAnimations(gltf.scene)
     applyMaterial(gltf.scene, color)
-  }, [gltf, color])
+    loadedAssets.set(url, gltf.scene)
+  }, [gltf, color, url])
   useEffect(() => applyClippingPlanes(gltf.scene, clippingPlanes), [gltf, clippingPlanes])
   return <primitive object={gltf.scene} scale={GLTF_UNIT_SCALE} />
 }
@@ -214,6 +256,9 @@ function applyMaterial(object: THREE.Object3D, color: string) {
     if (child instanceof THREE.Mesh) {
       ensureVertexColorAttribute(child.geometry)
       buildBoundsTree(child.geometry)
+      // A colour change builds a new material, so the one it replaces
+      // (the loader's own the first time) has to be freed.
+      disposeMaterials(child.material)
       child.material = new THREE.MeshStandardMaterial({
         color,
         roughness: 0.6,

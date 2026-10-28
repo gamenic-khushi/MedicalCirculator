@@ -475,6 +475,12 @@ export function LesionAnalysisPage() {
   // The points as of the last render, for the line measurement a frame later.
   const annotationsRef = useRef(annotations)
   const lineFrameRef = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (lineFrameRef.current !== null) cancelAnimationFrame(lineFrameRef.current)
+    },
+    [],
+  )
   const lineMeasuredKeyRef = useRef('')
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
   const activeToolRef = useRef(activeTool)
