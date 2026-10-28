@@ -132,8 +132,9 @@ interface ModelCanvasProps {
   // While on, the cutting plane follows the vessel under the screen centre
   // (the page draws the crosshair there), so moving the model moves the cut.
   sliceMode?: boolean
-  // Turning and moving the model are switched off (zooming and the depth
-  // slider still work) — the model stays where the scissors put it.
+  // Turning, moving and the mouse-wheel / pinch zoom are switched off (the
+  // zoom buttons and the depth slider still work) — the model stays where the
+  // scissors put it.
   viewLocked?: boolean
   onSliceAreaChange?: (area: number | null) => void
   // Called once, as soon as the model has loaded, with its largest dimension in
@@ -1286,6 +1287,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           enabled={controlsEnabled}
           enableRotate={!viewLocked}
           enablePan={!viewLocked}
+          enableZoom={!viewLocked}
           onChange={handleControlsChange}
           onStart={cancelAlign}
           onEnd={emitCameraChange}
