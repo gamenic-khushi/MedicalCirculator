@@ -64,6 +64,7 @@ export function FileDropzone({
           if (event.target.files?.length) {
             onFilesSelected?.(event.target.files)
           }
+          event.target.value = ''
         }}
       />
     </div>

@@ -183,7 +183,11 @@ export function LearningContentPage() {
           type="file"
           accept=".fbx,.stl,.obj"
           className="hidden"
-          onChange={(event) => handleFileSelected(event.target.files)}
+          onChange={(event) => {
+            handleFileSelected(event.target.files)
+            // Without this, picking the same file again fires no change event.
+            event.target.value = ''
+          }}
         />
       </div>
       {record && (

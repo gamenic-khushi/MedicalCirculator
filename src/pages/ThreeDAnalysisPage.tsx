@@ -113,7 +113,11 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
           type="file"
           accept=".fbx,.stl,.obj"
           className="hidden"
-          onChange={(event) => handleFileSelected(event.target.files)}
+          onChange={(event) => {
+            handleFileSelected(event.target.files)
+            // Without this, picking the same file again fires no change event.
+            event.target.value = ''
+          }}
         />
       </div>
     </div>
