@@ -1,3 +1,5 @@
+import type { LesionShape } from '@/lib/twoPointLesionMeasurement'
+
 interface VesselShapeDiagramProps {
   proximalDiameter: number
   minDiameter: number
@@ -5,6 +7,11 @@ interface VesselShapeDiagramProps {
   // Drawn to the same mm-per-pixel scale as the diameters, so editing the
   // length visibly stretches or shortens the narrowed stretch.
   stenosisLength?: number
+  // The model's own outline between ① and ②. When given it is drawn as it is,
+  // ① at the left end and ② at the right end; without it (a saved capture, or
+  // a measurement that could not follow the vessel) a smooth shape is made up
+  // from the numbers above.
+  shape?: LesionShape | null
 }
 
 const MIN_LESION_WIDTH = 24
@@ -14,6 +21,10 @@ const X_MARGIN = 16
 const MAX_HALF_HEIGHT = 40
 const MIN_HALF_HEIGHT = 4
 const CENTER_Y = HEIGHT / 2
+const MARKER_RADIUS = 7
+// ① and ② are coloured like their markers on the 3D view.
+const PROXIMAL_COLOR = '#ef4444'
+const DISTAL_COLOR = '#3b82f6'
 
 function halfHeightFor(diameter: number, maxDiameter: number) {
   if (!Number.isFinite(diameter) || diameter <= 0 || maxDiameter <= 0) return MIN_HALF_HEIGHT
@@ -21,12 +32,111 @@ function halfHeightFor(diameter: number, maxDiameter: number) {
   return Math.max(MIN_HALF_HEIGHT, ratio * MAX_HALF_HEIGHT)
 }
 
-export function VesselShapeDiagram({
+function formatLength(length: number) {
+  return length < 10 ? length.toFixed(2) : length.toFixed(1)
+}
+
+function EndMarker({ x, color, label }: { x: number; color: string; label: string }) {
+  return (
+    <g>
+      <line
+        x1={x}
+        y1={CENTER_Y - MAX_HALF_HEIGHT - 6}
+        x2={x}
+        y2={CENTER_Y + MAX_HALF_HEIGHT + 6}
+        stroke={color}
+        strokeWidth={1}
+        strokeDasharray="3 3"
+        opacity={0.6}
+      />
+      <circle cx={x} cy={CENTER_Y} r={MARKER_RADIUS} fill={color} fillOpacity={0.75} stroke={color} />
+      <text
+        x={x}
+        y={CENTER_Y}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={9}
+        fontWeight={700}
+        fill="#ffffff"
+      >
+        {label}
+      </text>
+    </g>
+  )
+}
+
+// The vessel exactly as the model has it: the wall above and below the centre
+// line at every step from ① to ②, with the length across the full width.
+function MeasuredShape({ shape }: { shape: LesionShape }) {
+  const { samples } = shape
+  const lastArc = samples[samples.length - 1].arc
+  const x0 = X_MARGIN
+  const x1 = WIDTH - X_MARGIN
+  const xPerMm = (x1 - x0) / lastArc
+  const maxReach = Math.max(...samples.map((sample) => Math.max(sample.top, sample.bottom)), 1e-9)
+  // The same scale along and across the vessel whenever the picture is tall
+  // enough for it; a vessel too wide for its length is squeezed vertically.
+  const yPerMm = Math.min(xPerMm, MAX_HALF_HEIGHT / maxReach)
+  const squeezed = yPerMm < xPerMm * 0.999
+
+  const xOf = (arc: number) => x0 + arc * xPerMm
+  const upper = samples.map((sample) => `${xOf(sample.arc)} ${CENTER_Y - sample.top * yPerMm}`)
+  const lower = samples
+    .slice()
+    .reverse()
+    .map((sample) => `${xOf(sample.arc)} ${CENTER_Y + sample.bottom * yPerMm}`)
+  const outline = `M ${upper.join(' L ')} L ${lower.join(' L ')} Z`
+  const xNarrowest = x0 + shape.narrowestFraction * (x1 - x0)
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full">
+        <path d={outline} fill="#dbe4f0" stroke="#9db3d1" strokeWidth={1} strokeLinejoin="round" />
+        <line
+          x1={x0}
+          y1={CENTER_Y}
+          x2={x1}
+          y2={CENTER_Y}
+          stroke="#4f7fee"
+          strokeWidth={1.5}
+          strokeDasharray="2 3"
+        />
+        <line
+          x1={xNarrowest}
+          y1={CENTER_Y - MAX_HALF_HEIGHT - 6}
+          x2={xNarrowest}
+          y2={CENTER_Y + MAX_HALF_HEIGHT + 6}
+          stroke="#6b7280"
+          strokeWidth={1}
+          strokeDasharray="1 3"
+        />
+        <EndMarker x={x0} color={PROXIMAL_COLOR} label="①" />
+        <EndMarker x={x1} color={DISTAL_COLOR} label="②" />
+      </svg>
+      <div className="relative h-4 w-full px-1 text-[11px] font-medium text-gray-500">
+        <span className="absolute left-1 top-0">① 近位側</span>
+        <span
+          className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
+          style={{ left: `${(xNarrowest / WIDTH) * 100}%` }}
+        >
+          最小
+        </span>
+        <span className="absolute right-1 top-0">② 遠位側</span>
+      </div>
+      <p className="text-center text-[10px] text-gray-400">
+        3Dモデルの断面形状（①〜②の中心線に沿って・長さ {formatLength(lastArc)} mm）
+        {squeezed && '。縦方向は縮めて表示しています'}
+      </p>
+    </div>
+  )
+}
+
+function GeneratedShape({
   proximalDiameter,
   minDiameter,
   distalDiameter,
   stenosisLength,
-}: VesselShapeDiagramProps) {
+}: Omit<VesselShapeDiagramProps, 'shape'>) {
   const maxDiameter = Math.max(proximalDiameter, distalDiameter, minDiameter, 0.001)
   const hProximal = halfHeightFor(proximalDiameter, maxDiameter)
   const hMin = halfHeightFor(minDiameter, maxDiameter)
@@ -75,13 +185,21 @@ export function VesselShapeDiagram({
           strokeWidth={1.5}
           strokeDasharray="2 3"
         />
+        <EndMarker x={x0} color={PROXIMAL_COLOR} label="①" />
+        <EndMarker x={x1} color={DISTAL_COLOR} label="②" />
       </svg>
       <div className="flex w-full justify-between px-1 text-[11px] font-medium text-gray-500">
-        <span>近位側</span>
+        <span>① 近位側</span>
         <span>狭窄中心</span>
-        <span>遠位側</span>
+        <span>② 遠位側</span>
       </div>
       <p className="text-center text-[10px] text-gray-400">入力値に基づき滑らかにつながる形状を生成</p>
     </div>
   )
+}
+
+export function VesselShapeDiagram({ shape, ...numbers }: VesselShapeDiagramProps) {
+  const lastArc = shape ? shape.samples[shape.samples.length - 1]?.arc : 0
+  if (shape && shape.samples.length >= 2 && lastArc > 0) return <MeasuredShape shape={shape} />
+  return <GeneratedShape {...numbers} />
 }

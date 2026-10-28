@@ -14,6 +14,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import { nearerToHeart } from '@/lib/heartDistance'
 import { computeCrossSection, loopArea } from '@/lib/slicePlane'
+import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
 import { measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
@@ -45,6 +46,8 @@ export interface ModelCanvasHandle {
     length: number
     narrowestFraction: number
     narrowestPoint: { x: number; y: number } | null
+    // The vessel's outline between the two points, as the view's up sees it.
+    profile: LesionProfileSample[]
   } | null
   measureDistance3D: (
     x1Percent: number,
@@ -84,19 +87,28 @@ export interface ModelCanvasHandle {
   // Smoothly turns, moves and zooms the view so the vessel from `first` to
   // `second` lies left to right along the screen's horizontal centre line,
   // with `first` at `firstX` and `second` at `secondX` (percent of the width).
+  // False when the view could not be moved (nothing to move yet).
   alignViewToVessel: (
     first: [number, number, number],
     second: [number, number, number],
     firstX: number,
     secondX: number,
-  ) => void
+  ) => boolean
+  // Moves the model forward (towards the viewer, positive) or backward
+  // (negative) along the line of sight, `depth` being -1 to 1 of the travel
+  // allowed from where it was when the slider was last at 0. Which vessel
+  // lies under the crosshair changes as it passes through the model.
+  setDepth: (depth: number) => void
   // Diameter of the vessel cut by a vertical plane through the screen column
   // at `xPercent`, as the equivalent circle of the cut's area: the vessel
   // nearest `yPercent` in that column, found on its surface at `point`. Null
-  // when nothing is there.
+  // when nothing is there. With `onlyThatRow` the vessel must be right at
+  // `yPercent` (not merely near it), and with `near` it is the surface along
+  // that line of sight closest to `near`, so the point stays on its own vessel.
   measureDiameterAtScreenX: (
     xPercent: number,
     yPercent: number,
+    options?: { onlyThatRow?: boolean; near?: [number, number, number] },
   ) => { diameter: number; area: number; point: [number, number, number] } | null
   // How many screen pixels one model unit covers at the orbit target — grows as
   // the user zooms in. Null before the view is ready.
@@ -120,6 +132,9 @@ interface ModelCanvasProps {
   // While on, the cutting plane follows the vessel under the screen centre
   // (the page draws the crosshair there), so moving the model moves the cut.
   sliceMode?: boolean
+  // Turning and moving the model are switched off (zooming and the depth
+  // slider still work) — the model stays where the scissors put it.
+  viewLocked?: boolean
   onSliceAreaChange?: (area: number | null) => void
   // Called once, as soon as the model has loaded, with its largest dimension in
   // model units — lets a page tell when a model is not in millimetres.
@@ -162,6 +177,10 @@ const SEGMENT_HIGHLIGHT_STEPS = 30
 const REFERENCE_PLATEAU_STABLE_STEPS = 3
 const REFERENCE_PLATEAU_TOLERANCE_RATIO = 0.08
 const ALIGN_DURATION_MS = 500
+// The depth slider's travel, as a share of the camera's distance from the
+// vessel at the slider's middle. Forward stops short of the vessel itself.
+const DEPTH_FORWARD_FRACTION = 0.9
+const DEPTH_BACKWARD_FRACTION = 1
 // Heights (percent of the view, either side of the point being measured) tried
 // in turn when looking for the vessel a diameter line cuts.
 const LINE_SEARCH_OFFSETS_PERCENT = [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12, 15, -15, 18, -18]
@@ -238,6 +257,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     onCameraChange,
     onCameraMove,
     sliceMode = false,
+    viewLocked = false,
     onSliceAreaChange,
     onModelSize,
   },
@@ -255,6 +275,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const [sliceFocusPoint, setSliceFocusPoint] = useState<[number, number, number] | null>(null)
   const sliceFrameRef = useRef<number | null>(null)
   const alignFrameRef = useRef<number | null>(null)
+  // How far the depth slider has moved the model from its middle position, and
+  // the travel one full slider step stands for (measured at the middle).
+  const depthOffsetRef = useRef(0)
+  const depthTravelRef = useRef(0)
   const sliceModeRef = useRef(sliceMode)
 
   useEffect(() => {
@@ -384,15 +408,17 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     second: [number, number, number],
     firstX: number,
     secondX: number,
-  ) {
+  ): boolean {
     const controls = controlsRef.current
     const camera = controls?.object
-    if (!controls || !(camera instanceof THREE.PerspectiveCamera) || secondX <= firstX) return
+    if (!controls || !(camera instanceof THREE.PerspectiveCamera) || secondX <= firstX) return false
     const start = new THREE.Vector3(...first)
     const vessel = new THREE.Vector3(...second).sub(start)
     const length = vessel.length()
-    if (length < 1e-6) return
+    if (length < 1e-6) return false
     vessel.divideScalar(length)
+    // The view starts afresh from here, so the depth slider's middle is here too.
+    depthOffsetRef.current = 0
 
     // Spin left over from the user's last drag (OrbitControls damping) would
     // keep turning the model after the move lands, taking ① and ② off their
@@ -463,6 +489,33 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       }
     }
     alignFrameRef.current = requestAnimationFrame(step)
+    return true
+  }
+
+  // Moves camera and orbit target together along the line of sight, which is
+  // the model moving the other way: the cutting plane contains that line, so the
+  // cut itself is unchanged, but the surface under the crosshair is the first
+  // one the line meets from the camera's new place.
+  function setDepth(depth: number) {
+    const controls = controlsRef.current
+    if (!controls) return
+    const camera = controls.object
+    const clamped = THREE.MathUtils.clamp(depth, -1, 1)
+    if (depthOffsetRef.current === 0) {
+      depthTravelRef.current = camera.position.distanceTo(controls.target)
+    }
+    const travel = depthTravelRef.current * (clamped >= 0 ? DEPTH_FORWARD_FRACTION : DEPTH_BACKWARD_FRACTION)
+    const next = clamped * travel
+    const delta = next - depthOffsetRef.current
+    if (delta === 0) return
+    const forward = controls.target.clone().sub(camera.position).normalize()
+    camera.position.addScaledVector(forward, delta)
+    controls.target.addScaledVector(forward, delta)
+    depthOffsetRef.current = next
+    cancelAlign()
+    controls.update()
+    emitCameraChange()
+    if (sliceModeRef.current) scheduleSliceUpdate()
   }
 
   function dolly(factor: number) {
@@ -475,8 +528,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   }
 
   // `root` narrows the ray to one object (the model itself), so overlays such
-  // as the slice plane can't be hit instead of the vessel behind them.
-  function hitAt(xPct: number, yPct: number, root?: THREE.Object3D) {
+  // as the slice plane can't be hit instead of the vessel behind them. Where the
+  // ray passes through several surfaces, the first is returned, or with `near`
+  // the one closest to that point.
+  function hitAt(xPct: number, yPct: number, root?: THREE.Object3D, near?: [number, number, number]) {
     const camera = threeStateRef.current?.camera
     const scene = root ?? threeStateRef.current?.scene
     if (!camera || !scene || !(camera instanceof THREE.PerspectiveCamera)) return null
@@ -503,7 +558,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const ndc = new THREE.Vector2()
     ndc.set((xPct / 100) * 2 - 1, -((yPct / 100) * 2 - 1))
     raycaster.setFromCamera(ndc, camera)
-    return raycaster.intersectObject(scene, true)[0] ?? null
+    const hits = raycaster.intersectObject(scene, true)
+    if (!near || hits.length < 2) return hits[0] ?? null
+    const anchor = new THREE.Vector3(...near)
+    return hits.reduce((best, candidate) =>
+      candidate.point.distanceTo(anchor) < best.point.distanceTo(anchor) ? candidate : best,
+    )
   }
 
   function findNearestHit(xPercent: number, yPercent: number) {
@@ -544,6 +604,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       camera.updateProjectionMatrix()
     }
     camera.updateMatrixWorld(true)
+
+    // A point behind the camera (the model moved forward past it) has no place
+    // on screen; project() would mirror it onto the wrong side.
+    if (point.clone().applyMatrix4(camera.matrixWorldInverse).z >= 0) return null
 
     const ndc = point.clone().project(camera)
     return {
@@ -922,10 +986,13 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const modelGroup = modelGroupRef.current
       if (!modelGroup) return null
       modelGroup.updateMatrixWorld(true)
+      const camera = threeStateRef.current?.camera
+      camera?.updateMatrixWorld()
       const result = measureVesselSweep(
         modelGroup,
         new THREE.Vector3(...proximalWorld),
         new THREE.Vector3(...distalWorld),
+        camera ? new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize() : undefined,
       )
       if (!result) return null
       return {
@@ -936,6 +1003,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         length: result.length,
         narrowestFraction: result.narrowestFraction,
         narrowestPoint: projectWorldPointToScreen(result.narrowestPoint),
+        profile: result.profile,
       }
     },
     getWorldPoint: (xPercent, yPercent) => {
@@ -951,6 +1019,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       return hit ? [hit.point.x, hit.point.y, hit.point.z] : null
     },
     alignViewToVessel,
+    setDepth,
     getPixelsPerUnit: () => {
       const camera = threeStateRef.current?.camera
       const controls = controlsRef.current
@@ -960,17 +1029,19 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       if (distance <= 0 || canvasElement.clientHeight <= 0) return null
       return canvasElement.clientHeight / (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))
     },
-    measureDiameterAtScreenX: (xPercent, yPercent) => {
+    measureDiameterAtScreenX: (xPercent, yPercent, options) => {
       const camera = threeStateRef.current?.camera
       const modelGroup = modelGroupRef.current
       if (!camera || !modelGroup) return null
       modelGroup.updateMatrixWorld(true)
-      // The vessel is seldom exactly at that height in this column, so take
-      // the nearest vessel in a band around it (the plane for a screen column
-      // is the same whatever the height, so only the hit point depends on it).
+      // Unless told otherwise, the vessel is seldom exactly at that height in
+      // this column, so take the nearest vessel in a band around it (the plane
+      // for a screen column is the same whatever the height, so only the hit
+      // point depends on it).
+      const offsets = options?.onlyThatRow ? [0] : LINE_SEARCH_OFFSETS_PERCENT
       let hit: THREE.Intersection | null = null
-      for (const offset of LINE_SEARCH_OFFSETS_PERCENT) {
-        hit = hitAt(xPercent, yPercent + offset, modelGroup)
+      for (const offset of offsets) {
+        hit = hitAt(xPercent, yPercent + offset, modelGroup, options?.near)
         if (hit) break
       }
       if (!hit) return null
@@ -1213,6 +1284,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           ref={controlsRef}
           makeDefault
           enabled={controlsEnabled}
+          enableRotate={!viewLocked}
+          enablePan={!viewLocked}
           onChange={handleControlsChange}
           onStart={cancelAlign}
           onEnd={emitCameraChange}

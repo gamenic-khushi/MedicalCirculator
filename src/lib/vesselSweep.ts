@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 
 import { computeCrossSection } from '@/lib/slicePlane'
+import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
 
 export interface VesselSweepResult {
   proximalDiameter: number
@@ -14,6 +15,8 @@ export interface VesselSweepResult {
   narrowestPoint: THREE.Vector3
   /** Vessel direction at the narrowest cut (the cutting plane's normal there). */
   narrowestDirection: THREE.Vector3
+  /** The vessel's outline along the centre line, from the proximal point to the distal one. */
+  profile: LesionProfileSample[]
 }
 
 interface LoopStats {
@@ -21,6 +24,7 @@ interface LoopStats {
   centroid: THREE.Vector3
   /** Distance from the query point to the closest vertex of the loop. */
   nearestVertexDistance: number
+  loop: THREE.Vector3[]
 }
 
 const MAX_STEPS = 600
@@ -70,7 +74,32 @@ function loopStats(loop: THREE.Vector3[], normal: THREE.Vector3, query: THREE.Ve
 
   let nearest = Infinity
   for (const p of loop) nearest = Math.min(nearest, p.distanceTo(query))
-  return { area, centroid, nearestVertexDistance: nearest }
+  return { area, centroid, nearestVertexDistance: nearest, loop }
+}
+
+// The `up` direction used to read the vessel's outline at a station: the hint
+// (the view's up) with the vessel's own direction taken out, so it lies in the
+// cutting plane. Where the vessel runs along the hint, the previous station's
+// `up` carries on, so the outline never flips between stations.
+function stationUp(direction: THREE.Vector3, hint: THREE.Vector3 | undefined, previous: THREE.Vector3 | null) {
+  for (const candidate of [hint, previous]) {
+    if (!candidate) continue
+    const up = candidate.clone().addScaledVector(direction, -candidate.dot(direction))
+    if (up.lengthSq() >= 0.04 * candidate.lengthSq()) return up.normalize()
+  }
+  return planeBasis(direction).v
+}
+
+// How far the cut's outline reaches above and below the centre, along `up`.
+function wallExtents(loop: THREE.Vector3[], centre: THREE.Vector3, up: THREE.Vector3) {
+  let highest = -Infinity
+  let lowest = Infinity
+  for (const point of loop) {
+    const offset = (point.x - centre.x) * up.x + (point.y - centre.y) * up.y + (point.z - centre.z) * up.z
+    if (offset > highest) highest = offset
+    if (offset < lowest) lowest = offset
+  }
+  return { top: highest, bottom: -lowest }
 }
 
 function collectMeshes(root: THREE.Object3D): THREE.Mesh[] {
@@ -184,11 +213,15 @@ export function locateVesselAt(
  * clicked. Each cut gives a true cross-section area; the diameters are the
  * equivalent circle of that area. Returns null when the sweep can't follow the
  * vessel (open mesh, point off the vessel), so the caller can fall back.
+ *
+ * `upHint` is the direction drawn as "up" in the outline returned in `profile`
+ * (normally the view's up, so the outline is the vessel as seen on screen).
  */
 export function measureVesselSweep(
   modelRoot: THREE.Object3D,
   proximalSurfacePoint: THREE.Vector3,
   distalSurfacePoint: THREE.Vector3,
+  upHint?: THREE.Vector3,
 ): VesselSweepResult | null {
   const meshes = collectMeshes(modelRoot)
   if (meshes.length === 0) return null
@@ -217,11 +250,26 @@ export function measureVesselSweep(
   let stats: LoopStats = startLoop
   let previousCentre: THREE.Vector3 | null = null
 
-  const profile: { area: number; centre: THREE.Vector3; arc: number; direction: THREE.Vector3 }[] = []
+  const profile: {
+    area: number
+    centre: THREE.Vector3
+    arc: number
+    direction: THREE.Vector3
+    top: number
+    bottom: number
+  }[] = []
   let arc = 0
+  let up: THREE.Vector3 | null = null
 
   for (let i = 0; i < MAX_STEPS; i++) {
-    profile.push({ area: stats.area, centre: stats.centroid.clone(), arc, direction: direction.clone() })
+    up = stationUp(direction, upHint, up)
+    profile.push({
+      area: stats.area,
+      centre: stats.centroid.clone(),
+      arc,
+      direction: direction.clone(),
+      ...wallExtents(stats.loop, stats.centroid, up),
+    })
 
     const toEnd = new THREE.Vector3().subVectors(endCentre, stats.centroid)
     const diameter = equivalentDiameter(stats.area)
@@ -259,24 +307,34 @@ export function measureVesselSweep(
   // there, taken from the centre line just followed, so the proximal and distal
   // diameters are the vessel's true diameter at the two points.
   const span = Math.min(END_DIRECTION_STEPS, profile.length - 1)
-  const squareCutArea = (centre: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3, fallback: number) => {
+  const squareCut = (centre: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3, fallback: (typeof profile)[number]) => {
     const direction = new THREE.Vector3().subVectors(to, from)
     if (direction.lengthSq() === 0) return fallback
     direction.normalize()
-    const loop = pickLoop(loopsAt(meshes, centre, direction), direction, centre, 'centre')
-    return loop ? loop.area : fallback
+    const cut = pickLoop(loopsAt(meshes, centre, direction), direction, centre, 'centre')
+    if (!cut) return fallback
+    const endUp = stationUp(direction, upHint, fallback.direction)
+    return { ...fallback, area: cut.area, ...wallExtents(cut.loop, cut.centroid, endUp) }
   }
-  const proximalArea = squareCutArea(first.centre, first.centre, profile[span].centre, first.area)
-  const distalArea = squareCutArea(last.centre, profile[profile.length - 1 - span].centre, last.centre, last.area)
+  const proximalCut = squareCut(first.centre, first.centre, profile[span].centre, first)
+  const distalCut = squareCut(last.centre, profile[profile.length - 1 - span].centre, last.centre, last)
+
+  // The outline between the two points: the ends are the square cuts, so the
+  // diameters at ① and ② are exactly the ones reported above.
+  const outline: LesionProfileSample[] = profile.map((entry, index) => {
+    const source = index === 0 ? proximalCut : index === profile.length - 1 ? distalCut : entry
+    return { arc: entry.arc, top: source.top, bottom: source.bottom }
+  })
 
   return {
-    proximalDiameter: equivalentDiameter(proximalArea),
-    distalDiameter: equivalentDiameter(distalArea),
+    proximalDiameter: equivalentDiameter(proximalCut.area),
+    distalDiameter: equivalentDiameter(distalCut.area),
     minArea: narrowest.area,
     minDiameter: equivalentDiameter(narrowest.area),
     length: totalArc,
     narrowestFraction: totalArc > 0 ? narrowest.arc / totalArc : 0.5,
     narrowestPoint: narrowest.centre.clone(),
     narrowestDirection: narrowest.direction.clone(),
+    profile: outline,
   }
 }

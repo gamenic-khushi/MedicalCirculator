@@ -1,4 +1,4 @@
-import { Maximize, Move, RefreshCw, Rotate3d, Scissors } from 'lucide-react'
+import { Lock, Maximize, Move, RefreshCw, Rotate3d, Scissors } from 'lucide-react'
 import { useEffect } from 'react'
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
@@ -11,6 +11,8 @@ interface ViewerToolbarProps {
   // Whether dragging currently moves the model rather than turning it. Passed
   // in because while slicing, activeTool is 'slice' and can't say which.
   isPanning: boolean
+  // The model is held where the scissors put it, so turning and moving are off.
+  locked?: boolean
   onToolChange: (tool: ViewerTool) => void
   onToggleFullscreen: () => void
   onReset: () => void
@@ -27,6 +29,7 @@ interface ViewerToolbarProps {
 export function ViewerToolbar({
   activeTool,
   isPanning,
+  locked = false,
   onToolChange,
   onToggleFullscreen,
   onReset,
@@ -81,18 +84,29 @@ export function ViewerToolbar({
       >
         <RefreshCw className="h-4 w-4" />
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          onToolChange(isPanning ? 'rotate' : 'pan')
-          if (!isRotatePanHintDismissed) dismissRotatePanHint()
-        }}
-        aria-pressed
-        title={isPanning ? 'クリックして回転モードに切り替え' : 'クリックして移動モードに切り替え'}
-        className="rounded-full bg-indigo-50 p-2 text-indigo-600 transition"
-      >
-        {isPanning ? <Move className="h-4 w-4" /> : <Rotate3d className="h-4 w-4" />}
-      </button>
+      {locked ? (
+        <button
+          type="button"
+          disabled
+          title="モデルの位置を固定しています（はさみをもう一度クリックすると解除されます）"
+          className="cursor-not-allowed rounded-full bg-gray-100 p-2 text-gray-400"
+        >
+          <Lock className="h-4 w-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            onToolChange(isPanning ? 'rotate' : 'pan')
+            if (!isRotatePanHintDismissed) dismissRotatePanHint()
+          }}
+          aria-pressed
+          title={isPanning ? 'クリックして回転モードに切り替え' : 'クリックして移動モードに切り替え'}
+          className="rounded-full bg-indigo-50 p-2 text-indigo-600 transition"
+        >
+          {isPanning ? <Move className="h-4 w-4" /> : <Rotate3d className="h-4 w-4" />}
+        </button>
+      )}
       {showSlice && (
         <button
           type="button"

@@ -4,6 +4,21 @@ export interface PercentPoint {
   worldPoint?: [number, number, number]
 }
 
+// One station on the vessel's outline between ① and ②: how far along the
+// centre line it is, and how far the wall reaches above and below that line.
+export interface LesionProfileSample {
+  arc: number
+  top: number
+  bottom: number
+}
+
+// The vessel between ① (left) and ② (right) as the model really has it.
+export interface LesionShape {
+  samples: LesionProfileSample[]
+  /** Where along the centre line the narrowest cut sits, 0 (①) to 1 (②). */
+  narrowestFraction: number
+}
+
 export interface LesionSweepMeasurement {
   proximalDiameter: number
   distalDiameter: number
@@ -12,6 +27,7 @@ export interface LesionSweepMeasurement {
   length: number
   narrowestFraction: number
   narrowestPoint: PercentPoint | null
+  profile?: LesionProfileSample[]
 }
 
 export interface LesionMeasurementCanvas {
@@ -42,6 +58,8 @@ export interface TwoPointLesionResult {
   narrowestArea?: number
   segmentLength: number | null
   lesionPosition: '近位' | '中間' | '遠位'
+  /** The model's own outline between the points; only the 3D sweep gives it. */
+  shape?: LesionShape
 }
 
 const SCAN_STEPS = 30
@@ -97,6 +115,7 @@ export function measureTwoPointLesion(
         narrowestArea: sweep.minArea,
         segmentLength: sweep.length,
         lesionPosition: sweepRatio < 1 / 3 ? '近位' : sweepRatio > 2 / 3 ? '遠位' : '中間',
+        shape: sweep.profile ? { samples: sweep.profile, narrowestFraction: sweepRatio } : undefined,
       }
     }
   }

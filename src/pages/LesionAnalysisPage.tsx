@@ -48,7 +48,11 @@ import {
 } from '@/lib/messages'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { resolveProximalTiebreak } from '@/lib/typesafeProximity'
-import { measureTwoPointLesion, type PercentPoint } from '@/lib/twoPointLesionMeasurement'
+import {
+  measureTwoPointLesion,
+  type LesionShape,
+  type PercentPoint,
+} from '@/lib/twoPointLesionMeasurement'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 import { isAdminCategory } from '@/types/user'
@@ -225,6 +229,7 @@ function LesionSnapshotPanel({
   minDiameter,
   distalDiameter,
   stenosisLength,
+  shape,
   isMeasuring,
   awaitingConfirm,
 }: {
@@ -232,6 +237,7 @@ function LesionSnapshotPanel({
   minDiameter: number
   distalDiameter: number
   stenosisLength: number
+  shape: LesionShape | null
   isMeasuring: boolean
   awaitingConfirm: boolean
 }) {
@@ -252,6 +258,7 @@ function LesionSnapshotPanel({
             minDiameter={minDiameter}
             distalDiameter={distalDiameter}
             stenosisLength={stenosisLength}
+            shape={shape}
           />
         </div>
       ) : (
@@ -292,6 +299,11 @@ export function LesionAnalysisPage() {
   // Rotate vs move for the left mouse button while the slice tool is on
   // (activeTool is 'slice' then, so it can't carry that choice itself).
   const [slicePan, setSlicePan] = useState(false)
+  // Whether the scissors has put the model in place with ① and ② on the cross.
+  // From then on the model can no longer be turned or moved, only zoomed and
+  // slid forward or backward (depth, -100 to 100, 0 where it was put).
+  const [sliceAligned, setSliceAligned] = useState(false)
+  const [depth, setDepth] = useState(0)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   // The vessel's diameter where each slidable line (through ① and ②) cuts it.
@@ -328,6 +340,9 @@ export function LesionAnalysisPage() {
   )
   const [snapshotImage, setSnapshotImage] = useState<string | null>(viewFrame?.image ?? null)
   const [isMeasuring, setIsMeasuring] = useState(Boolean(initialAnnotations))
+  // The model's own outline between ① and ② from the last measurement, drawn in
+  // the stenosis diagram; null when it could not be taken from the 3D model.
+  const [lesionShape, setLesionShape] = useState<LesionShape | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
   const [isEditingLesion, setIsEditingLesion] = useState(false)
   const { toast, showToast, dismissToast } = useToast()
@@ -498,6 +513,26 @@ export function LesionAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTool, annotations])
 
+  // While slicing with two points chosen (whether they were there when the
+  // scissors was clicked or placed afterwards), the model is moved so ① and ②
+  // sit where the vertical lines cross the horizontal one, and held there. The
+  // hold ends when the scissors is turned off or the points are cleared.
+  useEffect(() => {
+    if (activeTool !== 'slice') return
+    if (annotations.length !== 2) {
+      if (sliceAligned) {
+        canvasRef.current?.setDepth(0)
+        setDepth(0)
+        setSliceAligned(false)
+      }
+      return
+    }
+    if (sliceAligned) return
+    alignSliceView(annotations[0], annotations[1])
+    // alignSliceView only reads refs and sets state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTool, annotations, sliceAligned])
+
   if (!validModel && !viewFrame) {
     return <Navigate to="/data/3d-analysis" state={{ dataRecordId }} replace />
   }
@@ -571,8 +606,9 @@ export function LesionAnalysisPage() {
   }
 
   // Sliding a line moves its point (① or ②) along the vessel to where the line
-  // now is, so the two never part; where the line finds no vessel, the point
-  // stays put. The diameter fields are not written here: the line's own cut
+  // now is, so the two never part, and always onto the horizontal line, so the
+  // point stays at the crossing; where the vessel is not on that line at that
+  // place, the point stays put. The diameter fields are not written here: the line's own cut
   // is a different measurement from the one along the vessel that 測定範囲を更新
   // makes, and writing it made the values jump when that button was clicked.
   // On release the lesion is measured again, exactly as that button does.
@@ -583,14 +619,18 @@ export function LesionAnalysisPage() {
     const point = annotations[which === 'proximal' ? 0 : 1]
     if (!which || !bounds || !canvas || !point) return
     const x = clampLineX(((event.clientX - bounds.left) / bounds.width) * 100)
-    // Look near the point's own height, so it keeps to its own vessel.
-    const result = canvas.measureDiameterAtScreenX(x, point.y)
+    // Only on the horizontal centre line, and on the surface nearest the point's
+    // own, so it keeps to its own vessel.
+    const result = canvas.measureDiameterAtScreenX(x, 50, {
+      onlyThatRow: true,
+      near: point.worldPoint,
+    })
     const onScreen = result && canvas.projectWorldPoint(result.point)
     if (!result || !onScreen) return
     setAnnotations((prev) =>
       prev.map((annotation) =>
         annotation.id === point.id
-          ? { ...annotation, x: onScreen.x, y: onScreen.y, worldPoint: result.point }
+          ? { ...annotation, x: onScreen.x, y: 50, worldPoint: result.point }
           : annotation,
       ),
     )
@@ -611,10 +651,35 @@ export function LesionAnalysisPage() {
     if (selectedLesion.stenosisRate !== '') measureLesion(ordered[0], ordered[1])
   }
 
+  // Moves the model so ① and ② land on the lines' starting positions with the
+  // vessel between them running left to right, so the cross is on the lesion
+  // between them (the lines follow the points from then on), then locks it.
+  function alignSliceView(first: Annotation, second: Annotation) {
+    if (!first.worldPoint || !second.worldPoint) return
+    const aligned = canvasRef.current?.alignViewToVessel(
+      first.worldPoint,
+      second.worldPoint,
+      PROXIMAL_LINE_START_X,
+      DISTAL_LINE_START_X,
+    )
+    if (!aligned) return
+    setDepth(0)
+    setSliceAligned(true)
+  }
+
+  function handleDepthChange(value: number) {
+    setDepth(value)
+    canvasRef.current?.setDepth(value / 100)
+  }
+
   function handleToolChange(tool: ViewerTool) {
     if (activeTool === 'slice') {
       if (tool === 'slice') {
         // The scissors again leaves slice mode, keeping the drag mode in use.
+        // The model goes back from any depth it was slid to, and is released.
+        canvasRef.current?.setDepth(0)
+        setDepth(0)
+        setSliceAligned(false)
         setLineDiameters({ proximal: null, distal: null })
         lineMeasuredKeyRef.current = ''
         const back: ViewerTool = slicePan ? 'pan' : 'rotate'
@@ -622,29 +687,21 @@ export function LesionAnalysisPage() {
         canvasRef.current?.setTool(back)
         return
       }
-      // The rotate / move button keeps working while slicing: the model is
-      // what moves under the fixed crosshair, so the user can choose between
-      // turning it and sliding it.
+      // The model is held where the scissors put it; the rotate / move choice
+      // only matters again once it is released.
+      if (sliceAligned) return
+      // Without that hold, the rotate / move button keeps working while
+      // slicing: the model is what moves under the fixed crosshair, so the
+      // user can choose between turning it and sliding it.
       setSlicePan(tool === 'pan')
       canvasRef.current?.setTool(tool)
       return
     }
     if (tool === 'slice') {
-      // Slice mode keeps whichever of rotate / move was already active.
+      // Slice mode keeps whichever of rotate / move was already active. The
+      // effect above moves and locks the model once two points are chosen.
       setSlicePan(activeTool === 'pan')
       setActiveTool('slice')
-      // Move the model so ① and ② land on the lines' starting positions with
-      // the vessel between them running left to right, so the cross is on the
-      // lesion between them (the lines follow the points from then on).
-      const [first, second] = annotations
-      if (first?.worldPoint && second?.worldPoint) {
-        canvasRef.current?.alignViewToVessel(
-          first.worldPoint,
-          second.worldPoint,
-          PROXIMAL_LINE_START_X,
-          DISTAL_LINE_START_X,
-        )
-      }
       return
     }
     setActiveTool(tool)
@@ -671,6 +728,7 @@ export function LesionAnalysisPage() {
     setMeasurement(null)
     setParams(EMPTY_PARAMS)
     setSelectedLesion(EMPTY_SELECTED_LESION)
+    setLesionShape(null)
     setSnapshotImage(null)
     canvasRef.current?.clearSelection()
   }
@@ -958,6 +1016,7 @@ export function LesionAnalysisPage() {
       }
 
       const { proximalWidth, distalWidth, narrowestWidth, segmentLength, lesionPosition } = result
+      setLesionShape(result.shape ?? null)
       const referenceDiameter = (proximalWidth + distalWidth) / 2
       const rawStenosisRate =
         referenceDiameter > 0 ? (1 - narrowestWidth / referenceDiameter) * 100 : 0
@@ -1488,14 +1547,18 @@ export function LesionAnalysisPage() {
                   onCameraChange={handleCameraChange}
                   onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
+                  viewLocked={activeTool === 'slice' && sliceAligned}
                   onSliceAreaChange={setSliceCrossSectionArea}
                   onModelSize={handleModelSize}
                 />
 
                 <TwoPointMarkers
                   points={annotations}
+                  // While slicing the points stay on the crossings of the lines
+                  // and move only with them, never by being dragged off.
                   draggable={
                     annotations.length === 2 &&
+                    activeTool !== 'slice' &&
                     (selectedLesion.stenosisRate === '' || !measurement)
                   }
                   onDragPoint={handleDragAnnotation}
@@ -1562,6 +1625,30 @@ export function LesionAnalysisPage() {
                   >
                     <ZoomOut className="h-4 w-4" />
                   </button>
+                  {activeTool === 'slice' && (
+                    // Moves the model towards or away from the viewer (up is
+                    // forward) once the scissors has locked it in place.
+                    <div
+                      title="モデルの奥行きを調整（上：手前、下：奥。ダブルクリックで元の位置）"
+                      className="flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm"
+                    >
+                      <span className="text-[10px] font-medium text-gray-500">手前</span>
+                      <div className="relative h-24 w-5">
+                        <input
+                          type="range"
+                          min={-100}
+                          max={100}
+                          step={1}
+                          value={depth}
+                          aria-label="奥行き"
+                          onChange={(event) => handleDepthChange(Number(event.target.value))}
+                          onDoubleClick={() => handleDepthChange(0)}
+                          className="absolute left-1/2 top-1/2 h-5 w-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-pointer accent-indigo-600"
+                        />
+                      </div>
+                      <span className="text-[10px] font-medium text-gray-500">奥</span>
+                    </div>
+                  )}
                 </div>
 
                 {measurement && <FfrResultOverlay {...measurement} />}
@@ -1642,6 +1729,7 @@ export function LesionAnalysisPage() {
                 <ViewerToolbar
                   activeTool={activeTool}
                   isPanning={activeTool === 'pan' || (activeTool === 'slice' && slicePan)}
+                  locked={activeTool === 'slice' && sliceAligned}
                   onToolChange={handleToolChange}
                   onToggleFullscreen={toggleFullscreen}
                   onReset={handleResetAnnotations}
@@ -1733,6 +1821,7 @@ export function LesionAnalysisPage() {
             minDiameter={Number(selectedLesion.minVesselDiameter) || 0}
             distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
             stenosisLength={Number(selectedLesion.stenosisLength) || 0}
+            shape={lesionShape}
             isMeasuring={isMeasuring}
             awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />
