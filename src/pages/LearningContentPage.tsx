@@ -9,7 +9,6 @@ import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
-import { pickModelFile } from '@/lib/filePickerMemory'
 import { LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
 import { sniffModelExtension } from '@/lib/sniffModelFormat'
 import { appwriteConfig } from '@/services/appwrite/config'
@@ -108,8 +107,7 @@ export function LearningContentPage() {
   async function handleAddNew() {
     if (isLoadingRecord) return
     if (!record?.modelFileId) {
-      const file = await pickModelFile(() => inputRef.current?.click())
-      if (file) await registerAndLoadFile(file)
+      inputRef.current?.click()
       return
     }
 

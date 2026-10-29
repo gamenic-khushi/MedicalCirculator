@@ -4,7 +4,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
-import { pickModelFile } from '@/lib/filePickerMemory'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
 import { storageService } from '@/services/appwrite/storage'
@@ -66,11 +65,6 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
     void loadFile(files[0])
   }
 
-  async function handleOpenFolder() {
-    const file = await pickModelFile(() => inputRef.current?.click())
-    if (file) await loadFile(file)
-  }
-
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()
     handleFileSelected(event.dataTransfer.files)
@@ -101,7 +95,7 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
       >
         <button
           type="button"
-          onClick={handleOpenFolder}
+          onClick={() => inputRef.current?.click()}
           className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
         >
           フォルダを開く
