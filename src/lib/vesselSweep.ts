@@ -17,6 +17,34 @@ export interface VesselSweepResult {
   narrowestDirection: THREE.Vector3
   /** The vessel's outline along the centre line, from the proximal point to the distal one. */
   profile: LesionProfileSample[]
+  /** The centre of the vessel at each entry of `profile`. */
+  centres: THREE.Vector3[]
+}
+
+/**
+ * Where along the centre line a plane crosses it, as a fraction of its length
+ * (0 at the proximal point, 1 at the distal one); null when the plane does not
+ * cross the centre line between the two points. `centres` and `arcs` are the
+ * stations of the sweep and the centre-line length reached at each.
+ */
+export function centreLineFractionAtPlane(
+  plane: THREE.Plane,
+  centres: THREE.Vector3[],
+  arcs: number[],
+): number | null {
+  const total = arcs[arcs.length - 1]
+  if (centres.length < 2 || !(total > 0)) return null
+  let previous = plane.distanceToPoint(centres[0])
+  if (previous === 0) return 0
+  for (let i = 1; i < centres.length; i++) {
+    const current = plane.distanceToPoint(centres[i])
+    if (previous * current < 0 || current === 0) {
+      const t = previous / (previous - current)
+      return (arcs[i - 1] + t * (arcs[i] - arcs[i - 1])) / total
+    }
+    previous = current
+  }
+  return null
 }
 
 interface LoopStats {
@@ -336,5 +364,6 @@ export function measureVesselSweep(
     narrowestPoint: narrowest.centre.clone(),
     narrowestDirection: narrowest.direction.clone(),
     profile: outline,
+    centres: profile.map((entry) => entry.centre.clone()),
   }
 }

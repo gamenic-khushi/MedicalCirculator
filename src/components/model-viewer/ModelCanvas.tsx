@@ -15,7 +15,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { nearerToHeart } from '@/lib/heartDistance'
 import { computeCrossSection, loopArea } from '@/lib/slicePlane'
 import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
-import { measureVesselSweep } from '@/lib/vesselSweep'
+import { centreLineFractionAtPlane, measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
@@ -94,10 +94,11 @@ export interface ModelCanvasHandle {
     firstX: number,
     secondX: number,
   ) => boolean
-  // Moves the model forward (towards the viewer, positive) or backward
-  // (negative) along the line of sight, `depth` being -1 to 1 of the travel
-  // allowed from where it was when the slider was last at 0. Which vessel
-  // lies under the crosshair changes as it passes through the model.
+  // Moves the model along the line of sight, `depth` being -1 to 1 of the
+  // travel allowed from where it was when the slider was last at 0: positive
+  // brings it towards the viewer, negative takes it away. Which vessel lies
+  // under the crosshair changes as it passes through the model, and so does
+  // the cut when the cutting line is not in the middle of the view.
   setDepth: (depth: number) => void
   // Diameter of the vessel cut by a vertical plane through the screen column
   // at `xPercent`, as the equivalent circle of the cut's area: the vessel
@@ -129,9 +130,17 @@ interface ModelCanvasProps {
   // world-anchored annotation markers every frame so they stay pinned to
   // the mesh instead of visibly drifting during the rotate/pan/zoom itself.
   onCameraMove?: () => void
-  // While on, the cutting plane follows the vessel under the screen centre
-  // (the page draws the crosshair there), so moving the model moves the cut.
+  // While on, the cutting plane is fixed to the screen, at the column given by
+  // `sliceCutX` (the page draws the cutting line there), so moving the model
+  // moves the cut.
   sliceMode?: boolean
+  // Where the cutting line stands across the view, as a percent of its width
+  // (50 is the middle).
+  sliceCutX?: number
+  // Where the cutting plane crosses the centre line of the lesion measured
+  // last, 0 at ① to 1 at ②, or null when it crosses outside it. Called
+  // whenever the plane or that measurement changes.
+  onSliceCutChange?: (fraction: number | null) => void
   // Turning, moving and the mouse-wheel / pinch zoom are switched off (the
   // zoom buttons and the depth slider still work) — the model stays where the
   // scissors put it.
@@ -258,6 +267,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     onCameraChange,
     onCameraMove,
     sliceMode = false,
+    sliceCutX = 50,
+    onSliceCutChange,
     viewLocked = false,
     onSliceAreaChange,
     onModelSize,
@@ -281,31 +292,70 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const depthOffsetRef = useRef(0)
   const depthTravelRef = useRef(0)
   const sliceModeRef = useRef(sliceMode)
+  const sliceCutXRef = useRef(sliceCutX)
+  const slicePlaneRef = useRef<THREE.Plane | null>(null)
+  // The centre line of the lesion measured last (a station every few percent of
+  // a diameter, with the length reached at each), to place the cut along it.
+  const lastSweepRef = useRef<{ centres: THREE.Vector3[]; arcs: number[] } | null>(null)
 
   useEffect(() => {
     sliceModeRef.current = sliceMode
   }, [sliceMode])
 
-  // The cutting plane is fixed to the screen: it is the vertical plane through
-  // the middle of the view that contains the line of sight (seen edge-on, it is
-  // the vertical line of the cross), so its normal is the camera's right
-  // direction. The model is what moves under it (rotate / move / zoom change
-  // which cut it makes), so it is recomputed whenever the camera changes.
+  // Dragging the cutting line moves the cut across the model.
+  useEffect(() => {
+    sliceCutXRef.current = sliceCutX
+    if (sliceModeRef.current) scheduleSliceUpdate()
+    // scheduleSliceUpdate only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliceCutX])
+
+  function reportCutFraction() {
+    const plane = slicePlaneRef.current
+    const sweep = lastSweepRef.current
+    onSliceCutChange?.(plane && sweep ? centreLineFractionAtPlane(plane, sweep.centres, sweep.arcs) : null)
+  }
+
+  // The cutting plane is fixed to the screen: it holds the screen's up direction
+  // and the line of sight through the column the cutting line stands at, so seen
+  // from the camera it is exactly that vertical line, wherever the model is
+  // (through the middle of the view it is also parallel to the line of sight, and
+  // its normal is the camera's right direction). The model is what moves under it
+  // (zoom and depth change which cut it makes), so it is recomputed whenever the
+  // camera changes.
   function updateSlice() {
     const camera = threeStateRef.current?.camera
     if (!camera) return
+    const canvasElement = containerRef.current?.querySelector('canvas')
+    if (camera instanceof THREE.PerspectiveCamera && canvasElement && canvasElement.clientHeight > 0) {
+      camera.aspect = canvasElement.clientWidth / canvasElement.clientHeight
+      camera.updateProjectionMatrix()
+    }
     camera.updateMatrixWorld()
-    const normal = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize()
-    setSlicePlane(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, camera.position))
+    const cutX = sliceCutXRef.current
+    let normal = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize()
+    if (cutX !== 50) {
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize()
+      const ray = new THREE.Vector3((cutX / 100) * 2 - 1, 0, 0.5)
+        .unproject(camera)
+        .sub(camera.position)
+        .normalize()
+      const tilted = new THREE.Vector3().crossVectors(ray, up)
+      if (tilted.lengthSq() > 1e-12) normal = tilted.normalize()
+    }
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, camera.position)
+    slicePlaneRef.current = plane
+    setSlicePlane(plane)
 
     let focus: [number, number, number] | null = null
     const modelGroup = modelGroupRef.current
     if (modelGroup) {
       modelGroup.updateMatrixWorld(true)
-      const hit = hitAt(50, 50, modelGroup)
+      const hit = hitAt(cutX, 50, modelGroup)
       if (hit) focus = hit.point.toArray() as [number, number, number]
     }
     setSliceFocusPoint(focus)
+    reportCutFraction()
   }
 
   // At most once per frame, however many camera changes arrive.
@@ -996,6 +1046,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         camera ? new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize() : undefined,
       )
       if (!result) return null
+      lastSweepRef.current = { centres: result.centres, arcs: result.profile.map((sample) => sample.arc) }
+      reportCutFraction()
       return {
         proximalDiameter: result.proximalDiameter,
         distalDiameter: result.distalDiameter,

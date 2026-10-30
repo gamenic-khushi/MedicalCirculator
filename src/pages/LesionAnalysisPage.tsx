@@ -230,6 +230,7 @@ function LesionSnapshotPanel({
   distalDiameter,
   stenosisLength,
   shape,
+  cutFraction,
   isMeasuring,
   awaitingConfirm,
 }: {
@@ -238,6 +239,7 @@ function LesionSnapshotPanel({
   distalDiameter: number
   stenosisLength: number
   shape: LesionShape | null
+  cutFraction: number | null
   isMeasuring: boolean
   awaitingConfirm: boolean
 }) {
@@ -259,6 +261,7 @@ function LesionSnapshotPanel({
             distalDiameter={distalDiameter}
             stenosisLength={stenosisLength}
             shape={shape}
+            cutFraction={cutFraction}
           />
         </div>
       ) : (
@@ -304,6 +307,12 @@ export function LesionAnalysisPage() {
   // slid forward or backward (depth, -100 to 100, 0 where it was put).
   const [sliceAligned, setSliceAligned] = useState(false)
   const [depth, setDepth] = useState(0)
+  // The cutting line (the vertical blue line) can be slid across the view; the
+  // model is held and slides under the cut. Percent of the view's width, 50
+  // being the middle, and where along the lesion's centre line it cuts (0 at ①
+  // to 1 at ②, null outside it), drawn in the shape block as well.
+  const [cutX, setCutX] = useState(50)
+  const [cutFraction, setCutFraction] = useState<number | null>(null)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   // The vessel's diameter where each slidable line (through ① and ②) cuts it.
@@ -483,6 +492,7 @@ export function LesionAnalysisPage() {
   )
   const lineMeasuredKeyRef = useRef('')
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
+  const draggingCutRef = useRef(false)
   const activeToolRef = useRef(activeTool)
   // Whether the last check found the view zoomed in enough, so the hint only
   // shows when that changes to "not enough", not on every camera move.
@@ -529,6 +539,7 @@ export function LesionAnalysisPage() {
       if (sliceAligned) {
         canvasRef.current?.setDepth(0)
         setDepth(0)
+        setCutX(50)
         setSliceAligned(false)
       }
       return
@@ -657,6 +668,27 @@ export function LesionAnalysisPage() {
     if (selectedLesion.stenosisRate !== '') measureLesion(ordered[0], ordered[1])
   }
 
+  // The cutting line slides across the view; the cut is the model's section at
+  // wherever it stands (the area shown is that of the vessel under it).
+  function handleCutLinePointerDown(event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    draggingCutRef.current = true
+  }
+
+  function handleCutLinePointerMove(event: PointerEvent<HTMLDivElement>) {
+    const bounds = canvasAreaRef.current?.getBoundingClientRect()
+    if (!draggingCutRef.current || !bounds) return
+    setCutX(clampLineX(((event.clientX - bounds.left) / bounds.width) * 100))
+  }
+
+  function handleCutLinePointerUp(event: PointerEvent<HTMLDivElement>) {
+    draggingCutRef.current = false
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
   // Moves the model so ① and ② land on the lines' starting positions with the
   // vessel between them running left to right, so the cross is on the lesion
   // between them (the lines follow the points from then on), then locks it.
@@ -670,12 +702,14 @@ export function LesionAnalysisPage() {
     )
     if (!aligned) return
     setDepth(0)
+    setCutX(50)
     setSliceAligned(true)
   }
 
+  // Up takes the model away from the viewer, down brings it closer.
   function handleDepthChange(value: number) {
     setDepth(value)
-    canvasRef.current?.setDepth(value / 100)
+    canvasRef.current?.setDepth(-value / 100)
   }
 
   function handleToolChange(tool: ViewerTool) {
@@ -685,6 +719,8 @@ export function LesionAnalysisPage() {
         // The model goes back from any depth it was slid to, and is released.
         canvasRef.current?.setDepth(0)
         setDepth(0)
+        setCutX(50)
+        setCutFraction(null)
         setSliceAligned(false)
         setLineDiameters({ proximal: null, distal: null })
         lineMeasuredKeyRef.current = ''
@@ -1553,6 +1589,8 @@ export function LesionAnalysisPage() {
                   onCameraChange={handleCameraChange}
                   onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
+                  sliceCutX={cutX}
+                  onSliceCutChange={setCutFraction}
                   viewLocked={activeTool === 'slice' && sliceAligned}
                   onSliceAreaChange={setSliceCrossSectionArea}
                   onModelSize={handleModelSize}
@@ -1632,13 +1670,13 @@ export function LesionAnalysisPage() {
                     <ZoomOut className="h-4 w-4" />
                   </button>
                   {activeTool === 'slice' && (
-                    // Moves the model towards or away from the viewer (up is
-                    // forward) once the scissors has locked it in place.
+                    // Moves the model away from the viewer (up) or towards
+                    // them (down) once the scissors has locked it in place.
                     <div
-                      title="モデルの奥行きを調整（上：手前、下：奥。ダブルクリックで元の位置）"
+                      title="モデルの奥行きを調整（上：奥へ、下：手前へ。ダブルクリックで元の位置）"
                       className="flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm"
                     >
-                      <span className="text-[10px] font-medium text-gray-500">手前</span>
+                      <span className="text-[10px] font-medium text-gray-500">奥</span>
                       <div className="relative h-24 w-5">
                         <input
                           type="range"
@@ -1652,7 +1690,7 @@ export function LesionAnalysisPage() {
                           className="absolute left-1/2 top-1/2 h-5 w-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-pointer accent-indigo-600"
                         />
                       </div>
-                      <span className="text-[10px] font-medium text-gray-500">奥</span>
+                      <span className="text-[10px] font-medium text-gray-500">手前</span>
                     </div>
                   )}
                 </div>
@@ -1662,18 +1700,32 @@ export function LesionAnalysisPage() {
                 <PressurePointsPanel pa={livePa} pd={livePd} />
                 <AnatomyGuideThumbnail />
                 {activeTool === 'slice' && (
-                  // Fixed to the middle of the 3D view; the model is what moves.
-                  // The vertical line is the cutting plane seen edge-on (X is
-                  // across it, Y up the line, Z the line of sight); the
-                  // horizontal line is the X axis the vessel is laid along.
+                  // Fixed to the 3D view; the model is what moves. The vertical
+                  // line is the cutting plane seen edge-on (X is across it, Y up
+                  // the line, Z the line of sight) and can be slid left and
+                  // right; the horizontal line is the X axis the vessel is laid
+                  // along, and stays put.
                   <div className="pointer-events-none absolute inset-0">
                     <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-500/50" />
-                    <div className="absolute bottom-0 top-0 left-1/2 w-0.5 -translate-x-1/2 bg-indigo-500/80" />
-                    <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60" />
+                    <div
+                      className="pointer-events-auto absolute bottom-0 top-0 w-3 -translate-x-1/2 cursor-ew-resize touch-none"
+                      style={{ left: `${cutX}%` }}
+                      title="切断面の位置（左右にドラッグ）"
+                      onPointerDown={handleCutLinePointerDown}
+                      onPointerMove={handleCutLinePointerMove}
+                      onPointerUp={handleCutLinePointerUp}
+                      onPointerCancel={handleCutLinePointerUp}
+                    >
+                      <div className="absolute bottom-0 left-1/2 top-0 w-0.5 -translate-x-1/2 bg-indigo-500/80" />
+                    </div>
+                    <div
+                      className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
+                      style={{ left: `${cutX}%` }}
+                    />
                     <span className="absolute right-2 top-1/2 mt-1 text-[10px] font-semibold text-gray-500">X</span>
-                    <span className="absolute left-1/2 top-1 ml-1.5 text-[10px] font-semibold text-gray-500">Y</span>
-                    <span className="absolute left-1/2 top-1/2 ml-3 mt-1 text-[10px] font-semibold text-gray-500">Z</span>
-                    <span className="absolute left-1/2 bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600">切断面</span>
+                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-gray-500" style={{ left: `${cutX}%` }}>Y</span>
+                    <span className="absolute top-1/2 ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${cutX}%` }}>Z</span>
+                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600" style={{ left: `${cutX}%` }}>切断面</span>
                     {(['proximal', 'distal'] as const).map((which, index) => {
                       // Each line goes through its own point, ① or ②, whose
                       // marker is its only label: one ① and one ② on screen.
@@ -1704,7 +1756,7 @@ export function LesionAnalysisPage() {
                           onPointerCancel={handleLinePointerUp}
                         >
                           <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-gray-700/70" />
-                          <span className="absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-gray-700 shadow-sm">
+                          <span className="pointer-events-none absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-gray-700 shadow-sm">
                             {isProximal ? '近位径' : '遠位径'}{' '}
                             {diameter != null ? `${formatMeasurement(diameter)} mm` : '—'}
                           </span>
@@ -1712,7 +1764,10 @@ export function LesionAnalysisPage() {
                       )
                     })}
                     {sliceCrossSectionArea == null && (
-                      <p className="absolute left-1/2 top-1/2 mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm">
+                      <p
+                        className="absolute top-1/2 mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm"
+                        style={{ left: `${cutX}%` }}
+                      >
                         十字の中心に血管を合わせてください
                       </p>
                     )}
@@ -1828,6 +1883,7 @@ export function LesionAnalysisPage() {
             distalDiameter={Number(selectedLesion.lesionDistalDiameter) || 0}
             stenosisLength={Number(selectedLesion.stenosisLength) || 0}
             shape={lesionShape}
+            cutFraction={activeTool === 'slice' ? cutFraction : null}
             isMeasuring={isMeasuring}
             awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />

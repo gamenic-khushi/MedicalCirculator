@@ -12,6 +12,9 @@ interface VesselShapeDiagramProps {
   // a measurement that could not follow the vessel) a smooth shape is made up
   // from the numbers above.
   shape?: LesionShape | null
+  // Where the cutting line of the 3D view crosses the vessel, 0 at ① to 1 at ②
+  // (null when it is outside ①〜②). Drawn on the model's own outline only.
+  cutFraction?: number | null
 }
 
 const MIN_LESION_WIDTH = 24
@@ -25,6 +28,8 @@ const MARKER_RADIUS = 7
 // ① and ② are coloured like their markers on the 3D view.
 const PROXIMAL_COLOR = '#ef4444'
 const DISTAL_COLOR = '#3b82f6'
+// The cutting line is the same indigo as on the 3D view.
+const CUT_COLOR = '#6366f1'
 
 function halfHeightFor(diameter: number, maxDiameter: number) {
   if (!Number.isFinite(diameter) || diameter <= 0 || maxDiameter <= 0) return MIN_HALF_HEIGHT
@@ -67,7 +72,7 @@ function EndMarker({ x, color, label }: { x: number; color: string; label: strin
 
 // The vessel exactly as the model has it: the wall above and below the centre
 // line at every step from ① to ②, with the length across the full width.
-function MeasuredShape({ shape }: { shape: LesionShape }) {
+function MeasuredShape({ shape, cutFraction }: { shape: LesionShape; cutFraction?: number | null }) {
   const { samples } = shape
   const lastArc = samples[samples.length - 1].arc
   const x0 = X_MARGIN
@@ -87,6 +92,7 @@ function MeasuredShape({ shape }: { shape: LesionShape }) {
     .map((sample) => `${xOf(sample.arc)} ${CENTER_Y + sample.bottom * yPerMm}`)
   const outline = `M ${upper.join(' L ')} L ${lower.join(' L ')} Z`
   const xNarrowest = x0 + shape.narrowestFraction * (x1 - x0)
+  const xCut = cutFraction != null ? x0 + Math.min(Math.max(cutFraction, 0), 1) * (x1 - x0) : null
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -112,6 +118,19 @@ function MeasuredShape({ shape }: { shape: LesionShape }) {
         />
         <EndMarker x={x0} color={PROXIMAL_COLOR} label="①" />
         <EndMarker x={x1} color={DISTAL_COLOR} label="②" />
+        {xCut != null && (
+          <g>
+            <line
+              x1={xCut}
+              y1={CENTER_Y - MAX_HALF_HEIGHT - 8}
+              x2={xCut}
+              y2={CENTER_Y + MAX_HALF_HEIGHT + 8}
+              stroke={CUT_COLOR}
+              strokeWidth={2}
+            />
+            <circle cx={xCut} cy={CENTER_Y} r={3.5} fill="#ffffff" stroke={CUT_COLOR} strokeWidth={1.5} />
+          </g>
+        )}
       </svg>
       <div className="relative h-4 w-full px-1 text-[11px] font-medium text-gray-500">
         <span className="absolute left-1 top-0">① 近位側</span>
@@ -122,6 +141,14 @@ function MeasuredShape({ shape }: { shape: LesionShape }) {
           最小
         </span>
         <span className="absolute right-1 top-0">② 遠位側</span>
+        {xCut != null && (
+          <span
+            className="absolute top-0 -translate-x-1/2 whitespace-nowrap font-semibold text-indigo-600"
+            style={{ left: `${(xCut / WIDTH) * 100}%` }}
+          >
+            切断面
+          </span>
+        )}
       </div>
       <p className="text-center text-[10px] text-gray-400">
         3Dモデルの断面形状（①〜②の中心線に沿って・長さ {formatLength(lastArc)} mm）
@@ -198,8 +225,10 @@ function GeneratedShape({
   )
 }
 
-export function VesselShapeDiagram({ shape, ...numbers }: VesselShapeDiagramProps) {
+export function VesselShapeDiagram({ shape, cutFraction, ...numbers }: VesselShapeDiagramProps) {
   const lastArc = shape ? shape.samples[shape.samples.length - 1]?.arc : 0
-  if (shape && shape.samples.length >= 2 && lastArc > 0) return <MeasuredShape shape={shape} />
+  if (shape && shape.samples.length >= 2 && lastArc > 0) {
+    return <MeasuredShape shape={shape} cutFraction={cutFraction} />
+  }
   return <GeneratedShape {...numbers} />
 }
