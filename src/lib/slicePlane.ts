@@ -204,6 +204,107 @@ export function loopArea(loop: THREE.Vector3[], normal: THREE.Vector3): number {
   return Math.abs(area) / 2
 }
 
+// The two directions in the cutting plane the cut is drawn in: up the screen,
+// and across it towards the far side of the view (depth).
+function inPlaneAxes(
+  normal: THREE.Vector3,
+  screenUp: THREE.Vector3,
+): { up: THREE.Vector3; across: THREE.Vector3 } | null {
+  const up = screenUp.clone().addScaledVector(normal, -screenUp.dot(normal))
+  if (up.lengthSq() < 1e-12) return null
+  up.normalize()
+  return { up, across: new THREE.Vector3().crossVectors(up, normal).normalize() }
+}
+
+// Keeps the part of a cut outline that is no more than `limit` behind
+// `reference` along the depth direction, closing the outline along that edge.
+// Whatever lies further back (another vessel, or the far side of a wide one) is
+// left out.
+export function clipLoopBehind(
+  loop: THREE.Vector3[],
+  normal: THREE.Vector3,
+  screenUp: THREE.Vector3,
+  reference: THREE.Vector3,
+  limit: number,
+): THREE.Vector3[] {
+  const axes = inPlaneAxes(normal, screenUp)
+  if (!axes || loop.length < 3) return loop
+  const reach = (point: THREE.Vector3) => point.clone().sub(reference).dot(axes.across) - limit
+  const kept: THREE.Vector3[] = []
+  for (let i = 0; i < loop.length; i++) {
+    const current = loop[i]
+    const next = loop[(i + 1) % loop.length]
+    const a = reach(current)
+    const b = reach(next)
+    if (a <= 0) kept.push(current)
+    if ((a <= 0) !== (b <= 0)) kept.push(current.clone().lerp(next, a / (a - b)))
+  }
+  return kept.length >= 3 ? kept : loop
+}
+
+// The cut outline flattened onto the cutting plane, in mm and centred on its
+// own middle: x runs towards the far side of the view (depth), y up the screen,
+// so it reads like the cut face seen from beside the model.
+export interface PlaneOutline {
+  points: [number, number][]
+  width: number
+  height: number
+  // Where the horizontal (lengthwise) section meets this plane: a line through
+  // (x, y) in the direction (dx, dy). Null when it is not known.
+  sectionLine: { x: number; y: number; dx: number; dy: number } | null
+}
+
+const MAX_OUTLINE_POINTS = 96
+
+// `sectionThrough` is the point the horizontal line crosses the plane at, and
+// `viewpoint` the camera: the lengthwise section is the plane through the
+// camera and the horizontal line, so it meets this plane along the line from
+// the camera through that point.
+export function outlineInPlane(
+  loop: THREE.Vector3[],
+  normal: THREE.Vector3,
+  screenUp: THREE.Vector3,
+  sectionThrough?: THREE.Vector3 | null,
+  viewpoint?: THREE.Vector3 | null,
+): PlaneOutline | null {
+  if (loop.length < 3) return null
+  const axes = inPlaneAxes(normal, screenUp)
+  if (!axes) return null
+  const { up, across } = axes
+  const step = Math.max(1, Math.ceil(loop.length / MAX_OUTLINE_POINTS))
+  const flat: [number, number][] = []
+  for (let i = 0; i < loop.length; i += step) flat.push([loop[i].dot(across), loop[i].dot(up)])
+  const xs = flat.map((p) => p[0])
+  const ys = flat.map((p) => p[1])
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  let sectionLine: PlaneOutline['sectionLine'] = null
+  if (sectionThrough && viewpoint) {
+    const direction = sectionThrough.clone().sub(viewpoint)
+    const dx = direction.dot(across)
+    const dy = direction.dot(up)
+    const length = Math.hypot(dx, dy)
+    if (length > 1e-9) {
+      sectionLine = {
+        x: sectionThrough.dot(across) - cx,
+        y: sectionThrough.dot(up) - cy,
+        dx: dx / length,
+        dy: dy / length,
+      }
+    }
+  }
+  return {
+    points: flat.map(([x, y]) => [x - cx, y - cy]),
+    width: maxX - minX,
+    height: maxY - minY,
+    sectionLine,
+  }
+}
+
 // Fan triangulation from the loop's own centroid — sufficient for the
 // roughly-convex, lumen-shaped cross-sections a vessel produces. Returns
 // geometry in the same (world) space the loop points are already in; the

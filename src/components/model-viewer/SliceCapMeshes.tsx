@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-import { computeCrossSection, loopArea, triangulateFan } from '@/lib/slicePlane'
+import {
+  clipLoopBehind,
+  computeCrossSection,
+  loopArea,
+  outlineInPlane,
+  triangulateFan,
+  type PlaneOutline,
+} from '@/lib/slicePlane'
 
 interface CapGeometryEntry {
   key: string
@@ -13,6 +21,12 @@ interface SliceCapMeshesProps {
   plane: THREE.Plane | null
   color: string
   onAreaChange?: (area: number | null) => void
+  // The outline of the cut that is counted, flattened onto the plane (null when
+  // nothing is cut), for drawing the transverse cross-section.
+  onOutlineChange?: (outline: PlaneOutline | null) => void
+  // How far behind the surface the horizontal line lies on (mm) the cut reaches;
+  // null puts no limit on the depth.
+  depthLimit?: number | null
   // The surface point under the middle of the view (it lies on the plane).
   // Only the vessel whose cut passes through it is shown and counted, not
   // every other vessel the plane crosses. Null shows nothing.
@@ -26,15 +40,25 @@ interface SliceCapMeshesProps {
 // move during a drag would be visibly janky, so recomputation is coalesced
 // to at most once per rendered frame — the plain clipping-plane visual
 // already gives smooth feedback while the cap trails a frame or two behind.
-export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focusPoint }: SliceCapMeshesProps) {
+export function SliceCapMeshes({
+  modelGroupRef,
+  plane,
+  color,
+  onAreaChange,
+  onOutlineChange,
+  depthLimit,
+  focusPoint,
+}: SliceCapMeshesProps) {
   const [caps, setCaps] = useState<CapGeometryEntry[]>([])
   const frameRef = useRef<number | null>(null)
+  const camera = useThree((state) => state.camera)
 
   useEffect(() => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
     if (!plane) {
       setCaps([])
       onAreaChange?.(null)
+      onOutlineChange?.(null)
       return
     }
 
@@ -62,8 +86,10 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focu
       // loop nearest to it. With nothing under the middle, nothing is shown.
       let shown: typeof allLoops = []
       totalArea = 0
-      if (focusPoint && allLoops.length > 0) {
-        const focus = new THREE.Vector3(...focusPoint)
+      camera.updateMatrixWorld()
+      const screenUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize()
+      const focus = focusPoint ? new THREE.Vector3(...focusPoint) : null
+      if (focus && allLoops.length > 0) {
         let nearest = allLoops[0]
         let nearestDistance = Infinity
         for (const entry of allLoops) {
@@ -73,8 +99,12 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focu
             nearest = entry
           }
         }
-        shown = [nearest]
-        totalArea = loopArea(nearest.loop, plane.normal)
+        // Between ① and ②, only a limited depth behind the surface the
+        // horizontal line lies on is cut, so something running behind it is not.
+        const loop =
+          depthLimit != null ? clipLoopBehind(nearest.loop, plane.normal, screenUp, focus, depthLimit) : nearest.loop
+        shown = [{ key: nearest.key, loop }]
+        totalArea = loopArea(loop, plane.normal)
       }
 
       for (const { key, loop } of shown) {
@@ -87,6 +117,9 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focu
       }
       setCaps(nextCaps)
       onAreaChange?.(nextCaps.length > 0 ? totalArea : null)
+      onOutlineChange?.(
+        shown.length > 0 ? outlineInPlane(shown[0].loop, plane.normal, screenUp, focus, camera.position) : null,
+      )
     })
 
     return () => {
@@ -96,14 +129,17 @@ export function SliceCapMeshes({ modelGroupRef, plane, color, onAreaChange, focu
     // doesn't memoize it) — depending on it would refire this expensive
     // recompute on every unrelated re-render of the parent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plane, focusPoint, modelGroupRef])
+  }, [plane, focusPoint, depthLimit, modelGroupRef])
 
   // Leaving slice mode unmounts this component entirely (see ModelCanvas's
   // `{sliceMode && <SliceCapMeshes .../>}`) — without this, the parent would
   // keep showing the last cross-section area from before the cut was
   // removed.
   useEffect(() => {
-    return () => onAreaChange?.(null)
+    return () => {
+      onAreaChange?.(null)
+      onOutlineChange?.(null)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

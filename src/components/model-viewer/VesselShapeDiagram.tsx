@@ -1,3 +1,4 @@
+import type { PlaneOutline } from '@/lib/slicePlane'
 import type { LesionShape } from '@/lib/twoPointLesionMeasurement'
 
 interface VesselShapeDiagramProps {
@@ -15,6 +16,10 @@ interface VesselShapeDiagramProps {
   // Where the cutting line of the 3D view crosses the vessel, 0 at ① to 1 at ②
   // (null when it is outside ①〜②). Drawn on the model's own outline only.
   cutFraction?: number | null
+  // The cut at the cutting line seen face-on (the transverse cross-section),
+  // drawn under the lengthwise diagram, with its area in mm². Null shows none.
+  crossSection?: PlaneOutline | null
+  crossSectionArea?: number | null
 }
 
 const MIN_LESION_WIDTH = 24
@@ -39,6 +44,95 @@ function halfHeightFor(diameter: number, maxDiameter: number) {
 
 function formatLength(length: number) {
   return length < 10 ? length.toFixed(2) : length.toFixed(1)
+}
+
+const SECTION_SIZE = 120
+// The lengthwise section is the horizontal line of the 3D view, drawn grey there.
+const SECTION_LINE_COLOR = '#4b5563'
+const SECTION_MARGIN = 14
+
+// The cut at the cutting line seen face-on, in the same indigo as the line. The
+// frame is square so the outline keeps its true proportions; its size is fitted
+// to the cut, with the sizes across it written underneath.
+function TransverseSection({
+  outline,
+  area,
+  connectorLeft,
+}: {
+  outline: PlaneOutline
+  area?: number | null
+  // Where the cutting line stands along the diagram above, in percent of its
+  // width, so a short stem can lead from the line down to this picture.
+  connectorLeft: number | null
+}) {
+  const reach = Math.max(outline.width, outline.height, 1e-9)
+  const scale = (SECTION_SIZE - SECTION_MARGIN * 2) / reach
+  const centre = SECTION_SIZE / 2
+  const path = `M ${outline.points
+    .map(([x, y]) => `${(centre + x * scale).toFixed(2)} ${(centre - y * scale).toFixed(2)}`)
+    .join(' L ')} Z`
+  // The lengthwise section meets this cut along a line, drawn across the frame
+  // (up the screen is up here too).
+  let line: { x1: number; y1: number; x2: number; y2: number } | null = null
+  if (outline.sectionLine) {
+    const { x, y, dx, dy } = outline.sectionLine
+    const px = centre + x * scale
+    const py = centre - y * scale
+    // Run it from the frame's left side to its right (nearly flat, so this
+    // always crosses the whole frame).
+    const slope = Math.abs(dx) > 1e-6 ? -dy / dx : 0
+    const yAt = (frameX: number) => py + slope * (frameX - px)
+    line = { x1: 4, y1: yAt(4), x2: SECTION_SIZE - 4, y2: yAt(SECTION_SIZE - 4) }
+  }
+
+  return (
+    <div className="relative mt-3 flex flex-col items-center gap-1 rounded-lg bg-gray-50 px-2 pb-2 pt-3">
+      {connectorLeft != null && (
+        <span
+          className="absolute -top-3 h-3 w-px bg-indigo-500"
+          style={{ left: `${connectorLeft}%` }}
+          aria-hidden
+        />
+      )}
+      <p className="text-[11px] font-semibold text-indigo-600">切断面の横断面</p>
+      <svg viewBox={`0 0 ${SECTION_SIZE} ${SECTION_SIZE}`} className="h-28 w-28">
+        <rect
+          x={1}
+          y={1}
+          width={SECTION_SIZE - 2}
+          height={SECTION_SIZE - 2}
+          rx={4}
+          fill="#ffffff"
+          stroke="#c7d2fe"
+        />
+        <line x1={centre} y1={4} x2={centre} y2={SECTION_SIZE - 4} stroke="#c7d2fe" strokeDasharray="2 3" />
+        <line x1={4} y1={centre} x2={SECTION_SIZE - 4} y2={centre} stroke="#c7d2fe" strokeDasharray="2 3" />
+        <path d={path} fill="#dbe4f0" stroke="#6366f1" strokeWidth={1.5} strokeLinejoin="round" />
+        {line && (
+          <g>
+            <line
+              x1={line.x1}
+              y1={line.y1}
+              x2={line.x2}
+              y2={line.y2}
+              stroke={SECTION_LINE_COLOR}
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+            />
+            <text x={6} y={Math.max(11, Math.min(SECTION_SIZE - 4, line.y1 - 3))} fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
+              縦断面
+            </text>
+          </g>
+        )}
+      </svg>
+      <p className="text-center text-[10px] text-gray-500">
+        {area != null && <span className="block font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</span>}
+        <span className="block">
+          上下 {formatLength(outline.height)} mm × 奥行 {formatLength(outline.width)} mm
+        </span>
+      </p>
+    </div>
+  )
 }
 
 function EndMarker({ x, color, label }: { x: number; color: string; label: string }) {
@@ -72,7 +166,17 @@ function EndMarker({ x, color, label }: { x: number; color: string; label: strin
 
 // The vessel exactly as the model has it: the wall above and below the centre
 // line at every step from ① to ②, with the length across the full width.
-function MeasuredShape({ shape, cutFraction }: { shape: LesionShape; cutFraction?: number | null }) {
+function MeasuredShape({
+  shape,
+  cutFraction,
+  crossSection,
+  crossSectionArea,
+}: {
+  shape: LesionShape
+  cutFraction?: number | null
+  crossSection?: PlaneOutline | null
+  crossSectionArea?: number | null
+}) {
   const { samples } = shape
   const lastArc = samples[samples.length - 1].arc
   const x0 = X_MARGIN
@@ -154,6 +258,15 @@ function MeasuredShape({ shape, cutFraction }: { shape: LesionShape; cutFraction
         3Dモデルの断面形状（①〜②の中心線に沿って・長さ {formatLength(lastArc)} mm）
         {squeezed && '。縦方向は縮めて表示しています'}
       </p>
+      {crossSection && (
+        <div className="w-full">
+          <TransverseSection
+            outline={crossSection}
+            area={crossSectionArea}
+            connectorLeft={xCut != null ? (xCut / WIDTH) * 100 : null}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -225,10 +338,32 @@ function GeneratedShape({
   )
 }
 
-export function VesselShapeDiagram({ shape, cutFraction, ...numbers }: VesselShapeDiagramProps) {
+export function VesselShapeDiagram({
+  shape,
+  cutFraction,
+  crossSection,
+  crossSectionArea,
+  ...numbers
+}: VesselShapeDiagramProps) {
   const lastArc = shape ? shape.samples[shape.samples.length - 1]?.arc : 0
   if (shape && shape.samples.length >= 2 && lastArc > 0) {
-    return <MeasuredShape shape={shape} cutFraction={cutFraction} />
+    return (
+      <MeasuredShape
+        shape={shape}
+        cutFraction={cutFraction}
+        crossSection={crossSection}
+        crossSectionArea={crossSectionArea}
+      />
+    )
   }
-  return <GeneratedShape {...numbers} />
+  return (
+    <div className="flex flex-col items-center">
+      <GeneratedShape {...numbers} />
+      {crossSection && (
+        <div className="w-full">
+          <TransverseSection outline={crossSection} area={crossSectionArea} connectorLeft={null} />
+        </div>
+      )}
+    </div>
+  )
 }

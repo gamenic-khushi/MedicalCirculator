@@ -23,6 +23,7 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
+import type { PlaneOutline } from '@/lib/slicePlane'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
@@ -115,6 +116,10 @@ const MIN_VESSEL_SCREEN_PX = 30
 // Keeps a slidable line inside the view, away from the very edges.
 function clampLineX(value: number): number {
   return Math.min(Math.max(value, 3), 97)
+}
+
+function clampLineY(value: number): number {
+  return Math.min(Math.max(value, 8), 92)
 }
 
 // Where the scissors brings ① and ② (percent of the view's width), either side
@@ -231,6 +236,8 @@ function LesionSnapshotPanel({
   stenosisLength,
   shape,
   cutFraction,
+  crossSection,
+  crossSectionArea,
   isMeasuring,
   awaitingConfirm,
 }: {
@@ -240,6 +247,8 @@ function LesionSnapshotPanel({
   stenosisLength: number
   shape: LesionShape | null
   cutFraction: number | null
+  crossSection: PlaneOutline | null
+  crossSectionArea: number | null
   isMeasuring: boolean
   awaitingConfirm: boolean
 }) {
@@ -262,6 +271,8 @@ function LesionSnapshotPanel({
             stenosisLength={stenosisLength}
             shape={shape}
             cutFraction={cutFraction}
+            crossSection={crossSection}
+            crossSectionArea={crossSectionArea}
           />
         </div>
       ) : (
@@ -312,9 +323,14 @@ export function LesionAnalysisPage() {
   // being the middle, and where along the lesion's centre line it cuts (0 at ①
   // to 1 at ②, null outside it), drawn in the shape block as well.
   const [cutX, setCutX] = useState(50)
+  // The horizontal line can be slid up and down; the vessel under its crossing
+  // with the cutting line is the one that is cut. Percent of the view's height.
+  const [lineY, setLineY] = useState(50)
   const [cutFraction, setCutFraction] = useState<number | null>(null)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
+  // The shape of that cut, drawn under the diagram in the shape block.
+  const [sliceOutline, setSliceOutline] = useState<PlaneOutline | null>(null)
   // The vessel's diameter where each slidable line (through ① and ②) cuts it.
   const [lineDiameters, setLineDiameters] = useState<{ proximal: number | null; distal: number | null }>({
     proximal: null,
@@ -493,6 +509,7 @@ export function LesionAnalysisPage() {
   const lineMeasuredKeyRef = useRef('')
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
   const draggingCutRef = useRef(false)
+  const draggingRowRef = useRef(false)
   const activeToolRef = useRef(activeTool)
   // Whether the last check found the view zoomed in enough, so the hint only
   // shows when that changes to "not enough", not on every camera move.
@@ -540,6 +557,7 @@ export function LesionAnalysisPage() {
         canvasRef.current?.setDepth(0)
         setDepth(0)
         setCutX(50)
+        setLineY(50)
         setSliceAligned(false)
       }
       return
@@ -636,9 +654,9 @@ export function LesionAnalysisPage() {
     const point = annotations[which === 'proximal' ? 0 : 1]
     if (!which || !bounds || !canvas || !point) return
     const x = clampLineX(((event.clientX - bounds.left) / bounds.width) * 100)
-    // Only on the horizontal centre line, and on the surface nearest the point's
-    // own, so it keeps to its own vessel.
-    const result = canvas.measureDiameterAtScreenX(x, 50, {
+    // Only on the point's own row (the horizontal line it was put on), and on
+    // the surface nearest the point's own, so it keeps to its own vessel.
+    const result = canvas.measureDiameterAtScreenX(x, point.y, {
       onlyThatRow: true,
       near: point.worldPoint,
     })
@@ -647,7 +665,7 @@ export function LesionAnalysisPage() {
     setAnnotations((prev) =>
       prev.map((annotation) =>
         annotation.id === point.id
-          ? { ...annotation, x: onScreen.x, y: 50, worldPoint: result.point }
+          ? { ...annotation, x: onScreen.x, y: point.y, worldPoint: result.point }
           : annotation,
       ),
     )
@@ -689,6 +707,27 @@ export function LesionAnalysisPage() {
     }
   }
 
+  // The horizontal line slides up and down; the cut is taken under wherever it
+  // crosses the cutting line.
+  function handleRowLinePointerDown(event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    draggingRowRef.current = true
+  }
+
+  function handleRowLinePointerMove(event: PointerEvent<HTMLDivElement>) {
+    const bounds = canvasAreaRef.current?.getBoundingClientRect()
+    if (!draggingRowRef.current || !bounds) return
+    setLineY(clampLineY(((event.clientY - bounds.top) / bounds.height) * 100))
+  }
+
+  function handleRowLinePointerUp(event: PointerEvent<HTMLDivElement>) {
+    draggingRowRef.current = false
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
   // Moves the model so ① and ② land on the lines' starting positions with the
   // vessel between them running left to right, so the cross is on the lesion
   // between them (the lines follow the points from then on), then locks it.
@@ -703,6 +742,7 @@ export function LesionAnalysisPage() {
     if (!aligned) return
     setDepth(0)
     setCutX(50)
+    setLineY(50)
     setSliceAligned(true)
   }
 
@@ -720,6 +760,7 @@ export function LesionAnalysisPage() {
         canvasRef.current?.setDepth(0)
         setDepth(0)
         setCutX(50)
+        setLineY(50)
         setCutFraction(null)
         setSliceAligned(false)
         setLineDiameters({ proximal: null, distal: null })
@@ -1590,9 +1631,11 @@ export function LesionAnalysisPage() {
                   onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
                   sliceCutX={cutX}
+                  sliceLineY={lineY}
                   onSliceCutChange={setCutFraction}
                   viewLocked={activeTool === 'slice' && sliceAligned}
                   onSliceAreaChange={setSliceCrossSectionArea}
+                  onSliceOutlineChange={setSliceOutline}
                   onModelSize={handleModelSize}
                 />
 
@@ -1706,7 +1749,17 @@ export function LesionAnalysisPage() {
                   // right; the horizontal line is the X axis the vessel is laid
                   // along, and stays put.
                   <div className="pointer-events-none absolute inset-0">
-                    <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-500/50" />
+                    <div
+                      className="pointer-events-auto absolute left-0 right-0 h-3 -translate-y-1/2 cursor-ns-resize touch-none"
+                      style={{ top: `${lineY}%` }}
+                      title="横線の位置（上下にドラッグ）"
+                      onPointerDown={handleRowLinePointerDown}
+                      onPointerMove={handleRowLinePointerMove}
+                      onPointerUp={handleRowLinePointerUp}
+                      onPointerCancel={handleRowLinePointerUp}
+                    >
+                      <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-500/50" />
+                    </div>
                     <div
                       className="pointer-events-auto absolute bottom-0 top-0 w-3 -translate-x-1/2 cursor-ew-resize touch-none"
                       style={{ left: `${cutX}%` }}
@@ -1719,12 +1772,12 @@ export function LesionAnalysisPage() {
                       <div className="absolute bottom-0 left-1/2 top-0 w-0.5 -translate-x-1/2 bg-indigo-500/80" />
                     </div>
                     <div
-                      className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
-                      style={{ left: `${cutX}%` }}
+                      className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
+                      style={{ left: `${cutX}%`, top: `${lineY}%` }}
                     />
-                    <span className="absolute right-2 top-1/2 mt-1 text-[10px] font-semibold text-gray-500">X</span>
+                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-gray-500" style={{ top: `${lineY}%` }}>X</span>
                     <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-gray-500" style={{ left: `${cutX}%` }}>Y</span>
-                    <span className="absolute top-1/2 ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${cutX}%` }}>Z</span>
+                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${cutX}%`, top: `${lineY}%` }}>Z</span>
                     <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600" style={{ left: `${cutX}%` }}>切断面</span>
                     {(['proximal', 'distal'] as const).map((which, index) => {
                       // Each line goes through its own point, ① or ②, whose
@@ -1765,8 +1818,8 @@ export function LesionAnalysisPage() {
                     })}
                     {sliceCrossSectionArea == null && (
                       <p
-                        className="absolute top-1/2 mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm"
-                        style={{ left: `${cutX}%` }}
+                        className="absolute mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm"
+                        style={{ left: `${cutX}%`, top: `${lineY}%` }}
                       >
                         十字の中心に血管を合わせてください
                       </p>
@@ -1884,6 +1937,8 @@ export function LesionAnalysisPage() {
             stenosisLength={Number(selectedLesion.stenosisLength) || 0}
             shape={lesionShape}
             cutFraction={activeTool === 'slice' ? cutFraction : null}
+            crossSection={activeTool === 'slice' ? sliceOutline : null}
+            crossSectionArea={activeTool === 'slice' ? sliceCrossSectionArea : null}
             isMeasuring={isMeasuring}
             awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />

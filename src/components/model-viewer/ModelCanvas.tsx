@@ -13,7 +13,7 @@ import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import { nearerToHeart } from '@/lib/heartDistance'
-import { computeCrossSection, loopArea } from '@/lib/slicePlane'
+import { computeCrossSection, loopArea, type PlaneOutline } from '@/lib/slicePlane'
 import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
 import { centreLineFractionAtPlane, measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
@@ -141,11 +141,17 @@ interface ModelCanvasProps {
   // last, 0 at ① to 1 at ②, or null when it crosses outside it. Called
   // whenever the plane or that measurement changes.
   onSliceCutChange?: (fraction: number | null) => void
+  // Where the horizontal line stands, in percent of the view's height from the
+  // top (50 is the middle). The vessel under its crossing with the cutting line
+  // is the one that is cut and counted.
+  sliceLineY?: number
   // Turning, moving and the mouse-wheel / pinch zoom are switched off (the
   // zoom buttons and the depth slider still work) — the model stays where the
   // scissors put it.
   viewLocked?: boolean
   onSliceAreaChange?: (area: number | null) => void
+  // The shape of the cut being measured, flattened onto the cutting plane.
+  onSliceOutlineChange?: (outline: PlaneOutline | null) => void
   // Called once, as soon as the model has loaded, with its largest dimension in
   // model units — lets a page tell when a model is not in millimetres.
   onModelSize?: (maxDimension: number) => void
@@ -156,6 +162,9 @@ interface ThreeState {
   scene: THREE.Scene
 }
 
+// Between ① and ②, the cut only takes in this much (mm) behind the surface the
+// horizontal line lies on, so another vessel running behind is not cut too.
+const SLICE_DEPTH_LIMIT = 6
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
 // A highlight sized strictly to the vessel's real width becomes imperceptible
 // (a handful of pixels) once the camera is framing the whole model — which is
@@ -269,8 +278,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     sliceMode = false,
     sliceCutX = 50,
     onSliceCutChange,
+    sliceLineY = 50,
     viewLocked = false,
     onSliceAreaChange,
+    onSliceOutlineChange,
     onModelSize,
   },
   ref,
@@ -293,6 +304,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const depthTravelRef = useRef(0)
   const sliceModeRef = useRef(sliceMode)
   const sliceCutXRef = useRef(sliceCutX)
+  const sliceLineYRef = useRef(sliceLineY)
+  // Whether the cut is between ① and ②, where only a limited depth behind the
+  // horizontal line is cut, so a vessel running behind the lesion is left out.
+  const [sliceDepthLimit, setSliceDepthLimit] = useState<number | null>(null)
   const slicePlaneRef = useRef<THREE.Plane | null>(null)
   // The centre line of the lesion measured last (a station every few percent of
   // a diameter, with the length reached at each), to place the cut along it.
@@ -310,10 +325,20 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sliceCutX])
 
+  // Moving the horizontal line moves the crossing the cut is taken under.
+  useEffect(() => {
+    sliceLineYRef.current = sliceLineY
+    if (sliceModeRef.current) scheduleSliceUpdate()
+    // scheduleSliceUpdate only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliceLineY])
+
   function reportCutFraction() {
     const plane = slicePlaneRef.current
     const sweep = lastSweepRef.current
-    onSliceCutChange?.(plane && sweep ? centreLineFractionAtPlane(plane, sweep.centres, sweep.arcs) : null)
+    const fraction = plane && sweep ? centreLineFractionAtPlane(plane, sweep.centres, sweep.arcs) : null
+    onSliceCutChange?.(fraction)
+    setSliceDepthLimit(fraction != null ? SLICE_DEPTH_LIMIT : null)
   }
 
   // The cutting plane is fixed to the screen: it holds the screen's up direction
@@ -351,7 +376,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     const modelGroup = modelGroupRef.current
     if (modelGroup) {
       modelGroup.updateMatrixWorld(true)
-      const hit = hitAt(cutX, 50, modelGroup)
+      const hit = hitAt(cutX, sliceLineYRef.current, modelGroup)
       if (hit) focus = hit.point.toArray() as [number, number, number]
     }
     setSliceFocusPoint(focus)
@@ -1330,6 +1355,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
             plane={slicePlane}
             color={color}
             onAreaChange={onSliceAreaChange}
+            onOutlineChange={onSliceOutlineChange}
+            depthLimit={sliceDepthLimit}
             focusPoint={sliceFocusPoint}
           />
         )}
