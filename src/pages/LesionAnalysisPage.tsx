@@ -315,7 +315,7 @@ export function LesionAnalysisPage() {
   const [slicePan, setSlicePan] = useState(false)
   // Whether the scissors has put the model in place with ① and ② on the cross.
   // From then on the model can no longer be turned or moved, only zoomed and
-  // slid forward or backward (depth, -100 to 100, 0 where it was put).
+  // slid away from the viewer by up to 6 mm (depth, 0 to 100, 0 where it was put).
   const [sliceAligned, setSliceAligned] = useState(false)
   const [depth, setDepth] = useState(0)
   // The cutting line (the vertical blue line) can be slid across the view; the
@@ -326,6 +326,10 @@ export function LesionAnalysisPage() {
   // The horizontal line can be slid up and down; the vessel under its crossing
   // with the cutting line is the one that is cut. Percent of the view's height.
   const [lineY, setLineY] = useState(50)
+  // Where the cutting plane shows on the screen. It is fixed to the model, so
+  // the depth slider and the zoom move it across the view; null until known.
+  const [cutScreenX, setCutScreenX] = useState<number | null>(null)
+  const lineX = cutScreenX ?? cutX
   const [cutFraction, setCutFraction] = useState<number | null>(null)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
@@ -746,7 +750,8 @@ export function LesionAnalysisPage() {
     setSliceAligned(true)
   }
 
-  // Up takes the model away from the viewer, down brings it closer.
+  // Up takes the model away from the viewer, by 6 mm at most; the bottom is where
+  // the scissors put it.
   function handleDepthChange(value: number) {
     setDepth(value)
     canvasRef.current?.setDepth(-value / 100)
@@ -1632,6 +1637,7 @@ export function LesionAnalysisPage() {
                   sliceMode={activeTool === 'slice'}
                   sliceCutX={cutX}
                   sliceLineY={lineY}
+                  onSliceLineXChange={setCutScreenX}
                   onSliceCutChange={setCutFraction}
                   viewLocked={activeTool === 'slice' && sliceAligned}
                   onSliceAreaChange={setSliceCrossSectionArea}
@@ -1713,17 +1719,17 @@ export function LesionAnalysisPage() {
                     <ZoomOut className="h-4 w-4" />
                   </button>
                   {activeTool === 'slice' && (
-                    // Moves the model away from the viewer (up) or towards
-                    // them (down) once the scissors has locked it in place.
+                    // Moves the model away from the viewer (up, 6 mm at most) once the
+                    // scissors has locked it in place; the bottom is where it was put.
                     <div
-                      title="モデルの奥行きを調整（上：奥へ、下：手前へ。ダブルクリックで元の位置）"
+                      title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
                       className="flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm"
                     >
                       <span className="text-[10px] font-medium text-gray-500">奥</span>
                       <div className="relative h-24 w-5">
                         <input
                           type="range"
-                          min={-100}
+                          min={0}
                           max={100}
                           step={1}
                           value={depth}
@@ -1762,7 +1768,7 @@ export function LesionAnalysisPage() {
                     </div>
                     <div
                       className="pointer-events-auto absolute bottom-0 top-0 w-3 -translate-x-1/2 cursor-ew-resize touch-none"
-                      style={{ left: `${cutX}%` }}
+                      style={{ left: `${lineX}%` }}
                       title="切断面の位置（左右にドラッグ）"
                       onPointerDown={handleCutLinePointerDown}
                       onPointerMove={handleCutLinePointerMove}
@@ -1773,12 +1779,12 @@ export function LesionAnalysisPage() {
                     </div>
                     <div
                       className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
-                      style={{ left: `${cutX}%`, top: `${lineY}%` }}
+                      style={{ left: `${lineX}%`, top: `${lineY}%` }}
                     />
                     <span className="absolute right-2 mt-1 text-[10px] font-semibold text-gray-500" style={{ top: `${lineY}%` }}>X</span>
-                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-gray-500" style={{ left: `${cutX}%` }}>Y</span>
-                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${cutX}%`, top: `${lineY}%` }}>Z</span>
-                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600" style={{ left: `${cutX}%` }}>切断面</span>
+                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%` }}>Y</span>
+                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%`, top: `${lineY}%` }}>Z</span>
+                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600" style={{ left: `${lineX}%` }}>切断面</span>
                     {(['proximal', 'distal'] as const).map((which, index) => {
                       // Each line goes through its own point, ① or ②, whose
                       // marker is its only label: one ① and one ② on screen.
@@ -1819,7 +1825,7 @@ export function LesionAnalysisPage() {
                     {sliceCrossSectionArea == null && (
                       <p
                         className="absolute mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm"
-                        style={{ left: `${cutX}%`, top: `${lineY}%` }}
+                        style={{ left: `${lineX}%`, top: `${lineY}%` }}
                       >
                         十字の中心に血管を合わせてください
                       </p>
