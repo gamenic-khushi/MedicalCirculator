@@ -1,3 +1,5 @@
+import { stenosisLengthOf } from '@/lib/vesselSweep'
+
 export interface PercentPoint {
   x: number
   y: number
@@ -27,6 +29,10 @@ export interface LesionSweepMeasurement {
   length: number
   narrowestFraction: number
   narrowestPoint: PercentPoint | null
+  /** The narrowest cut's centre in the model's own space. */
+  narrowestWorld?: [number, number, number]
+  /** Length of the stretch where the area stays within 1.1 times the minimum. */
+  stenosisLength: number
   profile?: LesionProfileSample[]
 }
 
@@ -56,7 +62,16 @@ export interface TwoPointLesionResult {
   narrowestPoint: PercentPoint
   /** True area of the narrowest cut, when measured in 3D. */
   narrowestArea?: number
+  /** Length of the centre line between the two points. */
   segmentLength: number | null
+  /**
+   * Length of the stretch around the narrowest cut where the cross-sectional
+   * area is at most 1.1 times the minimum (the 狭窄長); not the distance between
+   * the points.
+   */
+  stenosisLength: number | null
+  /** Where the narrowest cut is in the model's own space, when measured in 3D. */
+  narrowestWorld?: [number, number, number]
   lesionPosition: '近位' | '中間' | '遠位'
   /** The model's own outline between the points; only the 3D sweep gives it. */
   shape?: LesionShape
@@ -114,6 +129,8 @@ export function measureTwoPointLesion(
         narrowestPoint: sweep.narrowestPoint,
         narrowestArea: sweep.minArea,
         segmentLength: sweep.length,
+        stenosisLength: sweep.stenosisLength,
+        narrowestWorld: sweep.narrowestWorld,
         lesionPosition: sweepRatio < 1 / 3 ? '近位' : sweepRatio > 2 / 3 ? '遠位' : '中間',
         shape: sweep.profile ? { samples: sweep.profile, narrowestFraction: sweepRatio } : undefined,
       }
@@ -129,10 +146,12 @@ export function measureTwoPointLesion(
   let narrowestWidth = proximalWidth
   let narrowestPoint = proximal
   let narrowestStep = 0
+  const widths: number[] = [proximalWidth]
 
   path.forEach((point, step) => {
     if (step === 0) return
     const width = canvas.measureVesselWidth(point.x, point.y)
+    widths.push(width ?? Number.POSITIVE_INFINITY)
     if (width && width < narrowestWidth) {
       narrowestWidth = width
       narrowestPoint = point
@@ -141,6 +160,16 @@ export function measureTwoPointLesion(
   })
 
   const segmentLength = canvas.measureDistance3D(proximal.x, proximal.y, distal.x, distal.y)
+
+  // Without the 3D sweep the area is taken as that of a circle of the measured
+  // width, and the stretch counted in steps of the sampled line.
+  const stenosisLength =
+    segmentLength != null
+      ? stenosisLengthOf(
+          widths.map((width, step) => ({ area: width * width, arc: (step / SCAN_STEPS) * segmentLength })),
+          narrowestStep,
+        )
+      : null
 
   const ratio = narrowestStep / SCAN_STEPS
   const lesionPosition = ratio < 1 / 3 ? '近位' : ratio > 2 / 3 ? '遠位' : '中間'
@@ -153,6 +182,7 @@ export function measureTwoPointLesion(
     narrowestWidth,
     narrowestPoint,
     segmentLength,
+    stenosisLength,
     lesionPosition,
   }
 }

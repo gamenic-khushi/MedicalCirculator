@@ -13,6 +13,11 @@ export interface VesselSweepResult {
   /** Where along the centre line the narrowest cut sits, 0 (proximal) to 1 (distal). */
   narrowestFraction: number
   narrowestPoint: THREE.Vector3
+  /**
+   * Length of the stretch of the centre line around the narrowest cut where the
+   * cross-sectional area stays within STENOSIS_AREA_TOLERANCE times the minimum.
+   */
+  stenosisLength: number
   /** Vessel direction at the narrowest cut (the cutting plane's normal there). */
   narrowestDirection: THREE.Vector3
   /** The vessel's outline along the centre line, from the proximal point to the distal one. */
@@ -53,6 +58,36 @@ interface LoopStats {
   /** Distance from the query point to the closest vertex of the loop. */
   nearestVertexDistance: number
   loop: THREE.Vector3[]
+}
+
+// The stenosis is the stretch where the area is at most this many times the
+// minimum area (the 狭窄長 of the specification).
+export const STENOSIS_AREA_TOLERANCE = 1.1
+
+/**
+ * Length along the centre line of the stretch around the narrowest station where
+ * the area is no more than `tolerance` times that minimum: the run of stations
+ * next to it that stay within the limit, its two ends placed between the last
+ * station inside and the first one outside by linear interpolation. A run that
+ * reaches ① or ② is cut off there.
+ */
+export function stenosisLengthOf(
+  stations: { area: number; arc: number }[],
+  narrowestIndex: number,
+  tolerance = STENOSIS_AREA_TOLERANCE,
+): number {
+  const limit = stations[narrowestIndex].area * tolerance
+  let low = narrowestIndex
+  while (low > 0 && stations[low - 1].area <= limit) low--
+  let high = narrowestIndex
+  while (high < stations.length - 1 && stations[high + 1].area <= limit) high++
+  const crossing = (outside: { area: number; arc: number }, inside: { area: number; arc: number }) => {
+    const span = outside.area - inside.area
+    return span > 0 ? outside.arc + ((outside.area - limit) / span) * (inside.arc - outside.arc) : inside.arc
+  }
+  const start = low > 0 ? crossing(stations[low - 1], stations[low]) : stations[low].arc
+  const end = high < stations.length - 1 ? crossing(stations[high + 1], stations[high]) : stations[high].arc
+  return Math.max(end - start, 0)
 }
 
 const MAX_STEPS = 600
@@ -324,6 +359,7 @@ export function measureVesselSweep(
 
   let narrowest = profile[0]
   for (const entry of profile) if (entry.area < narrowest.area) narrowest = entry
+  const stenosisLength = stenosisLengthOf(profile, profile.indexOf(narrowest))
   const first = profile[0]
   const last = profile[profile.length - 1]
   const totalArc = last.arc
@@ -362,6 +398,7 @@ export function measureVesselSweep(
     length: totalArc,
     narrowestFraction: totalArc > 0 ? narrowest.arc / totalArc : 0.5,
     narrowestPoint: narrowest.centre.clone(),
+    stenosisLength,
     narrowestDirection: narrowest.direction.clone(),
     profile: outline,
     centres: profile.map((entry) => entry.centre.clone()),

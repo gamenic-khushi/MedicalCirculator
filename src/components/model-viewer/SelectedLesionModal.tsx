@@ -29,7 +29,7 @@ const NUMBER_FIELDS: {
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
 ]
 
 export function SelectedLesionModal({ initialValues, onClose, onSave }: SelectedLesionModalProps) {
@@ -45,7 +45,7 @@ export function SelectedLesionModal({ initialValues, onClose, onSave }: Selected
     <Modal title="選択病変" onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <p className="text-xs text-gray-400">
-          3Dモデルから自動計測された値です。径と狭窄長は修正できます。この値はFFRの計算にも使用されます。
+          3Dモデルから自動計測された値です。径は修正できます（狭窄長は最小断面積の1.1倍以内が続く区間の長さとして自動計算されます）。この値はFFRの計算にも使用されます。
         </p>
 
         {NUMBER_FIELDS.map(({ key, label, unit, readOnly }) => (

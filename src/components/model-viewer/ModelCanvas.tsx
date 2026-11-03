@@ -46,6 +46,8 @@ export interface ModelCanvasHandle {
     length: number
     narrowestFraction: number
     narrowestPoint: { x: number; y: number } | null
+    narrowestWorld: [number, number, number]
+    stenosisLength: number
     // The vessel's outline between the two points, as the view's up sees it.
     profile: LesionProfileSample[]
   } | null
@@ -137,6 +139,10 @@ interface ModelCanvasProps {
   // Where the cutting line stands across the view, as a percent of its width
   // (50 is the middle).
   sliceCutX?: number
+  // A point of the model the cutting line is kept at, wherever the camera is: the
+  // cut is set up through the column this point shows at, so `sliceCutX` is only
+  // used until it is known. The page gives the narrowest cut of the lesion here.
+  sliceLockPoint?: [number, number, number] | null
   // Where the cutting plane crosses the centre line of the lesion measured
   // last, 0 at ① to 1 at ②, or null when it crosses outside it. Called
   // whenever the plane or that measurement changes.
@@ -277,6 +283,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     onCameraMove,
     sliceMode = false,
     sliceCutX = 50,
+    sliceLockPoint = null,
     onSliceCutChange,
     onSliceLineXChange,
     sliceLineY = 50,
@@ -304,6 +311,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const sliceModeRef = useRef(sliceMode)
   const sliceCutXRef = useRef(sliceCutX)
   const sliceLineYRef = useRef(sliceLineY)
+  const sliceLockRef = useRef(sliceLockPoint)
   // Whether the cut is between ① and ②, where only a limited depth behind the
   // horizontal line is cut, so a vessel running behind the lesion is left out.
   const [sliceDepthLimit, setSliceDepthLimit] = useState<number | null>(null)
@@ -337,6 +345,15 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     // scheduleSliceUpdate only reads refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sliceCutX])
+
+  // The lock point is where the cutting line belongs: set the cut up again there.
+  const sliceLockKey = sliceLockPoint ? sliceLockPoint.join(',') : ''
+  useEffect(() => {
+    sliceLockRef.current = sliceLockPoint
+    if (sliceModeRef.current) scheduleSliceUpdate('full')
+    // scheduleSliceUpdate only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliceLockKey])
 
   // Moving the horizontal line moves the crossing the cut is taken under.
   useEffect(() => {
@@ -382,7 +399,10 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
 
     let anchor = previous
     if (!previous || (!hold && requested === 'full')) {
-      const cutX = sliceCutXRef.current
+      const locked = sliceLockRef.current
+        ? projectToPercent(new THREE.Vector3(...sliceLockRef.current), camera)?.x
+        : undefined
+      const cutX = locked != null ? Math.min(Math.max(locked, 0), 100) : sliceCutXRef.current
       let normal = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize()
       if (cutX !== 50) {
         const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize()
@@ -1150,6 +1170,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         length: result.length,
         narrowestFraction: result.narrowestFraction,
         narrowestPoint: projectWorldPointToScreen(result.narrowestPoint),
+        narrowestWorld: result.narrowestPoint.toArray() as [number, number, number],
+        stenosisLength: result.stenosisLength,
         profile: result.profile,
       }
     },

@@ -210,7 +210,7 @@ const SELECTED_LESION_FIELDS: {
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
   { key: 'lesionPosition', label: '病変位置', unit: '', readOnly: true },
 ]
 
@@ -318,10 +318,11 @@ export function LesionAnalysisPage() {
   // slid away from the viewer by up to 6 mm (depth, 0 to 100, 0 where it was put).
   const [sliceAligned, setSliceAligned] = useState(false)
   const [depth, setDepth] = useState(0)
-  // The cutting line (the vertical blue line) can be slid across the view; the
-  // model is held and slides under the cut. Percent of the view's width, 50
-  // being the middle, and where along the lesion's centre line it cuts (0 at ①
-  // to 1 at ②, null outside it), drawn in the shape block as well.
+  // The cutting line (the vertical blue line) stands at the narrowest cut of the
+  // lesion and cannot be moved; the model is held under it. Percent of the
+  // view's width, 50 being the middle until that is known, and where along the
+  // lesion's centre line it cuts (0 at ① to 1 at ②, null outside it), drawn in
+  // the shape block as well.
   const [cutX, setCutX] = useState(50)
   // The horizontal line can be slid up and down; the vessel under its crossing
   // with the cutting line is the one that is cut. Percent of the view's height.
@@ -331,6 +332,9 @@ export function LesionAnalysisPage() {
   const [cutScreenX, setCutScreenX] = useState<number | null>(null)
   const lineX = cutScreenX ?? cutX
   const [cutFraction, setCutFraction] = useState<number | null>(null)
+  // The narrowest cut of the lesion between ① and ②, in the model's own space.
+  // The cutting line is kept there, and cannot be moved off it.
+  const [narrowestWorld, setNarrowestWorld] = useState<[number, number, number] | null>(null)
   const [isSavingHistory, setIsSavingHistory] = useState(false)
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   // The shape of that cut, drawn under the diagram in the shape block.
@@ -516,7 +520,6 @@ export function LesionAnalysisPage() {
   )
   const lineMeasuredKeyRef = useRef('')
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
-  const draggingCutRef = useRef(false)
   const draggingRowRef = useRef(false)
   // Whether ① and ② were actually moved by the horizontal line being dragged.
   const rowMovedPointsRef = useRef(false)
@@ -568,6 +571,7 @@ export function LesionAnalysisPage() {
         setDepth(0)
         setCutX(50)
         setLineY(50)
+        setNarrowestWorld(null)
         setSliceAligned(false)
       }
       return
@@ -604,6 +608,7 @@ export function LesionAnalysisPage() {
       proximal: sweep?.proximalDiameter ?? null,
       distal: sweep?.distalDiameter ?? null,
     })
+    setNarrowestWorld(sweep?.narrowestWorld ?? null)
   }
 
   function scheduleLineMeasure() {
@@ -696,27 +701,6 @@ export function LesionAnalysisPage() {
     if (selectedLesion.stenosisRate !== '') measureLesion(ordered[0], ordered[1])
   }
 
-  // The cutting line slides across the view; the cut is the model's section at
-  // wherever it stands (the area shown is that of the vessel under it).
-  function handleCutLinePointerDown(event: PointerEvent<HTMLDivElement>) {
-    event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    draggingCutRef.current = true
-  }
-
-  function handleCutLinePointerMove(event: PointerEvent<HTMLDivElement>) {
-    const bounds = canvasAreaRef.current?.getBoundingClientRect()
-    if (!draggingCutRef.current || !bounds) return
-    setCutX(clampLineX(((event.clientX - bounds.left) / bounds.width) * 100))
-  }
-
-  function handleCutLinePointerUp(event: PointerEvent<HTMLDivElement>) {
-    draggingCutRef.current = false
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-  }
-
   // The horizontal line slides up and down; the cut is taken under wherever it
   // crosses the cutting line.
   function handleRowLinePointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -799,6 +783,7 @@ export function LesionAnalysisPage() {
         setCutX(50)
         setLineY(50)
         setCutFraction(null)
+        setNarrowestWorld(null)
         setSliceAligned(false)
         setLineDiameters({ proximal: null, distal: null })
         lineMeasuredKeyRef.current = ''
@@ -1135,8 +1120,12 @@ export function LesionAnalysisPage() {
         return
       }
 
-      const { proximalWidth, distalWidth, narrowestWidth, segmentLength, lesionPosition } = result
+      const { proximalWidth, distalWidth, narrowestWidth, segmentLength, stenosisLength, lesionPosition } = result
       setLesionShape(result.shape ?? null)
+      // The cutting line stands at the narrowest cut; without the 3D measurement
+      // only where it shows on the screen is known.
+      setNarrowestWorld(result.narrowestWorld ?? null)
+      if (!result.narrowestWorld) setCutX(clampLineX(result.narrowestPoint.x))
       const referenceDiameter = (proximalWidth + distalWidth) / 2
       const rawStenosisRate =
         referenceDiameter > 0 ? (1 - narrowestWidth / referenceDiameter) * 100 : 0
@@ -1171,7 +1160,9 @@ export function LesionAnalysisPage() {
         lesionDistalDiameter: formatMeasurement(distalWidth),
         minCrossSectionArea: formatMeasurement(mlaValue),
         stenosisRate: String(Math.round(stenosisRate)),
-        stenosisLength: segmentLength ? formatMeasurement(segmentLength) : '',
+        // Not the distance between ① and ②, but the length of the stretch where
+        // the area stays within 1.1 times the minimum.
+        stenosisLength: stenosisLength ? formatMeasurement(stenosisLength) : '',
         lesionPosition,
       }
       setSelectedLesion(measuredLesion)
@@ -1668,6 +1659,7 @@ export function LesionAnalysisPage() {
                   onCameraMove={syncAnnotationPositions}
                   sliceMode={activeTool === 'slice'}
                   sliceCutX={cutX}
+                  sliceLockPoint={narrowestWorld}
                   sliceLineY={lineY}
                   onSliceLineXChange={setCutScreenX}
                   onSliceCutChange={setCutFraction}
@@ -1799,13 +1791,9 @@ export function LesionAnalysisPage() {
                       <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-500/50" />
                     </div>
                     <div
-                      className="pointer-events-auto absolute bottom-0 top-0 w-3 -translate-x-1/2 cursor-ew-resize touch-none"
+                      className="absolute bottom-0 top-0 w-3 -translate-x-1/2"
                       style={{ left: `${lineX}%` }}
-                      title="切断面の位置（左右にドラッグ）"
-                      onPointerDown={handleCutLinePointerDown}
-                      onPointerMove={handleCutLinePointerMove}
-                      onPointerUp={handleCutLinePointerUp}
-                      onPointerCancel={handleCutLinePointerUp}
+                      title="切断面の位置（最小断面積の位置に固定されています）"
                     >
                       <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-indigo-500/80" />
                     </div>
