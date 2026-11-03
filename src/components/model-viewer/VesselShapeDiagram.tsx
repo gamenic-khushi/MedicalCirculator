@@ -202,7 +202,7 @@ function MeasuredShape({
           x2={x1}
           y2={CENTER_Y}
           stroke="#4f7fee"
-          strokeWidth={1.5}
+          strokeWidth={1}
           strokeDasharray="2 3"
         />
         <line
@@ -240,7 +240,7 @@ function MeasuredShape({
               x2={xCut}
               y2={CENTER_Y + MAX_HALF_HEIGHT + 8}
               stroke={CUT_COLOR}
-              strokeWidth={2}
+              strokeWidth={1}
             />
             <circle cx={xCut} cy={CENTER_Y} r={3.5} fill="#ffffff" stroke={CUT_COLOR} strokeWidth={1.5} />
           </g>
@@ -332,7 +332,7 @@ function GeneratedShape({
           x2={x1}
           y2={CENTER_Y}
           stroke="#4f7fee"
-          strokeWidth={1.5}
+          strokeWidth={1}
           strokeDasharray="2 3"
         />
         <EndMarker x={x0} color={PROXIMAL_COLOR} label="①" />
