@@ -346,6 +346,10 @@ export function LesionAnalysisPage() {
   const [isAnnotating, setIsAnnotating] = useState(false)
   const [isDraggingPoint, setIsDraggingPoint] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
+  // The horizontal line stands where ① and ② are (they are always on it), so it
+  // follows the model when the camera moves; the set height is only where it is
+  // asked to be.
+  const rowY = annotations.length === 2 ? (annotations[0].y + annotations[1].y) / 2 : lineY
   // Key of the point pair the user last corrected with the manual swap
   // button, so a Jev tiebreak already in flight for that exact pair doesn't
   // land afterward and silently flip the order back — the swap button is
@@ -514,6 +518,8 @@ export function LesionAnalysisPage() {
   const draggingLineRef = useRef<'proximal' | 'distal' | null>(null)
   const draggingCutRef = useRef(false)
   const draggingRowRef = useRef(false)
+  // Whether ① and ② were actually moved by the horizontal line being dragged.
+  const rowMovedPointsRef = useRef(false)
   const activeToolRef = useRef(activeTool)
   // Whether the last check found the view zoomed in enough, so the hint only
   // shows when that changes to "not enough", not on every camera move.
@@ -719,16 +725,42 @@ export function LesionAnalysisPage() {
     draggingRowRef.current = true
   }
 
+  // ① and ② always stay at the crossings of their vertical lines and the
+  // horizontal line, so they are put on the vessel at the new height, each on
+  // its own vertical line; where the vessel does not reach that height at either
+  // of them, the line stays where it was.
   function handleRowLinePointerMove(event: PointerEvent<HTMLDivElement>) {
     const bounds = canvasAreaRef.current?.getBoundingClientRect()
+    const canvas = canvasRef.current
     if (!draggingRowRef.current || !bounds) return
-    setLineY(clampLineY(((event.clientY - bounds.top) / bounds.height) * 100))
+    const y = clampLineY(((event.clientY - bounds.top) / bounds.height) * 100)
+    if (annotations.length !== 2 || !canvas) {
+      setLineY(y)
+      return
+    }
+    const moved = annotations.map((point) => {
+      if (!point.worldPoint) return null
+      const result = canvas.measureDiameterAtScreenX(point.x, y, { onlyThatRow: true, near: point.worldPoint })
+      const onScreen = result && canvas.projectWorldPoint(result.point)
+      return result && onScreen ? { ...point, x: onScreen.x, y: onScreen.y, worldPoint: result.point } : null
+    })
+    if (moved.some((point) => point === null)) return
+    setAnnotations(moved as Annotation[])
+    rowMovedPointsRef.current = true
+    setLineY(y)
   }
 
   function handleRowLinePointerUp(event: PointerEvent<HTMLDivElement>) {
+    const movedPoints = rowMovedPointsRef.current
+    rowMovedPointsRef.current = false
     draggingRowRef.current = false
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    // The points moved along the vessel, so measure the lesion between them
+    // again, as the vertical lines do.
+    if (movedPoints && annotations.length === 2 && selectedLesion.stenosisRate !== '') {
+      measureLesion(annotations[0], annotations[1])
     }
   }
 
@@ -1757,7 +1789,7 @@ export function LesionAnalysisPage() {
                   <div className="pointer-events-none absolute inset-0">
                     <div
                       className="pointer-events-auto absolute left-0 right-0 h-3 -translate-y-1/2 cursor-ns-resize touch-none"
-                      style={{ top: `${lineY}%` }}
+                      style={{ top: `${rowY}%` }}
                       title="横線の位置（上下にドラッグ）"
                       onPointerDown={handleRowLinePointerDown}
                       onPointerMove={handleRowLinePointerMove}
@@ -1775,15 +1807,15 @@ export function LesionAnalysisPage() {
                       onPointerUp={handleCutLinePointerUp}
                       onPointerCancel={handleCutLinePointerUp}
                     >
-                      <div className="absolute bottom-0 left-1/2 top-0 w-0.5 -translate-x-1/2 bg-indigo-500/80" />
+                      <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-indigo-500/80" />
                     </div>
                     <div
                       className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
-                      style={{ left: `${lineX}%`, top: `${lineY}%` }}
+                      style={{ left: `${lineX}%`, top: `${rowY}%` }}
                     />
-                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-gray-500" style={{ top: `${lineY}%` }}>X</span>
+                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-gray-500" style={{ top: `${rowY}%` }}>X</span>
                     <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%` }}>Y</span>
-                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%`, top: `${lineY}%` }}>Z</span>
+                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%`, top: `${rowY}%` }}>Z</span>
                     <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600" style={{ left: `${lineX}%` }}>切断面</span>
                     {(['proximal', 'distal'] as const).map((which, index) => {
                       // Each line goes through its own point, ① or ②, whose
@@ -1825,7 +1857,7 @@ export function LesionAnalysisPage() {
                     {sliceCrossSectionArea == null && (
                       <p
                         className="absolute mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm"
-                        style={{ left: `${lineX}%`, top: `${lineY}%` }}
+                        style={{ left: `${lineX}%`, top: `${rowY}%` }}
                       >
                         十字の中心に血管を合わせてください
                       </p>

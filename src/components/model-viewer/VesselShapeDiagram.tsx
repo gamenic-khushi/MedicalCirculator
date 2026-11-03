@@ -47,7 +47,8 @@ function formatLength(length: number) {
 }
 
 const SECTION_SIZE = 120
-// The lengthwise section is the horizontal line of the 3D view, drawn grey there.
+// The horizontal line of the 3D view is grey there; the lengthwise section is
+// drawn in the same grey wherever it shows.
 const SECTION_LINE_COLOR = '#4b5563'
 const SECTION_MARGIN = 14
 
@@ -71,19 +72,6 @@ function TransverseSection({
   const path = `M ${outline.points
     .map(([x, y]) => `${(centre + x * scale).toFixed(2)} ${(centre - y * scale).toFixed(2)}`)
     .join(' L ')} Z`
-  // The lengthwise section meets this cut along a line, drawn across the frame
-  // (up the screen is up here too).
-  let line: { x1: number; y1: number; x2: number; y2: number } | null = null
-  if (outline.sectionLine) {
-    const { x, y, dx, dy } = outline.sectionLine
-    const px = centre + x * scale
-    const py = centre - y * scale
-    // Run it from the frame's left side to its right (nearly flat, so this
-    // always crosses the whole frame).
-    const slope = Math.abs(dx) > 1e-6 ? -dy / dx : 0
-    const yAt = (frameX: number) => py + slope * (frameX - px)
-    line = { x1: 4, y1: yAt(4), x2: SECTION_SIZE - 4, y2: yAt(SECTION_SIZE - 4) }
-  }
 
   return (
     <div className="relative mt-3 flex flex-col items-center gap-1 rounded-lg bg-gray-50 px-2 pb-2 pt-3">
@@ -105,25 +93,21 @@ function TransverseSection({
           fill="#ffffff"
           stroke="#c7d2fe"
         />
-        <line x1={centre} y1={4} x2={centre} y2={SECTION_SIZE - 4} stroke="#c7d2fe" strokeDasharray="2 3" />
-        <line x1={4} y1={centre} x2={SECTION_SIZE - 4} y2={centre} stroke="#c7d2fe" strokeDasharray="2 3" />
         <path d={path} fill="#dbe4f0" stroke="#6366f1" strokeWidth={1.5} strokeLinejoin="round" />
-        {line && (
-          <g>
-            <line
-              x1={line.x1}
-              y1={line.y1}
-              x2={line.x2}
-              y2={line.y2}
-              stroke={SECTION_LINE_COLOR}
-              strokeWidth={1.5}
-              strokeDasharray="4 2"
-            />
-            <text x={6} y={Math.max(11, Math.min(SECTION_SIZE - 4, line.y1 - 3))} fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
-              縦断面
-            </text>
-          </g>
-        )}
+        {/* The lengthwise section, seen edge-on: the vertical line through the
+            middle of the cut, the plane of the lengthwise diagram above. */}
+        <line
+          x1={centre}
+          y1={4}
+          x2={centre}
+          y2={SECTION_SIZE - 4}
+          stroke={SECTION_LINE_COLOR}
+          strokeWidth={1}
+          strokeDasharray="4 2"
+        />
+        <text x={centre + 3} y={12} fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
+          縦断面
+        </text>
       </svg>
       <p className="text-center text-[10px] text-gray-500">
         {area != null && <span className="block font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</span>}
@@ -196,6 +180,16 @@ function MeasuredShape({
     .map((sample) => `${xOf(sample.arc)} ${CENTER_Y + sample.bottom * yPerMm}`)
   const outline = `M ${upper.join(' L ')} L ${lower.join(' L ')} Z`
   const xNarrowest = x0 + shape.narrowestFraction * (x1 - x0)
+  // The horizontal line of the 3D view, at its height above the middle of the
+  // vessel where the cutting line crosses it.
+  const lineOffset = crossSection?.sectionLine?.y
+  const yHorizontal =
+    lineOffset != null
+      ? Math.min(
+          Math.max(CENTER_Y - lineOffset * yPerMm, CENTER_Y - MAX_HALF_HEIGHT - 6),
+          CENTER_Y + MAX_HALF_HEIGHT + 6,
+        )
+      : null
   const xCut = cutFraction != null ? x0 + Math.min(Math.max(cutFraction, 0), 1) * (x1 - x0) : null
 
   return (
@@ -220,6 +214,22 @@ function MeasuredShape({
           strokeWidth={1}
           strokeDasharray="1 3"
         />
+        {yHorizontal != null && (
+          <g>
+            <line
+              x1={x0}
+              y1={yHorizontal}
+              x2={x1}
+              y2={yHorizontal}
+              stroke={SECTION_LINE_COLOR}
+              strokeWidth={1}
+              strokeDasharray="4 2"
+            />
+            <text x={x1 - 2} y={yHorizontal - 3} textAnchor="end" fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
+              横線
+            </text>
+          </g>
+        )}
         <EndMarker x={x0} color={PROXIMAL_COLOR} label="①" />
         <EndMarker x={x1} color={DISTAL_COLOR} label="②" />
         {xCut != null && (
