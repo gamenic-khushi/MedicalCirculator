@@ -309,8 +309,9 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const [sliceDepthLimit, setSliceDepthLimit] = useState<number | null>(null)
   const slicePlaneRef = useRef<THREE.Plane | null>(null)
   // The cut as it was last set up under the camera: the plane, a point on it
-  // that stands where the cutting line and the horizontal line cross on the
-  // screen, and the surface point the cut is taken through. Moving the camera
+  // that the cutting line is drawn through (the surface point where the cutting
+  // line and the horizontal line cross on the screen, if the model is hit
+  // there), and the surface point the cut is taken through. Moving the camera
   // along the line of sight (the depth slider, the zoom) keeps all three, so the
   // cut stays on the same place of the model.
   const sliceAnchorRef = useRef<{
@@ -408,7 +409,11 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         const hit = hitAt(cutX, lineY, modelGroup)
         if (hit) focus = hit.point.toArray() as [number, number, number]
       }
-      anchor = { plane, reference, focus }
+      // Where the surface is hit, the line is drawn through that very point (it
+      // is on the plane), so it keeps to the same place of the vessel when the
+      // camera moves along the line of sight; a point further in or out would
+      // drift away from it as the perspective changes.
+      anchor = { plane, reference: focus ? new THREE.Vector3(...focus) : reference, focus }
     } else if (previous && requested === 'focus') {
       // The plane stays; the vessel is looked for along the horizontal line, at
       // the column where the cutting line shows now, and taken onto the plane.
@@ -421,7 +426,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
           focus = previous.plane.projectPoint(hit.point, new THREE.Vector3()).toArray() as [number, number, number]
         }
       }
-      anchor = { ...previous, focus }
+      anchor = { ...previous, focus, reference: focus ? new THREE.Vector3(...focus) : previous.reference }
     }
     if (!anchor) return
     sliceAnchorRef.current = anchor
