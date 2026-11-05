@@ -210,7 +210,7 @@ const SELECTED_LESION_FIELDS: {
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
   { key: 'lesionPosition', label: '病変位置', unit: '', readOnly: true },
 ]
 
@@ -1161,7 +1161,7 @@ export function LesionAnalysisPage() {
         minCrossSectionArea: formatMeasurement(mlaValue),
         stenosisRate: String(Math.round(stenosisRate)),
         // Not the distance between ① and ②, but the length of the stretch where
-        // the area stays within 1.1 times the minimum.
+        // the area stays within 1.1 times the minimum. It can be corrected by hand.
         stenosisLength: stenosisLength ? formatMeasurement(stenosisLength) : '',
         lesionPosition,
       }
