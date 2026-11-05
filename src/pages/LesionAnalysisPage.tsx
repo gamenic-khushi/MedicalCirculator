@@ -1315,44 +1315,6 @@ export function LesionAnalysisPage() {
     applySelectedLesion(next, true)
   }
 
-  // 最小断面積 is normally derived from 最小血管径 via a circular assumption
-  // (see handleSelectedLesionFieldChange) — the slice tool measures the
-  // real cut polygon's actual area instead, which can differ meaningfully
-  // from that assumption on a non-circular lumen. This intentionally
-  // doesn't touch 狭窄率 the way a diameter edit does: there's no diameter
-  // to derive it from here, and overwriting it from an assumed-circular
-  // back-conversion would just reintroduce the same approximation this
-  // exists to avoid.
-  function handleUseSliceCrossSectionArea() {
-    if (sliceCrossSectionArea == null) return
-    // A cut through the wrong (much larger) vessel, or a model in the wrong
-    // unit, gives an area far outside anything the FFR model was trained on —
-    // reflecting it would silently produce a meaningless result, so block
-    // the extreme case and only warn for a mild miss.
-    const [minArea, maxArea] = ffrRangeFor('a', Number(bloodPressure) || 100)
-    if (sliceCrossSectionArea > maxArea * 10) {
-      showToast(
-        `スライスの断面積(${formatMeasurement(sliceCrossSectionArea)}mm²)が学習範囲(${minArea}〜${maxArea}mm²)を大きく超えています。選択した血管ではなく太い血管を切っている可能性があるため、最小断面積には反映しませんでした`,
-        'error',
-        { persistent: true },
-      )
-      return
-    }
-    setSelectedLesion((prev) => ({
-      ...prev,
-      minCrossSectionArea: formatMeasurement(sliceCrossSectionArea),
-    }))
-    if (sliceCrossSectionArea < minArea || sliceCrossSectionArea > maxArea) {
-      showToast(
-        `スライスの断面積(${formatMeasurement(sliceCrossSectionArea)}mm²)は学習範囲(${minArea}〜${maxArea}mm²)の外です。最小断面積に反映しましたが、FFR計算はできません`,
-        'error',
-        { persistent: true },
-      )
-      return
-    }
-    showToast('スライスの断面積を最小断面積に反映しました')
-  }
-
   // Always re-measures from the two points, so clicking this also restores
   // the auto-measured values after an accidental manual edit. If FFR was
   // already calculated, it's refreshed from the restored values.
@@ -1853,17 +1815,10 @@ export function LesionAnalysisPage() {
                   </div>
                 )}
                 {activeTool === 'slice' && sliceCrossSectionArea != null && (
-                  <div className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white py-1.5 pl-4 pr-1.5 shadow-sm">
+                  <div className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white px-4 py-1.5 shadow-sm">
                     <span className="text-xs text-gray-500">
                       断面積 <span className="font-semibold text-gray-900">{formatMeasurement(sliceCrossSectionArea)}</span> mm²
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleUseSliceCrossSectionArea}
-                      className="whitespace-nowrap rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-100"
-                    >
-                      最小断面積に反映
-                    </button>
                   </div>
                 )}
                 <ViewerToolbar
