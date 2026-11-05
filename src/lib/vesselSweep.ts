@@ -62,7 +62,7 @@ interface LoopStats {
 
 // The stenosis is the stretch where the area is at most this many times the
 // minimum area (the 狭窄長 of the specification).
-export const STENOSIS_AREA_TOLERANCE = 1.1
+export const STENOSIS_AREA_TOLERANCE = 1.5
 
 /**
  * Length along the centre line of the stretch around the narrowest station where

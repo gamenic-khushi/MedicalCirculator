@@ -33,6 +33,7 @@ import {
   computeFfrCubic,
   describeFfrRangeError,
   ffrRangeFor,
+  ffrStenosisLength,
   findOutOfRangeFfrInputs,
   type FfrCubicInputKey,
   type FfrCubicInputs,
@@ -1161,7 +1162,7 @@ export function LesionAnalysisPage() {
         minCrossSectionArea: formatMeasurement(mlaValue),
         stenosisRate: String(Math.round(stenosisRate)),
         // Not the distance between ① and ②, but the length of the stretch where
-        // the area stays within 1.1 times the minimum. It can be corrected by hand.
+        // the area stays within 1.5 times the minimum. It can be corrected by hand.
         stenosisLength: stenosisLength ? formatMeasurement(stenosisLength) : '',
         lesionPosition,
       }
@@ -1865,10 +1866,12 @@ export function LesionAnalysisPage() {
                 const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
                 const range = ffrKey ? ffrRangeFor(ffrKey, Number(bloodPressure) || 100) : null
                 const numericValue = Number(selectedLesion[key])
+                // A stenosis length under 1 mm is raised to 1 mm for the FFR calculation only.
+                const rangeValue = key === 'stenosisLength' ? ffrStenosisLength(numericValue) : numericValue
                 const isOutOfRange =
                   !!range &&
                   selectedLesion[key] !== '' &&
-                  (!Number.isFinite(numericValue) || numericValue < range[0] || numericValue > range[1])
+                  (!Number.isFinite(rangeValue) || rangeValue < range[0] || rangeValue > range[1])
                 return (
                   <div key={key} className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex flex-col">

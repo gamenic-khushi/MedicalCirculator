@@ -295,7 +295,7 @@ export function ModelViewerPage() {
       )
       // 狭窄長 is not the distance between the two reference positions but the
       // length of the stretch around the narrowest cut where the area stays
-      // within 1.1 times the minimum, measured along the vessel's centre line
+      // within 1.5 times the minimum, measured along the vessel's centre line
       // between them (the same measurement as the lesion analysis page).
       const upstreamPoint = {
         x: target.x,

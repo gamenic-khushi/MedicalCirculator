@@ -31,7 +31,7 @@ export interface LesionSweepMeasurement {
   narrowestPoint: PercentPoint | null
   /** The narrowest cut's centre in the model's own space. */
   narrowestWorld?: [number, number, number]
-  /** Length of the stretch where the area stays within 1.1 times the minimum. */
+  /** Length of the stretch where the area stays within 1.5 times the minimum. */
   stenosisLength: number
   profile?: LesionProfileSample[]
 }
@@ -66,7 +66,7 @@ export interface TwoPointLesionResult {
   segmentLength: number | null
   /**
    * Length of the stretch around the narrowest cut where the cross-sectional
-   * area is at most 1.1 times the minimum (the 狭窄長); not the distance between
+   * area is at most 1.5 times the minimum (the 狭窄長); not the distance between
    * the points.
    */
   stenosisLength: number | null

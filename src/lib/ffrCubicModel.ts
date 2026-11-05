@@ -74,8 +74,21 @@ export function ffrRangeFor(key: FfrCubicInputKey, p: number): [number, number] 
   return [key === 'a' ? minTrainedArea(p) : min, max]
 }
 
+/**
+ * The stenosis length actually fed to the formula. A measured length below the
+ * trained minimum (1 mm) is raised to 1 mm for the FFR calculation only (client
+ * specification, 2026/11/05); the measured value itself is left as it is
+ * wherever it is shown. A missing or non-positive length is left alone so it is
+ * still reported as unusable.
+ */
+export function ffrStenosisLength(l: number): number {
+  const [min] = FFR_INPUT_RANGES.l
+  return Number.isFinite(l) && l > 0 && l < min ? min : l
+}
+
 /** Inputs (by key) that fall outside the trained range — empty if all are within range. */
-export function findOutOfRangeFfrInputs(inputs: FfrCubicInputs): FfrCubicInputKey[] {
+export function findOutOfRangeFfrInputs(rawInputs: FfrCubicInputs): FfrCubicInputKey[] {
+  const inputs = { ...rawInputs, l: ffrStenosisLength(rawInputs.l) }
   return (Object.keys(FFR_INPUT_RANGES) as FfrCubicInputKey[]).filter((key) => {
     const [, max] = FFR_INPUT_RANGES[key]
     const min = key === 'a' ? minTrainedArea(inputs.p) : FFR_INPUT_RANGES[key][0]
@@ -100,7 +113,8 @@ export function describeFfrRangeError(outOfRangeKeys: FfrCubicInputKey[], inputs
   return `病変の値が推定式の学習範囲外です: ${details}。この病変ではFFRを計算できません。`
 }
 
-export function computeFfrCubic({ dp, dd, a, l, p }: FfrCubicInputs): number {
+export function computeFfrCubic({ dp, dd, a, l: measuredLength, p }: FfrCubicInputs): number {
+  const l = ffrStenosisLength(measuredLength)
   const z1 = (dp - 4) / 0.76453060256180794
   const z2 = (dd - 3.936619718309859) / 0.72641109623817635
   const z3 = (a - 1.3389376608450705) / 0.73651135322061001
