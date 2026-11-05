@@ -25,6 +25,7 @@ import { useViewerState } from '@/hooks/useViewerState'
 import {
   computeFfrCubic,
   describeFfrRangeError,
+  ffrStenosisLengthAdjustment,
   findOutOfRangeFfrInputs,
   type FfrCubicInputs,
 } from '@/lib/ffrCubicModel'
@@ -328,6 +329,8 @@ export function ModelViewerPage() {
         return
       }
       dismissToast()
+      const lengthAdjustment = ffrStenosisLengthAdjustment(ffrInputs.l)
+      if (lengthAdjustment) showToast(lengthAdjustment.message, 'info', { durationMs: 7000 })
 
       const ffrValue = computeFfrCubic(ffrInputs)
       const pdValue = (Number(bloodPressure) * ffrValue).toFixed(1)

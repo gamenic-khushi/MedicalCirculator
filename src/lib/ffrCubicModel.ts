@@ -76,14 +76,30 @@ export function ffrRangeFor(key: FfrCubicInputKey, p: number): [number, number] 
 
 /**
  * The stenosis length actually fed to the formula. A measured length below the
- * trained minimum (1 mm) is raised to 1 mm for the FFR calculation only (client
+ * trained minimum (1 mm) is raised to 1 mm, and one above the trained maximum
+ * (8 mm) is lowered to 8 mm, for the FFR calculation only (client
  * specification, 2026/11/05); the measured value itself is left as it is
  * wherever it is shown. A missing or non-positive length is left alone so it is
  * still reported as unusable.
  */
 export function ffrStenosisLength(l: number): number {
-  const [min] = FFR_INPUT_RANGES.l
-  return Number.isFinite(l) && l > 0 && l < min ? min : l
+  const [min, max] = FFR_INPUT_RANGES.l
+  if (!Number.isFinite(l) || l <= 0) return l
+  return Math.min(Math.max(l, min), max)
+}
+
+/**
+ * Notice for the user when the stenosis length was adjusted to 1 mm or 8 mm for
+ * the FFR calculation (null when it was used as it is). `used` is the value
+ * fed to the formula.
+ */
+export function ffrStenosisLengthAdjustment(l: number): { used: number; message: string } | null {
+  const used = ffrStenosisLength(l)
+  if (!Number.isFinite(l) || used === l) return null
+  return {
+    used,
+    message: `狭窄長 ${Number(l.toFixed(2))} mm は学習範囲（${FFR_INPUT_RANGES.l[0]}〜${FFR_INPUT_RANGES.l[1]} mm）外のため、FFRの計算には ${used} mm を使用しています（画面の狭窄長の値は変わりません）。`,
+  }
 }
 
 /** Inputs (by key) that fall outside the trained range — empty if all are within range. */

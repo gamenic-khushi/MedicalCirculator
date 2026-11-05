@@ -34,6 +34,7 @@ import {
   describeFfrRangeError,
   ffrRangeFor,
   ffrStenosisLength,
+  ffrStenosisLengthAdjustment,
   findOutOfRangeFfrInputs,
   type FfrCubicInputKey,
   type FfrCubicInputs,
@@ -1194,6 +1195,8 @@ export function LesionAnalysisPage() {
       return
     }
     dismissToast()
+    const lengthAdjustment = ffrStenosisLengthAdjustment(ffrInputs.l)
+    if (lengthAdjustment) showToast(lengthAdjustment.message, 'info', { durationMs: 7000 })
 
     const stenosisRate = Math.min(Math.max(Number(selectedLesion.stenosisRate) || 0, 0), 99)
     const ffrValue = computeFfrCubic(ffrInputs)
@@ -1866,8 +1869,12 @@ export function LesionAnalysisPage() {
                 const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
                 const range = ffrKey ? ffrRangeFor(ffrKey, Number(bloodPressure) || 100) : null
                 const numericValue = Number(selectedLesion[key])
-                // A stenosis length under 1 mm is raised to 1 mm for the FFR calculation only.
+                // A stenosis length under 1 mm (over 8 mm) is raised to 1 mm (lowered to 8 mm) for the FFR calculation only.
                 const rangeValue = key === 'stenosisLength' ? ffrStenosisLength(numericValue) : numericValue
+                const lengthAdjustment =
+                  key === 'stenosisLength' && selectedLesion[key] !== ''
+                    ? ffrStenosisLengthAdjustment(numericValue)
+                    : null
                 const isOutOfRange =
                   !!range &&
                   selectedLesion[key] !== '' &&
@@ -1882,6 +1889,11 @@ export function LesionAnalysisPage() {
                           className={`text-[10px] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
                         >
                           学習範囲 {formatRangeBound(range[0], 'min')}〜{formatRangeBound(range[1], 'max')}
+                        </span>
+                      )}
+                      {key === 'stenosisLength' && lengthAdjustment && (
+                        <span title={lengthAdjustment.message} className="text-[10px] text-amber-600">
+                          FFRの計算には {lengthAdjustment.used} mm を使用
                         </span>
                       )}
                     </div>
