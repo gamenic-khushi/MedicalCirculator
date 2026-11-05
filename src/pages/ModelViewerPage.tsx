@@ -32,6 +32,7 @@ import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
 import { SAVE_FAILED, VESSEL_WIDTH_MEASURE_FAILED } from '@/lib/messages'
+import { measureTwoPointLesion } from '@/lib/twoPointLesionMeasurement'
 import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
@@ -292,6 +293,23 @@ export function ModelViewerPage() {
         target.x,
         downstreamResult.y,
       )
+      // 狭窄長 is not the distance between the two reference positions but the
+      // length of the stretch around the narrowest cut where the area stays
+      // within 1.1 times the minimum, measured along the vessel's centre line
+      // between them (the same measurement as the lesion analysis page).
+      const upstreamPoint = {
+        x: target.x,
+        y: upstreamResult.y,
+        worldPoint: canvasRef.current?.getWorldPoint(target.x, upstreamResult.y) ?? undefined,
+      }
+      const downstreamPoint = {
+        x: target.x,
+        y: downstreamResult.y,
+        worldPoint: canvasRef.current?.getWorldPoint(target.x, downstreamResult.y) ?? undefined,
+      }
+      const stenosisLength = canvasRef.current
+        ? (measureTwoPointLesion(canvasRef.current, upstreamPoint, downstreamPoint)?.stenosisLength ?? null)
+        : null
       const bifurcationAngleDeg = canvasRef.current?.measureBifurcationAngle(target.x, target.y)
       const clampedMld = referenceDiameter * (1 - stenosisRate / 100)
       const mlaValue = Math.PI * (clampedMld / 2) ** 2
@@ -300,7 +318,7 @@ export function ModelViewerPage() {
         dp: upstream,
         dd: downstream,
         a: mlaValue,
-        l: segmentLength ?? NaN,
+        l: stenosisLength ?? NaN,
         p: Number(bloodPressure),
       }
       const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
