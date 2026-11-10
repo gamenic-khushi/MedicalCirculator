@@ -13,7 +13,13 @@ import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import { nearerToHeart } from '@/lib/heartDistance'
-import { computeCrossSection, loopArea, type PlaneOutline } from '@/lib/slicePlane'
+import {
+  computeCrossSection,
+  lengthwiseCut,
+  loopArea,
+  SLICE_DEPTH_LIMIT,
+  type PlaneOutline,
+} from '@/lib/slicePlane'
 import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
 import { centreLineFractionAtPlane, measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
@@ -162,6 +168,9 @@ interface ModelCanvasProps {
   onSliceAreaChange?: (area: number | null) => void
   // The shape of the cut being measured, flattened onto the cutting plane.
   onSliceOutlineChange?: (outline: PlaneOutline | null) => void
+  // The lesion cut lengthwise at the depth slider's depth (see lengthwiseCut),
+  // or null when the cut is not between ① and ②.
+  onSliceLengthwiseChange?: (runs: LesionProfileSample[][] | null) => void
   // Called once, as soon as the model has loaded, with its largest dimension in
   // model units — lets a page tell when a model is not in millimetres.
   onModelSize?: (maxDimension: number) => void
@@ -172,9 +181,6 @@ interface ThreeState {
   scene: THREE.Scene
 }
 
-// Between ① and ②, the cut only takes in this much (mm) behind the surface the
-// horizontal line lies on, so another vessel running behind is not cut too.
-const SLICE_DEPTH_LIMIT = 6
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
 // A highlight sized strictly to the vessel's real width becomes imperceptible
 // (a handful of pixels) once the camera is framing the whole model — which is
@@ -290,6 +296,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     viewLocked = false,
     onSliceAreaChange,
     onSliceOutlineChange,
+    onSliceLengthwiseChange,
     onModelSize,
   },
   ref,
@@ -332,7 +339,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const pendingSliceModeRef = useRef<'full' | 'focus'>('full')
   // The centre line of the lesion measured last (a station every few percent of
   // a diameter, with the length reached at each), to place the cut along it.
-  const lastSweepRef = useRef<{ centres: THREE.Vector3[]; arcs: number[] } | null>(null)
+  const lastSweepRef = useRef<{ centres: THREE.Vector3[]; profile: LesionProfileSample[] } | null>(null)
 
   useEffect(() => {
     sliceModeRef.current = sliceMode
@@ -366,9 +373,45 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   function reportCutFraction() {
     const plane = slicePlaneRef.current
     const sweep = lastSweepRef.current
-    const fraction = plane && sweep ? centreLineFractionAtPlane(plane, sweep.centres, sweep.arcs) : null
+    const fraction =
+      plane && sweep
+        ? centreLineFractionAtPlane(
+            plane,
+            sweep.centres,
+            sweep.profile.map((sample) => sample.arc),
+          )
+        : null
     onSliceCutChange?.(fraction)
     setSliceDepthLimit(fraction != null ? SLICE_DEPTH_LIMIT : null)
+    reportLengthwiseCut(fraction != null)
+  }
+
+  // The lengthwise section the depth slider moves through the lesion: the plane
+  // square to the depth direction, as far behind the surface the horizontal line
+  // lies on as the model has been slid away (0 to SLICE_DEPTH_LIMIT mm).
+  function reportLengthwiseCut(betweenPoints: boolean) {
+    if (!onSliceLengthwiseChange) return
+    const sweep = lastSweepRef.current
+    const anchor = sliceAnchorRef.current
+    const camera = threeStateRef.current?.camera
+    const modelGroup = modelGroupRef.current
+    if (!betweenPoints || !sweep || !anchor?.focus || !camera || !modelGroup) {
+      onSliceLengthwiseChange(null)
+      return
+    }
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize()
+    const side = anchor.plane.normal
+    const depthAxis = new THREE.Vector3().crossVectors(up, side).normalize()
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+      depthAxis,
+      new THREE.Vector3(...anchor.focus).addScaledVector(depthAxis, -depthOffsetRef.current),
+    )
+    const loops: THREE.Vector3[][] = []
+    modelGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) loops.push(...(computeCrossSection(child, plane)?.loops ?? []))
+    })
+    const stations = sweep.profile.map((sample, index) => ({ ...sample, centre: sweep.centres[index] }))
+    onSliceLengthwiseChange(lengthwiseCut(loops, stations, up, side))
   }
 
   // The cutting plane is set up under the camera: it holds the screen's up
@@ -1160,7 +1203,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         camera ? new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize() : undefined,
       )
       if (!result) return null
-      lastSweepRef.current = { centres: result.centres, arcs: result.profile.map((sample) => sample.arc) }
+      lastSweepRef.current = { centres: result.centres, profile: result.profile }
       reportCutFraction()
       return {
         proximalDiameter: result.proximalDiameter,

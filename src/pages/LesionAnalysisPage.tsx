@@ -23,7 +23,7 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
-import type { PlaneOutline } from '@/lib/slicePlane'
+import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
@@ -53,6 +53,7 @@ import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { resolveProximalTiebreak } from '@/lib/typesafeProximity'
 import {
   measureTwoPointLesion,
+  type LesionProfileSample,
   type LesionShape,
   type PercentPoint,
 } from '@/lib/twoPointLesionMeasurement'
@@ -240,6 +241,8 @@ function LesionSnapshotPanel({
   cutFraction,
   crossSection,
   crossSectionArea,
+  depth,
+  depthCut,
   isMeasuring,
   awaitingConfirm,
 }: {
@@ -251,6 +254,8 @@ function LesionSnapshotPanel({
   cutFraction: number | null
   crossSection: PlaneOutline | null
   crossSectionArea: number | null
+  depth: number | null
+  depthCut: LesionProfileSample[][] | null
   isMeasuring: boolean
   awaitingConfirm: boolean
 }) {
@@ -275,6 +280,8 @@ function LesionSnapshotPanel({
             cutFraction={cutFraction}
             crossSection={crossSection}
             crossSectionArea={crossSectionArea}
+            depth={depth}
+            depthCut={depthCut}
           />
         </div>
       ) : (
@@ -341,6 +348,8 @@ export function LesionAnalysisPage() {
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   // The shape of that cut, drawn under the diagram in the shape block.
   const [sliceOutline, setSliceOutline] = useState<PlaneOutline | null>(null)
+  // The lesion cut lengthwise at the depth slider's depth, drawn in the shape block.
+  const [sliceLengthwise, setSliceLengthwise] = useState<LesionProfileSample[][] | null>(null)
   // The vessel's diameter where each slidable line (through ① and ②) cuts it.
   const [lineDiameters, setLineDiameters] = useState<{ proximal: number | null; distal: number | null }>({
     proximal: null,
@@ -1632,6 +1641,7 @@ export function LesionAnalysisPage() {
                   viewLocked={activeTool === 'slice' && sliceAligned}
                   onSliceAreaChange={setSliceCrossSectionArea}
                   onSliceOutlineChange={setSliceOutline}
+                  onSliceLengthwiseChange={setSliceLengthwise}
                   onModelSize={handleModelSize}
                 />
 
@@ -1935,6 +1945,8 @@ export function LesionAnalysisPage() {
             cutFraction={activeTool === 'slice' ? cutFraction : null}
             crossSection={activeTool === 'slice' ? sliceOutline : null}
             crossSectionArea={activeTool === 'slice' ? sliceCrossSectionArea : null}
+            depth={activeTool === 'slice' ? (depth / 100) * SLICE_DEPTH_LIMIT : null}
+            depthCut={activeTool === 'slice' ? sliceLengthwise : null}
             isMeasuring={isMeasuring}
             awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />
