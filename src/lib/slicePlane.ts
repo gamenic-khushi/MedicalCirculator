@@ -364,6 +364,29 @@ export function lengthwiseCut(
   return runs
 }
 
+/**
+ * The lesion cut lengthwise `depth` mm behind `front` (the surface point the
+ * horizontal line lies on), by the plane square to the depth direction, which
+ * runs away from the viewer (`up` × `side`, `side` being the cutting plane's
+ * normal). Read at each station as lengthwiseCut does.
+ */
+export function lengthwiseCutAtDepth(
+  meshes: THREE.Mesh[],
+  front: THREE.Vector3,
+  depth: number,
+  up: THREE.Vector3,
+  side: THREE.Vector3,
+  stations: { centre: THREE.Vector3; arc: number; top: number; bottom: number }[],
+): LesionProfileSample[][] {
+  const depthAxis = new THREE.Vector3().crossVectors(up, side).normalize()
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+    depthAxis,
+    front.clone().addScaledVector(depthAxis, depth),
+  )
+  const loops = meshes.flatMap((mesh) => computeCrossSection(mesh, plane)?.loops ?? [])
+  return lengthwiseCut(loops, stations, up, side)
+}
+
 // Fan triangulation from the loop's own centroid — sufficient for the
 // roughly-convex, lumen-shaped cross-sections a vessel produces. Returns
 // geometry in the same (world) space the loop points are already in; the

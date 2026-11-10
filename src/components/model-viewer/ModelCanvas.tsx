@@ -15,7 +15,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { nearerToHeart } from '@/lib/heartDistance'
 import {
   computeCrossSection,
-  lengthwiseCut,
+  lengthwiseCutAtDepth,
   loopArea,
   SLICE_DEPTH_LIMIT,
   type PlaneOutline,
@@ -399,19 +399,20 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       onSliceLengthwiseChange(null)
       return
     }
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize()
-    const side = anchor.plane.normal
-    const depthAxis = new THREE.Vector3().crossVectors(up, side).normalize()
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-      depthAxis,
-      new THREE.Vector3(...anchor.focus).addScaledVector(depthAxis, -depthOffsetRef.current),
-    )
-    const loops: THREE.Vector3[][] = []
+    const meshes: THREE.Mesh[] = []
     modelGroup.traverse((child) => {
-      if (child instanceof THREE.Mesh) loops.push(...(computeCrossSection(child, plane)?.loops ?? []))
+      if (child instanceof THREE.Mesh) meshes.push(child)
     })
-    const stations = sweep.profile.map((sample, index) => ({ ...sample, centre: sweep.centres[index] }))
-    onSliceLengthwiseChange(lengthwiseCut(loops, stations, up, side))
+    onSliceLengthwiseChange(
+      lengthwiseCutAtDepth(
+        meshes,
+        new THREE.Vector3(...anchor.focus),
+        -depthOffsetRef.current,
+        new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize(),
+        anchor.plane.normal,
+        sweep.profile.map((sample, index) => ({ ...sample, centre: sweep.centres[index] })),
+      ),
+    )
   }
 
   // The cutting plane is set up under the camera: it holds the screen's up
