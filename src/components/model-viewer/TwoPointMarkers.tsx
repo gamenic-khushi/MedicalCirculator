@@ -1,4 +1,7 @@
+import { motion } from 'motion/react'
 import { useEffect, useRef } from 'react'
+
+import { SPRING } from '@/lib/motion'
 
 interface Point {
   id: string
@@ -65,8 +68,13 @@ export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd, onD
       {points.map((point, index) => {
         const style = MARKER_STYLES[index] ?? MARKER_STYLES[0]
         return (
-          <div
+          // Pops in where it was placed, so the click visibly lands. Only the
+          // first appearance animates; following the camera stays immediate.
+          <motion.div
             key={point.id}
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ ...SPRING, bounce: 0.4 }}
             style={{ left: `${point.x}%`, top: `${point.y}%` }}
             onMouseDown={
               draggable
@@ -90,7 +98,7 @@ export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd, onD
             }`}
           >
             {index + 1}
-          </div>
+          </motion.div>
         )
       })}
     </>

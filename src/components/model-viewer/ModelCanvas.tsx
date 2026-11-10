@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type RefObject,
 } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Bounds, OrbitControls } from '@react-three/drei'
@@ -13,6 +14,7 @@ import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import { nearerToHeart } from '@/lib/heartDistance'
+import { fadeInModel, glideZoom } from '@/lib/sceneMotion'
 import {
   computeCrossSection,
   lengthwiseCutAtDepth,
@@ -230,6 +232,18 @@ const HEART_PROXIMITY_DECISIVE_CONFIRM_STEPS = 3
 // that's as likely to be raycasting noise as a genuine signal.
 const HEART_PROXIMITY_WIDTH_TIE_TOLERANCE = 0.1
 
+// Mounts with the model (inside its Suspense), so it fades the model in as soon
+// as it has loaded; keyed by the URL, so each new model fades in too.
+function ModelFadeIn({ groupRef }: { groupRef: RefObject<THREE.Group | null> }) {
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    const fade = fadeInModel(group)
+    return () => fade.stop()
+  }, [groupRef])
+  return null
+}
+
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
   useEffect(() => {
@@ -336,6 +350,9 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   } | null>(null)
   // Set just before the camera is moved by the depth slider or the zoom.
   const holdSliceRef = useRef(false)
+  const holdGenerationRef = useRef(0)
+  // The zoom buttons' glide in progress (see glideZoom).
+  const zoomGlideRef = useRef<ReturnType<typeof glideZoom> | null>(null)
   const pendingSliceModeRef = useRef<'full' | 'focus'>('full')
   // The centre line of the lesion measured last (a station every few percent of
   // a diameter, with the length reached at each), to place the cut along it.
@@ -502,10 +519,18 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   }
 
   // The next set-up of the cut keeps the plane (see updateSlice); lapses after a
-  // couple of frames if the camera did not actually move.
+  // couple of frames if the camera did not actually move. Only the latest hold
+  // lapses: when the camera moves every frame (the zoom glide, dragging the
+  // depth slider), an earlier hold's lapse would otherwise land just before the
+  // set-up of a later move and let the plane be set up again under the camera.
   function holdSliceThisFrame() {
     holdSliceRef.current = true
-    requestAnimationFrame(() => requestAnimationFrame(() => (holdSliceRef.current = false)))
+    const hold = ++holdGenerationRef.current
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (holdGenerationRef.current === hold) holdSliceRef.current = false
+      }),
+    )
   }
 
   function projectToPercent(point: THREE.Vector3, camera: THREE.Camera) {
@@ -734,6 +759,13 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     holdSliceThisFrame()
     controls.update()
     emitCameraChange()
+  }
+
+  // The zoom buttons glide instead of jumping; a click during a glide adds on
+  // what that glide had left, so the view ends where the clicks add up to.
+  function zoomBy(factor: number) {
+    const left = zoomGlideRef.current?.stop() ?? 1
+    zoomGlideRef.current = glideZoom(left * factor, dolly)
   }
 
   // `root` narrows the ray to one object (the model itself), so overlays such
@@ -1159,8 +1191,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   }
 
   useImperativeHandle(ref, () => ({
-    zoomIn: () => dolly(0.85),
-    zoomOut: () => dolly(1.15),
+    zoomIn: () => zoomBy(0.85),
+    zoomOut: () => zoomBy(1.15),
     setTool: (tool) => {
       const controls = controlsRef.current
       if (!controls) return
@@ -1480,6 +1512,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
               {/* No clipping plane: the whole model stays visible while slicing;
                   the plane is only used to measure the cut. */}
               <Model3D url={url} extension={extension} color={color} />
+              <ModelFadeIn key={url} groupRef={modelGroupRef} />
             </group>
           </Bounds>
           <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />

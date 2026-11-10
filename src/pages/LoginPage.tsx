@@ -1,7 +1,9 @@
+import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/hooks/useAuth'
+import { expand, fade, pop } from '@/lib/motion'
 import { authService } from '@/services/appwrite/auth'
 
 export function LoginPage() {
@@ -49,7 +51,12 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-md rounded-3xl border border-gray-200 bg-white p-8 shadow-sm">
+      <motion.div
+        initial={pop.initial}
+        animate={pop.animate}
+        transition={pop.transition}
+        className="mx-auto w-full max-w-md rounded-3xl border border-gray-200 bg-white p-8 shadow-sm"
+      >
         <h1 className="text-2xl font-semibold text-gray-900">ログイン</h1>
         <p className="mt-2 text-sm text-gray-500">
           メールアドレスとパスワードでログインしてください。
@@ -82,7 +89,13 @@ export function LoginPage() {
             </label>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          <AnimatePresence>
+            {error && (
+              <motion.p {...fade} className="text-sm text-red-600">
+                {error}
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           <button
             type="submit"
@@ -104,7 +117,10 @@ export function LoginPage() {
           パスワードをお忘れですか？
         </button>
 
+        <AnimatePresence initial={false}>
         {isRecovering && (
+          // Opens in place; the margin sits inside the animated box so its height includes it.
+          <motion.div {...expand} className="overflow-hidden">
           <form onSubmit={handleRecoverySubmit} className="mt-4 space-y-3 rounded-2xl bg-gray-50 p-4">
             <label className="block text-sm font-medium text-gray-700">
               登録済みのメールアドレス
@@ -126,8 +142,10 @@ export function LoginPage() {
               {isSendingRecovery ? '送信中...' : '再設定メールを送信'}
             </button>
           </form>
+          </motion.div>
         )}
-      </div>
+        </AnimatePresence>
+      </motion.div>
     </div>
   )
 }

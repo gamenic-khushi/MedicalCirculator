@@ -1,4 +1,5 @@
 import { Query, type Models } from 'appwrite'
+import { AnimatePresence } from 'motion/react'
 import { Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -167,14 +168,16 @@ export function LearningContentPage() {
           >
             <Plus className="h-4 w-4" />
           </button>
-          {record?.modelFileId && !isReuseHintDismissed && (
-            <GuidanceBubble
-              anchor="top-left"
-              className="left-10 top-0"
-              message="この「+」はこのフォルダに登録済みの3Dモデルを再利用します"
-              onDismiss={dismissReuseHint}
-            />
-          )}
+          <AnimatePresence>
+            {record?.modelFileId && !isReuseHintDismissed && (
+              <GuidanceBubble
+                anchor="top-left"
+                className="left-10 top-0"
+                message="この「+」はこのフォルダに登録済みの3Dモデルを再利用します"
+                onDismiss={dismissReuseHint}
+              />
+            )}
+          </AnimatePresence>
         </div>
         <input
           ref={inputRef}
@@ -203,7 +206,7 @@ export function LearningContentPage() {
         />
       </div>
 
-      {toast && <Toast message={toast.message} variant={toast.variant} />}
+      <AnimatePresence>{toast && <Toast message={toast.message} variant={toast.variant} />}</AnimatePresence>
     </div>
   )
 }

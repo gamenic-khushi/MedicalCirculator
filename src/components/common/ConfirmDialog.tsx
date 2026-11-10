@@ -1,4 +1,7 @@
 import { Trash2, X } from 'lucide-react'
+import { motion } from 'motion/react'
+
+import { fade, pop } from '@/lib/motion'
 
 interface ConfirmDialogProps {
   message: string
@@ -8,6 +11,7 @@ interface ConfirmDialogProps {
   onCancel: () => void
 }
 
+// Animates in on its own; to animate out too, render it inside <AnimatePresence>.
 export function ConfirmDialog({
   message,
   confirmLabel = '消去',
@@ -16,11 +20,13 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <div
+    <motion.div
+      {...fade}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onClick={onCancel}
     >
-      <div
+      <motion.div
+        {...pop}
         role="alertdialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
@@ -56,7 +62,7 @@ export function ConfirmDialog({
             {confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

@@ -1,4 +1,5 @@
 import type { Models } from 'appwrite'
+import { AnimatePresence } from 'motion/react'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Lasso, Upload, ZoomIn, ZoomOut } from 'lucide-react'
@@ -655,15 +656,17 @@ export function ModelViewerPage() {
         <SavedSnapshotsPanel savedSnapshots={savedSnapshots} onDelete={handleDeleteSnapshot} />
       </div>
 
-      {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
+      <AnimatePresence>{isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}</AnimatePresence>
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          variant={toast.variant}
-          onDismiss={toast.persistent ? dismissToast : undefined}
-        />
-      )}
+      <AnimatePresence>
+        {toast && (
+          <Toast
+            message={toast.message}
+            variant={toast.variant}
+            onDismiss={toast.persistent ? dismissToast : undefined}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

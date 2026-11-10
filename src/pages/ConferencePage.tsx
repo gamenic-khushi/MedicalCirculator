@@ -1,4 +1,5 @@
 import type { Models } from 'appwrite'
+import { AnimatePresence } from 'motion/react'
 import { Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -97,9 +98,13 @@ export function ConferencePage() {
         </div>
       )}
 
-      {isAdding && <AddPaperModal onClose={() => setIsAdding(false)} onAdd={handleAdd} />}
+      <AnimatePresence>
+        {isAdding && <AddPaperModal onClose={() => setIsAdding(false)} onAdd={handleAdd} />}
+      </AnimatePresence>
 
-      {toast && <Toast message={toast.message} variant={toast.variant} />}
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} variant={toast.variant} />}
+      </AnimatePresence>
     </div>
   )
 }

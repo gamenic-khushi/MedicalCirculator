@@ -1,4 +1,5 @@
 import { ExternalLink, Trash2 } from 'lucide-react'
+import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
@@ -65,16 +66,18 @@ export function ConferencePaperTable({ papers, onDelete }: ConferencePaperTableP
         </table>
       </div>
 
-      {pendingDeleteId && (
-        <ConfirmDialog
-          message="本当に削除しますか？"
-          onCancel={() => setPendingDeleteId(null)}
-          onConfirm={() => {
-            onDelete(pendingDeleteId)
-            setPendingDeleteId(null)
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {pendingDeleteId && (
+          <ConfirmDialog
+            message="本当に削除しますか？"
+            onCancel={() => setPendingDeleteId(null)}
+            onConfirm={() => {
+              onDelete(pendingDeleteId)
+              setPendingDeleteId(null)
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
