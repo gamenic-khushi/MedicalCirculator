@@ -81,7 +81,8 @@ export function LearningContentPage() {
   }, [dataRecordId])
 
   function loadFile(file: File) {
-    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: DEFAULT_STUDY_NAME }))
+    // The record's own name (it may have been renamed on the lesion page).
+    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: record?.category || DEFAULT_STUDY_NAME }))
     navigate('/data/lesion-measurement/analysis', { state: { dataRecordId } })
   }
 

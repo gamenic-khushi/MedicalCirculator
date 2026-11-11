@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:browser": "node dev/browser-check/run.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

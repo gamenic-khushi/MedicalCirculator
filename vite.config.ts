@@ -31,4 +31,9 @@ export default defineConfig({
     port: Number(process.env.PORT) || 5173,
     strictPort: true,
   },
+  // Scan only the app and the browser-check page for dependencies, not the HTML
+  // pages under prototypes/ (they import vtk.js, which isn't installed).
+  optimizeDeps: {
+    entries: ['index.html', 'dev/browser-check/index.html'],
+  },
 })
