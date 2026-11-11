@@ -48,7 +48,7 @@ export function FfrResultOverlay({
           y1={`${originY}%`}
           x2={`${elbowX}%`}
           y2={`${labelY}%`}
-          stroke="#374151"
+          stroke="#cbd5e1"
           strokeWidth={1}
         />
         <motion.line
@@ -59,7 +59,7 @@ export function FfrResultOverlay({
           y1={`${labelY}%`}
           x2={`${labelX}%`}
           y2={`${labelY}%`}
-          stroke="#374151"
+          stroke="#cbd5e1"
           strokeWidth={1}
         />
       </svg>
@@ -74,7 +74,7 @@ export function FfrResultOverlay({
           width: TICK_COLUMN_WIDTH,
           height: BAR_HEIGHT,
         }}
-        className="absolute text-[11px] text-gray-500"
+        className="absolute text-[11px] text-slate-300"
       >
         {TICKS.map((tick, index) => (
           <span

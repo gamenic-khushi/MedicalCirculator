@@ -26,6 +26,7 @@ import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { fade } from '@/lib/motion'
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
+import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
@@ -1359,8 +1360,8 @@ export function LesionAnalysisPage() {
 
   function handleSave() {
     if (!measurement) return
-    // The view as it is now, whole: not the close-up taken when FFR was calculated.
-    const image = canvasRef.current?.capture()
+    // The view as it is now, whole and as shown: not the close-up taken when FFR was calculated.
+    const image = canvasRef.current?.capture({ asShown: true })
     if (!image) return
 
     setSavedSnapshots((prev) => [
@@ -1617,11 +1618,17 @@ export function LesionAnalysisPage() {
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
-            style={{
-              backgroundColor: '#737373',
-              backgroundImage:
-                'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
-            }}
+            // A saved image keeps the plain light background it was taken on; the
+            // canvas draws space, and this only shows until it does.
+            style={
+              viewFrame
+                ? {
+                    backgroundColor: '#737373',
+                    backgroundImage:
+                      'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
+                  }
+                : { backgroundColor: SPACE_COLOR }
+            }
             className={`relative overflow-hidden ${
               isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
@@ -1788,23 +1795,23 @@ export function LesionAnalysisPage() {
                       onPointerUp={handleRowLinePointerUp}
                       onPointerCancel={handleRowLinePointerUp}
                     >
-                      <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-500/50" />
+                      <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-slate-300/50" />
                     </div>
                     <div
                       className="absolute bottom-0 top-0 w-3 -translate-x-1/2"
                       style={{ left: `${lineX}%` }}
                       title="切断面の位置（最小断面積の位置に固定されています）"
                     >
-                      <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-indigo-500/80" />
+                      <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-indigo-400/90" />
                     </div>
                     <div
                       className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
                       style={{ left: `${lineX}%`, top: `${rowY}%` }}
                     />
-                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-gray-500" style={{ top: `${rowY}%` }}>X</span>
-                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%` }}>Y</span>
-                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%`, top: `${rowY}%` }}>Z</span>
-                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600" style={{ left: `${lineX}%` }}>切断面</span>
+                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-slate-300" style={{ top: `${rowY}%` }}>X</span>
+                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-slate-300" style={{ left: `${lineX}%` }}>Y</span>
+                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-slate-300" style={{ left: `${lineX}%`, top: `${rowY}%` }}>Z</span>
+                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-300" style={{ left: `${lineX}%` }}>切断面</span>
                     {(['proximal', 'distal'] as const).map((which, index) => {
                       // Each line goes through its own point, ① or ②, whose
                       // marker is its only label: one ① and one ② on screen.
@@ -1834,7 +1841,7 @@ export function LesionAnalysisPage() {
                           onPointerUp={handleLinePointerUp}
                           onPointerCancel={handleLinePointerUp}
                         >
-                          <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-gray-700/70" />
+                          <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-slate-300/70" />
                           <span className="pointer-events-none absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-gray-700 shadow-sm">
                             {isProximal ? '近位径' : '遠位径'}{' '}
                             {diameter != null ? `${formatMeasurement(diameter)} mm` : '—'}

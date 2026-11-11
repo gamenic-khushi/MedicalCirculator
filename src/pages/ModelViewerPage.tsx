@@ -18,6 +18,7 @@ import {
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
 import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPanel'
+import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
@@ -378,8 +379,8 @@ export function ModelViewerPage() {
   }
 
   function handleSaveSnapshot() {
-    // The view as it is now, whole (not cropped around the lesion).
-    const image = canvasRef.current?.capture()
+    // The view as it is now, whole (not cropped around the lesion), as shown.
+    const image = canvasRef.current?.capture({ asShown: true })
     if (!image) return
 
     const pa = bloodPressure.trim() || '80'
@@ -544,11 +545,8 @@ export function ModelViewerPage() {
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
-            style={{
-              backgroundColor: '#737373',
-              backgroundImage:
-                'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
-            }}
+            // The canvas draws space; this only shows until it does.
+            style={{ backgroundColor: SPACE_COLOR }}
             className={`relative overflow-hidden ${
               isFullscreen ? 'flex-1' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { EASE_OUT } from '@/lib/motion'
 import type { SavedSnapshot } from '@/types/viewerState'
 
@@ -106,7 +107,7 @@ export function SavedSnapshotsPanel({
                   <td className="px-3 py-4">
                     <p className="mb-2 text-xs text-gray-500">{snapshot.date}</p>
                     {/* The whole image, as the viewer showed it; the box matches its edges. */}
-                    <div className="h-20 w-32 overflow-hidden rounded-lg bg-gray-300">
+                    <div className="h-20 w-32 overflow-hidden rounded-lg" style={{ backgroundColor: SPACE_COLOR }}>
                       <img
                         src={snapshot.image}
                         alt="保存されたモデル画像"

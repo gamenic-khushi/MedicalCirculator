@@ -28,6 +28,7 @@ import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
 import { SliceCapMeshes } from './SliceCapMeshes'
+import { ViewerEnvironment } from './ViewerEnvironment'
 
 export type ViewerTool = 'rotate' | 'pan' | 'slice'
 
@@ -35,7 +36,10 @@ export interface ModelCanvasHandle {
   zoomIn: () => void
   zoomOut: () => void
   setTool: (tool: ViewerTool) => void
-  capture: () => string | null
+  // The view as an image. By default on the plain light background, without the
+  // space and the floor (for reports and learning content); `asShown` keeps
+  // exactly what the viewer shows.
+  capture: (options?: { asShown?: boolean }) => string | null
   measureVesselWidth: (xPercent: number, yPercent: number) => number | null
   measureAdaptiveReferenceWidth: (
     xPercent: number,
@@ -181,6 +185,7 @@ interface ModelCanvasProps {
 interface ThreeState {
   camera: THREE.Camera
   scene: THREE.Scene
+  gl: THREE.WebGLRenderer
 }
 
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
@@ -247,7 +252,7 @@ function ModelFadeIn({ groupRef }: { groupRef: RefObject<THREE.Group | null> }) 
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
   useEffect(() => {
-    stateRef.current = { camera: three.camera, scene: three.scene }
+    stateRef.current = { camera: three.camera, scene: three.scene, gl: three.gl }
   })
   return null
 }
@@ -321,6 +326,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const paintedMeshRef = useRef<THREE.Mesh | null>(null)
   const lastHighlightRef = useRef<{ points: THREE.Vector3[]; radius: number } | null>(null)
   const modelGroupRef = useRef<THREE.Group>(null)
+  const floorRef = useRef<THREE.Group>(null)
   const [slicePlane, setSlicePlane] = useState<THREE.Plane | null>(null)
   // Where the screen-centre line of sight meets the model; that surface point
   // lies on the cutting plane, so the cut through it is the vessel to measure.
@@ -1198,9 +1204,22 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       if (!controls) return
       controls.mouseButtons.LEFT = tool === 'pan' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
     },
-    capture: () => {
+    capture: (options) => {
       const canvasElement = containerRef.current?.querySelector('canvas')
       if (!canvasElement) return null
+      // The canvas draws the space and the floor itself.
+      if (options?.asShown) return canvasElement.toDataURL('image/png')
+
+      // Draw the frame once more without them, take it, then put them back.
+      const three = threeStateRef.current
+      const floor = floorRef.current
+      const shownBackground = three?.scene.background ?? null
+      const floorShown = floor?.visible ?? false
+      if (three) {
+        three.scene.background = null
+        if (floor) floor.visible = false
+        three.gl.render(three.scene, three.camera)
+      }
 
       const sourceWidth = canvasElement.width
       const sourceHeight = canvasElement.height
@@ -1211,9 +1230,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const ctx = outputCanvas.getContext('2d')
       if (!ctx) return canvasElement.toDataURL('image/png')
 
-      // The viewer's own background (both viewer pages put this radial gradient,
-      // 52.31% × 138.94% of the box, behind the transparent canvas), so the image
-      // looks exactly like the view.
+      // The plain light radial gradient (52.31% × 138.94% of the box) the
+      // viewers had before the space background.
       const background = ctx.createRadialGradient(0, 0, 0, 0, 0, 1)
       background.addColorStop(0, '#F3F4F6')
       background.addColorStop(0.5, '#E5E7EB')
@@ -1223,6 +1241,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       ctx.fillRect(-1, -1, 2, 2)
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.drawImage(canvasElement, 0, 0, sourceWidth, sourceHeight)
+
+      if (three) {
+        three.scene.background = shownBackground
+        if (floor) floor.visible = floorShown
+        three.gl.render(three.scene, three.camera)
+      }
       return outputCanvas.toDataURL('image/png')
     },
     measureVesselWidth: (xPercent, yPercent) => computeVesselWidth(xPercent, yPercent),
@@ -1515,6 +1539,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <ambientLight intensity={0.7} />
         <directionalLight position={[5, 8, 5]} intensity={1.1} />
         <directionalLight position={[-5, -3, -5]} intensity={0.3} />
+        <ViewerEnvironment modelGroupRef={modelGroupRef} floorRef={floorRef} />
         <Suspense fallback={null}>
           <Bounds fit={!initialCamera} clip margin={1.3} maxDuration={0}>
             <group ref={modelGroupRef}>
