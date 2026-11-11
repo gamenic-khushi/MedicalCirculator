@@ -1359,7 +1359,8 @@ export function LesionAnalysisPage() {
 
   function handleSave() {
     if (!measurement) return
-    const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
+    // The view as it is now, whole: not the close-up taken when FFR was calculated.
+    const image = canvasRef.current?.capture()
     if (!image) return
 
     setSavedSnapshots((prev) => [
@@ -1659,6 +1660,10 @@ export function LesionAnalysisPage() {
                   onModelSize={handleModelSize}
                 />
 
+                {/* Under everything else, so the markers and controls stay visible
+                    where the result card reaches them on a narrow view. */}
+                {measurement && <FfrResultOverlay {...measurement} />}
+
                 <TwoPointMarkers
                   points={annotations}
                   // While slicing the points stay on the crossings of the lines
@@ -1763,8 +1768,6 @@ export function LesionAnalysisPage() {
                   )}
                   </AnimatePresence>
                 </div>
-
-                {measurement && <FfrResultOverlay {...measurement} />}
 
                 <PressurePointsPanel pa={livePa} pd={livePd} />
                 <AnatomyGuideThumbnail />

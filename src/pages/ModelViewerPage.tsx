@@ -377,21 +377,18 @@ export function ModelViewerPage() {
     canvasRef.current?.clearSelection()
   }
 
-  async function handleSaveSnapshot() {
+  function handleSaveSnapshot() {
+    // The view as it is now, whole (not cropped around the lesion).
     const image = canvasRef.current?.capture()
     if (!image) return
 
-    const highlightPoint = ffrResult
-      ? { x: ffrResult.originX, y: ffrResult.originY }
-      : (annotations[annotations.length - 1] ?? null)
-    const highlightedImage = await createAnnotatedSnapshot(image, highlightPoint)
     const pa = bloodPressure.trim() || '80'
     const pdValue = pd.trim() || pa
     setSavedSnapshots((prev) => [
       ...prev,
       {
         id: generateId(),
-        image: highlightedImage,
+        image,
         date: formatSnapshotDate(new Date()),
         upstreamSize: upstreamDiameter.trim() ? `${upstreamDiameter}mm` : '4mm',
         downstreamSize: downstreamDiameter.trim() ? `${downstreamDiameter}mm` : '3mm',

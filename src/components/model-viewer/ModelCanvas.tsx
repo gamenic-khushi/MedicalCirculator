@@ -1211,8 +1211,17 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const ctx = outputCanvas.getContext('2d')
       if (!ctx) return canvasElement.toDataURL('image/png')
 
-      ctx.fillStyle = '#000000'
-      ctx.fillRect(0, 0, sourceWidth, sourceHeight)
+      // The viewer's own background (both viewer pages put this radial gradient,
+      // 52.31% × 138.94% of the box, behind the transparent canvas), so the image
+      // looks exactly like the view.
+      const background = ctx.createRadialGradient(0, 0, 0, 0, 0, 1)
+      background.addColorStop(0, '#F3F4F6')
+      background.addColorStop(0.5, '#E5E7EB')
+      background.addColorStop(1, '#D1D5DC')
+      ctx.setTransform(sourceWidth * 0.5231, 0, 0, sourceHeight * 1.3894, sourceWidth / 2, sourceHeight / 2)
+      ctx.fillStyle = background
+      ctx.fillRect(-1, -1, 2, 2)
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.drawImage(canvasElement, 0, 0, sourceWidth, sourceHeight)
       return outputCanvas.toDataURL('image/png')
     },

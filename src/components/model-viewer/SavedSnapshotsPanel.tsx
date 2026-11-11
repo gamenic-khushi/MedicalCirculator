@@ -105,11 +105,12 @@ export function SavedSnapshotsPanel({
                 >
                   <td className="px-3 py-4">
                     <p className="mb-2 text-xs text-gray-500">{snapshot.date}</p>
-                    <div className="h-20 w-32 overflow-hidden rounded-lg bg-gray-800">
+                    {/* The whole image, as the viewer showed it; the box matches its edges. */}
+                    <div className="h-20 w-32 overflow-hidden rounded-lg bg-gray-300">
                       <img
                         src={snapshot.image}
                         alt="保存されたモデル画像"
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                       />
                     </div>
                   </td>

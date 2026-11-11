@@ -52,19 +52,22 @@ function formatLength(length: number) {
   return length < 10 ? length.toFixed(2) : length.toFixed(1)
 }
 
-const SECTION_WIDTH = 180
-const SECTION_HEIGHT = 120
+const SECTION_WIDTH = 300
+const SECTION_HEIGHT = 150
+// Share of the picture's height (or width, for a cut wider than tall) the cut fills.
+const SECTION_FILL = 0.7
 // The horizontal line of the 3D view is grey there; the lengthwise section is
 // drawn in the same grey wherever it shows.
 const SECTION_LINE_COLOR = '#4b5563'
-const SECTION_MARGIN = 14
 const DEPTH_RANGE_COLOR = '#6366f1'
 
 // The cut at the cutting line seen face-on, in the same indigo as the line, with
 // the depth (away from the viewer) to the right. One scale both ways keeps the
-// outline's true proportions; the frame is fitted to the cut and to the
-// SLICE_DEPTH_LIMIT mm behind the surface the horizontal line lies on (the range
-// the cut and the depth slider reach), with the sizes across the cut underneath.
+// outline's true proportions; the cut is drawn large in the middle of the
+// picture, with the sizes across it underneath. The SLICE_DEPTH_LIMIT mm behind
+// the surface the horizontal line lies on (the range the cut and the depth slider
+// reach) is drawn to the same scale; a small cut leaves the far end of it past
+// the right edge, which then says so with an arrow, and so does the 縦断面 line.
 function TransverseSection({
   outline,
   area,
@@ -81,25 +84,29 @@ function TransverseSection({
   const line = outline.sectionLine
   // Where the horizontal line meets the vessel's surface: the front of the range.
   const front = line?.x ?? null
-  const minX = Math.min(-outline.width / 2, front ?? Infinity)
-  const maxX = Math.max(outline.width / 2, front != null ? front + SLICE_DEPTH_LIMIT : -Infinity)
-  const midX = (minX + maxX) / 2
+  // The outline is centred on its own middle, so x = y = 0 is the picture's centre.
   const scale = Math.min(
-    (SECTION_WIDTH - SECTION_MARGIN * 2) / Math.max(maxX - minX, 1e-9),
-    (SECTION_HEIGHT - SECTION_MARGIN * 2) / Math.max(outline.height, 1e-9),
+    (SECTION_WIDTH * SECTION_FILL) / Math.max(outline.width, 1e-9),
+    (SECTION_HEIGHT * SECTION_FILL) / Math.max(outline.height, 1e-9),
   )
-  const xOf = (x: number) => SECTION_WIDTH / 2 + (x - midX) * scale
+  const xOf = (x: number) => SECTION_WIDTH / 2 + x * scale
   const yOf = (y: number) => SECTION_HEIGHT / 2 - y * scale
   const path = `M ${outline.points.map(([x, y]) => `${xOf(x).toFixed(2)} ${yOf(y).toFixed(2)}`).join(' L ')} Z`
   // The horizontal line's plane seen edge-on, across the frame.
   const halfSpan = (SECTION_WIDTH / 2 - 4) / scale
   const horizontal =
     line && line.dx > 1e-6
-      ? [midX - halfSpan, midX + halfSpan].map((x) => [xOf(x), yOf(line.y + ((x - line.x) / line.dx) * line.dy)])
+      ? [-halfSpan, halfSpan].map((x) => [xOf(x), yOf(line.y + ((x - line.x) / line.dx) * line.dy)])
       : null
+  // The range runs from the surface to the right edge at most.
+  const rightEdge = SECTION_WIDTH - 4
+  const rangeEnd = front != null ? xOf(front + SLICE_DEPTH_LIMIT) : null
+  const rangeCut = rangeEnd != null && rangeEnd > rightEdge
   // The lengthwise section (the diagram above) at the depth slider's depth.
   const shownDepth = front != null && depth != null ? Math.min(Math.max(depth, 0), SLICE_DEPTH_LIMIT) : null
-  const depthX = shownDepth != null && front != null ? xOf(front + shownDepth) : null
+  const depthAt = shownDepth != null && front != null ? xOf(front + shownDepth) : null
+  const depthPastEdge = depthAt != null && depthAt > rightEdge
+  const depthX = depthAt != null ? Math.min(depthAt, rightEdge) : null
 
   return (
     <div className="relative mt-3 flex flex-col items-center gap-1 rounded-lg bg-gray-50 px-2 pb-2 pt-3">
@@ -111,7 +118,7 @@ function TransverseSection({
         />
       )}
       <p className="text-[11px] font-semibold text-indigo-600">切断面の横断面</p>
-      <svg viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="h-28 w-[168px]">
+      <svg viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="w-full">
         <rect
           x={1}
           y={1}
@@ -121,12 +128,12 @@ function TransverseSection({
           fill="#ffffff"
           stroke="#c7d2fe"
         />
-        {front != null && (
+        {front != null && rangeEnd != null && (
           <g>
             <rect
               x={xOf(front)}
               y={4}
-              width={SLICE_DEPTH_LIMIT * scale}
+              width={Math.min(rangeEnd, rightEdge) - xOf(front)}
               height={SECTION_HEIGHT - 8}
               fill={DEPTH_RANGE_COLOR}
               fillOpacity={0.06}
@@ -139,13 +146,13 @@ function TransverseSection({
               手前
             </text>
             <text
-              x={xOf(front + SLICE_DEPTH_LIMIT) - 2}
+              x={Math.min(rangeEnd, rightEdge) - 2}
               y={SECTION_HEIGHT - 7}
               textAnchor="end"
               fontSize={8}
               fill={DEPTH_RANGE_COLOR}
             >
-              奥 {SLICE_DEPTH_LIMIT} mm
+              奥 {SLICE_DEPTH_LIMIT} mm{rangeCut && ' →'}
             </text>
           </g>
         )}
@@ -185,8 +192,16 @@ function TransverseSection({
               strokeWidth={1}
               strokeDasharray="4 2"
             />
-            <text x={depthX + 3} y={12} fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
-              縦断面
+            {/* Past the right edge it waits there, pointing on to where it is. */}
+            <text
+              x={depthPastEdge ? depthX - 3 : depthX + 3}
+              y={12}
+              textAnchor={depthPastEdge ? 'end' : 'start'}
+              fontSize={8}
+              fontWeight={600}
+              fill={SECTION_LINE_COLOR}
+            >
+              縦断面{depthPastEdge && ' →'}
             </text>
           </g>
         )}
