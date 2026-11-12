@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { act, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,27 +9,33 @@ import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { Modal } from '@/components/common/Modal'
 import { Toast } from '@/components/common/Toast'
+import { reveal } from '@/lib/motion'
 
 // Lets React apply updates inside act() without warnings.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const noop = () => {}
-const OVERLAYS: [string, ReactElement][] = [
+// Each overlay, and whether it is rendered into <body>, outside the page (so a
+// page rising in as it opens never moves it) rather than in place.
+const OVERLAYS: [string, ReactElement, boolean][] = [
   [
     'Modal',
     <Modal key="o" title="タイトル" onClose={noop}>
       本文
     </Modal>,
+    true,
   ],
   [
     'ConfirmDialog',
     <ConfirmDialog key="o" message="本当に削除しますか？" onConfirm={noop} onCancel={noop} />,
+    true,
   ],
-  ['Toast', <Toast key="o" message="保存しました" />],
-  ['LoadingOverlay', <LoadingOverlay key="o" message="計測しています..." />],
+  ['Toast', <Toast key="o" message="保存しました" />, true],
+  ['LoadingOverlay', <LoadingOverlay key="o" message="計測しています..." />, true],
   [
     'GuidanceBubble',
     <GuidanceBubble key="o" anchor="top-left" message="ヒント" onDismiss={noop} />,
+    false,
   ],
 ]
 
@@ -38,6 +44,12 @@ let container: HTMLElement
 
 function show(overlay: ReactElement, open: boolean) {
   act(() => root!.render(<AnimatePresence>{open && overlay}</AnimatePresence>))
+}
+
+// The overlay's outermost element, in <body> or in the page (`container`).
+function shown() {
+  const outside = [...document.body.children].find((element) => element !== container)
+  return (outside ?? container.firstElementChild) as HTMLElement | null
 }
 
 // Polls until `check` passes, as the animations run on real frames.
@@ -60,13 +72,14 @@ afterEach(() => {
   container.remove()
 })
 
-describe.each(OVERLAYS)('%s', (_, overlay) => {
+describe.each(OVERLAYS)('%s', (_, overlay, intoBody) => {
   it('ends fully visible after animating in', async () => {
     container = document.body.appendChild(document.createElement('div'))
     root = createRoot(container)
     show(overlay, true)
-    const element = container.firstElementChild as HTMLElement
+    const element = shown()!
     expect(element).not.toBeNull()
+    expect(container.contains(element)).toBe(!intoBody)
     expect(Number(element.style.opacity)).toBeLessThan(1)
     await eventually(() => expect(element.style.opacity).toBe('1'))
   })
@@ -75,13 +88,26 @@ describe.each(OVERLAYS)('%s', (_, overlay) => {
     container = document.body.appendChild(document.createElement('div'))
     root = createRoot(container)
     show(overlay, true)
-    await eventually(() =>
-      expect((container.firstElementChild as HTMLElement).style.opacity).toBe('1'),
-    )
+    await eventually(() => expect(shown()!.style.opacity).toBe('1'))
     show(overlay, false)
     // Still there while it fades, so the close is seen...
-    expect(container.firstElementChild).not.toBeNull()
+    expect(shown()).not.toBeNull()
     // ...and gone afterwards, so nothing invisible is left covering the page.
-    await eventually(() => expect(container.firstElementChild).toBeNull())
+    await eventually(() => expect(shown()).toBeNull())
+  })
+})
+
+// The Shape block's diagram draws in from ① to ② under a clip.
+describe('reveal', () => {
+  it('ends with nothing clipped, so labels past the edges show in full', async () => {
+    container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    act(() => root!.render(<motion.div {...reveal} />))
+    const element = container.firstElementChild as HTMLElement
+    expect(element.style.clipPath).toContain('inset')
+    await eventually(() => {
+      expect(element.style.opacity).toBe('1')
+      expect(element.style.clipPath).toBe('none')
+    })
   })
 })

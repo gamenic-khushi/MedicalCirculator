@@ -12,6 +12,24 @@ body {
   margin: 0;
 }
 
+/* Buttons and the menu's links give a little when pressed. Only `scale`, which
+   adds to any translate or rotate they already have; their own `transition`
+   class (most have one) eases it, and this one eases the rest. Screens set to
+   reduce motion keep them still, as with the app's other animations. */
+@layer base {
+  @media (prefers-reduced-motion: no-preference) {
+    button,
+    nav a {
+      transition: scale 120ms ease-out;
+    }
+
+    button:not(:disabled):active,
+    nav a:active {
+      scale: 0.97;
+    }
+  }
+}
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;

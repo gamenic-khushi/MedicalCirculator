@@ -103,6 +103,17 @@ describe('cross-section preview', () => {
     expect(markup).toContain('奥 6 mm →')
   })
 
+  it('keeps the labels apart when the cut sits on the narrowest point (user report: text overlapping)', () => {
+    const markup = renderToStaticMarkup(
+      <VesselShapeDiagram proximalDiameter={2} minDiameter={1} distalDiameter={2} shape={shape} cutFraction={0.5} crossSection={crossSection} />,
+    )
+    // 最小 a line below 切断面, not under it.
+    expect(markup).toMatch(/top-4"[^>]*>最小</)
+    // 横線 ends left of the ② circle (r 7 at x 304), not inside it.
+    const horizontal = Number(markup.match(/<text x="([\d.]+)"[^>]*>横線/)![1])
+    expect(horizontal).toBeLessThan(304 - 7)
+  })
+
   it('writes no caption under the lengthwise diagram', () => {
     const cut = [[{ arc: 0, top: 0.4, bottom: 0.4 }, { arc: 10, top: 0.4, bottom: 0.4 }]]
     expect(render(2.5, cut)).not.toContain('縦断面（表面から奥へ')

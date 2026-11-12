@@ -6,7 +6,6 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { ConferencePage } from '@/pages/ConferencePage'
 import { DataManagementPage } from '@/pages/DataManagementPage'
 import { DocumentsPage } from '@/pages/DocumentsPage'
-import { FormulaSettingsPage } from '@/pages/FormulaSettingsPage'
 import { HelpPage } from '@/pages/HelpPage'
 import { LearningContentPage } from '@/pages/LearningContentPage'
 import { LesionAnalysisPage } from '@/pages/LesionAnalysisPage'
@@ -37,14 +36,6 @@ const router = createBrowserRouter([
         element: (
           <AdminRoute>
             <UserManagementPage />
-          </AdminRoute>
-        ),
-      },
-      {
-        path: 'settings/formula',
-        element: (
-          <AdminRoute>
-            <FormulaSettingsPage />
           </AdminRoute>
         ),
       },

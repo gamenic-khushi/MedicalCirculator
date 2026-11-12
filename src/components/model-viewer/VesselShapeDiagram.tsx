@@ -291,6 +291,9 @@ function MeasuredShape({
         )
       : null
   const xCut = cutFraction != null ? x0 + Math.min(Math.max(cutFraction, 0), 1) * (x1 - x0) : null
+  // The cut is put at the smallest cross-section, so usually right by the
+  // narrowest point: its label would then sit on 最小, which goes a line lower.
+  const crowded = xCut != null && Math.abs(xCut - xNarrowest) < WIDTH * 0.12
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -349,7 +352,8 @@ function MeasuredShape({
               strokeWidth={1}
               strokeDasharray="4 2"
             />
-            <text x={x1 - 2} y={yHorizontal - 3} textAnchor="end" fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
+            {/* Ends short of the ② circle, which sits on the line's right end. */}
+            <text x={x1 - MARKER_RADIUS - 3} y={yHorizontal - 3} textAnchor="end" fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
               横線
             </text>
           </g>
@@ -370,10 +374,10 @@ function MeasuredShape({
           </g>
         )}
       </svg>
-      <div className="relative h-4 w-full px-1 text-[11px] font-medium text-gray-500">
+      <div className={`relative w-full px-1 text-[11px] font-medium text-gray-500 ${crowded ? 'h-8' : 'h-4'}`}>
         <span className="absolute left-1 top-0">① 近位側</span>
         <span
-          className="absolute top-0 -translate-x-1/2 whitespace-nowrap"
+          className={`absolute -translate-x-1/2 whitespace-nowrap ${crowded ? 'top-4' : 'top-0'}`}
           style={{ left: `${(xNarrowest / WIDTH) * 100}%` }}
         >
           最小

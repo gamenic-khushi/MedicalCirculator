@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 import { fade, pop } from '@/lib/motion'
 
@@ -21,7 +22,8 @@ export function Modal({ title, onClose, children, panelStyle }: ModalProps) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  return (
+  // Into <body>, outside the page: a page rising in as it opens never moves it.
+  return createPortal(
     <motion.div
       {...fade}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -48,6 +50,7 @@ export function Modal({ title, onClose, children, panelStyle }: ModalProps) {
 
         <div className="px-8 py-6">{children}</div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   )
 }

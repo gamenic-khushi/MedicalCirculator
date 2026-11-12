@@ -11,12 +11,30 @@ export const EASE_OUT = [0.22, 1, 0.36, 1] as const
 /** A soft spring with almost no overshoot: for dialogs, cards and markers. */
 export const SPRING: Transition = { type: 'spring', visualDuration: 0.28, bounce: 0.12 }
 
-/** Backdrops, overlays and whole pages: opacity only. */
+/** Backdrops and overlays: opacity only. */
 export const fade = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
   exit: { opacity: 0, transition: { duration: 0.15 } },
   transition: { duration: 0.2, ease: EASE_OUT },
+} satisfies MotionProps
+
+/** Whole pages: fade in while rising a little. Nothing fades out, so changing page never waits. */
+export const page = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.28, ease: EASE_OUT },
+} satisfies MotionProps
+
+/**
+ * A result drawn in from left to right, from ① to ②, as if traced along the
+ * vessel. The clip goes once drawn, so labels past the edges show in full.
+ */
+export const reveal = {
+  initial: { opacity: 0, clipPath: 'inset(0 100% 0 0)' },
+  animate: { opacity: 1, clipPath: 'inset(0 0% 0 0)', transitionEnd: { clipPath: 'none' } },
+  exit: fade.exit,
+  transition: { duration: 0.6, ease: EASE_OUT, opacity: { duration: 0.2 } },
 } satisfies MotionProps
 
 /** Dialogs, toasts and banners: rise and grow a little into place, sink away on close. */

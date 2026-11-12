@@ -7,6 +7,10 @@ import { DEFAULT_FFR_STENOSIS_FACTOR, fetchFfrStenosisFactor, saveFfrStenosisFac
 
 const TOAST_DURATION_MS = 1800
 
+// 計算式設定 is hidden for now (2026-11-12): no route, menu item or Help section,
+// as the client asked. It is kept for a later phase. To bring it back, add its
+// route ('settings/formula', inside AdminRoute) to AppRouter, its item to
+// SETTINGS_MENU_ITEMS in Header, and its Help section (ADMIN_SECTIONS in HelpPage).
 export function FormulaSettingsPage() {
   const [value, setValue] = useState(String(DEFAULT_FFR_STENOSIS_FACTOR))
   const [isLoading, setIsLoading] = useState(true)
