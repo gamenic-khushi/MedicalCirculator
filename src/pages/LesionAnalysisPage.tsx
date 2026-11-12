@@ -265,9 +265,7 @@ function LesionSnapshotPanel({
   const hasShape = proximalDiameter > 0 && minDiameter > 0 && distalDiameter > 0
   return (
     <div className="flex-1">
-      <p className="text-sm font-semibold text-gray-900">
-        生成される3D狭窄形状（中心線に沿った断面）
-      </p>
+      <p className="text-sm font-semibold text-gray-900">3D狭窄形状プレビュー</p>
       {/* Each state fades into the next (the old one out first, so they never
           stack up). The diagram itself redraws immediately as values change. */}
       <AnimatePresence mode="wait" initial={false}>
