@@ -170,7 +170,6 @@ function MeasuredShape({
   // The same scale along and across the vessel whenever the picture is tall
   // enough for it; a vessel too wide for its length is squeezed vertically.
   const yPerMm = Math.min(xPerMm, MAX_HALF_HEIGHT / maxReach)
-  const squeezed = yPerMm < xPerMm * 0.999
 
   const xOf = (arc: number) => x0 + arc * xPerMm
   const upper = samples.map((sample) => `${xOf(sample.arc)} ${CENTER_Y - sample.top * yPerMm}`)
@@ -264,10 +263,6 @@ function MeasuredShape({
           </span>
         )}
       </div>
-      <p className="text-center text-[10px] text-gray-400">
-        3Dモデルの断面形状（①〜②の中心線に沿って・長さ {formatLength(lastArc)} mm）
-        {squeezed && '。縦方向は縮めて表示しています'}
-      </p>
       {crossSection && (
         <div className="w-full">
           <TransverseSection
