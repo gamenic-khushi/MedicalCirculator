@@ -211,11 +211,6 @@ function TransverseSection({
         <span className="block">
           上下 {formatLength(outline.height)} mm × 奥行 {formatLength(outline.width)} mm
         </span>
-        {shownDepth != null && (
-          <span className="block">
-            縦断面：表面から奥へ {shownDepth.toFixed(1)} mm（0〜{SLICE_DEPTH_LIMIT} mm）
-          </span>
-        )}
       </p>
     </div>
   )

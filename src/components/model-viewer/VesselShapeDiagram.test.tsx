@@ -90,7 +90,7 @@ describe('cross-section preview', () => {
     expect(depthLineX(render(0))).toBeCloseTo(range.x)
     expect(depthLineX(render(1))).toBeCloseTo(range.x + pixelsPerMm, 0)
     expect(depthLineX(render(2))).toBeCloseTo(range.x + 2 * pixelsPerMm, 0)
-    expect(render(3)).toContain('縦断面：表面から奥へ 3.0 mm（0〜6 mm）')
+    expect(render(3)).not.toContain('縦断面：表面から奥へ')
   })
 
   it('keeps the 縦断面 line and the end of the range in the picture when they lie past its edge', () => {
