@@ -1,4 +1,5 @@
 import type { Models } from 'appwrite'
+import { AnimatePresence } from 'motion/react'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Lasso, Upload, ZoomIn, ZoomOut } from 'lucide-react'
@@ -17,6 +18,7 @@ import {
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
 import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPanel'
+import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
@@ -376,21 +378,18 @@ export function ModelViewerPage() {
     canvasRef.current?.clearSelection()
   }
 
-  async function handleSaveSnapshot() {
-    const image = canvasRef.current?.capture()
+  function handleSaveSnapshot() {
+    // The view as it is now, whole (not cropped around the lesion), as shown.
+    const image = canvasRef.current?.capture({ asShown: true })
     if (!image) return
 
-    const highlightPoint = ffrResult
-      ? { x: ffrResult.originX, y: ffrResult.originY }
-      : (annotations[annotations.length - 1] ?? null)
-    const highlightedImage = await createAnnotatedSnapshot(image, highlightPoint)
     const pa = bloodPressure.trim() || '80'
     const pdValue = pd.trim() || pa
     setSavedSnapshots((prev) => [
       ...prev,
       {
         id: generateId(),
-        image: highlightedImage,
+        image,
         date: formatSnapshotDate(new Date()),
         upstreamSize: upstreamDiameter.trim() ? `${upstreamDiameter}mm` : '4mm',
         downstreamSize: downstreamDiameter.trim() ? `${downstreamDiameter}mm` : '3mm',
@@ -546,11 +545,8 @@ export function ModelViewerPage() {
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
-            style={{
-              backgroundColor: '#737373',
-              backgroundImage:
-                'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
-            }}
+            // The canvas draws space; this only shows until it does.
+            style={{ backgroundColor: SPACE_COLOR }}
             className={`relative overflow-hidden ${
               isFullscreen ? 'flex-1' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
@@ -655,15 +651,17 @@ export function ModelViewerPage() {
         <SavedSnapshotsPanel savedSnapshots={savedSnapshots} onDelete={handleDeleteSnapshot} />
       </div>
 
-      {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
+      <AnimatePresence>{isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}</AnimatePresence>
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          variant={toast.variant}
-          onDismiss={toast.persistent ? dismissToast : undefined}
-        />
-      )}
+      <AnimatePresence>
+        {toast && (
+          <Toast
+            message={toast.message}
+            variant={toast.variant}
+            onDismiss={toast.persistent ? dismissToast : undefined}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

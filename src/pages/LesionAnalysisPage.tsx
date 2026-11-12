@@ -1,4 +1,5 @@
 import { Query, type Models } from 'appwrite'
+import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
@@ -23,7 +24,9 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
-import type { PlaneOutline } from '@/lib/slicePlane'
+import { fade } from '@/lib/motion'
+import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
+import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
@@ -53,6 +56,7 @@ import { createAnnotatedSnapshot } from '@/lib/snapshotCrop'
 import { resolveProximalTiebreak } from '@/lib/typesafeProximity'
 import {
   measureTwoPointLesion,
+  type LesionProfileSample,
   type LesionShape,
   type PercentPoint,
 } from '@/lib/twoPointLesionMeasurement'
@@ -240,6 +244,8 @@ function LesionSnapshotPanel({
   cutFraction,
   crossSection,
   crossSectionArea,
+  depth,
+  depthCut,
   isMeasuring,
   awaitingConfirm,
 }: {
@@ -251,6 +257,8 @@ function LesionSnapshotPanel({
   cutFraction: number | null
   crossSection: PlaneOutline | null
   crossSectionArea: number | null
+  depth: number | null
+  depthCut: LesionProfileSample[][] | null
   isMeasuring: boolean
   awaitingConfirm: boolean
 }) {
@@ -260,12 +268,19 @@ function LesionSnapshotPanel({
       <p className="text-sm font-semibold text-gray-900">
         生成される3D狭窄形状（中心線に沿った断面）
       </p>
+      {/* Each state fades into the next (the old one out first, so they never
+          stack up). The diagram itself redraws immediately as values change. */}
+      <AnimatePresence mode="wait" initial={false}>
       {isMeasuring ? (
-        <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400">
+        <motion.div
+          key="measuring"
+          {...fade}
+          className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400"
+        >
           計測中...
-        </div>
+        </motion.div>
       ) : hasShape ? (
-        <div className="mt-3">
+        <motion.div key="shape" {...fade} className="mt-3">
           <VesselShapeDiagram
             proximalDiameter={proximalDiameter}
             minDiameter={minDiameter}
@@ -275,15 +290,22 @@ function LesionSnapshotPanel({
             cutFraction={cutFraction}
             crossSection={crossSection}
             crossSectionArea={crossSectionArea}
+            depth={depth}
+            depthCut={depthCut}
           />
-        </div>
+        </motion.div>
       ) : (
-        <div className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 p-2 text-center text-xs text-gray-400">
+        <motion.div
+          key="empty"
+          {...fade}
+          className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 p-2 text-center text-xs text-gray-400"
+        >
           {awaitingConfirm
             ? '点をドラッグして位置を調整し、「測定範囲を更新」をクリックしてください'
             : '2点をクリックして選択してください'}
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -341,6 +363,8 @@ export function LesionAnalysisPage() {
   const [sliceCrossSectionArea, setSliceCrossSectionArea] = useState<number | null>(null)
   // The shape of that cut, drawn under the diagram in the shape block.
   const [sliceOutline, setSliceOutline] = useState<PlaneOutline | null>(null)
+  // The lesion cut lengthwise at the depth slider's depth, drawn in the shape block.
+  const [sliceLengthwise, setSliceLengthwise] = useState<LesionProfileSample[][] | null>(null)
   // The vessel's diameter where each slidable line (through ① and ②) cuts it.
   const [lineDiameters, setLineDiameters] = useState<{ proximal: number | null; distal: number | null }>({
     proximal: null,
@@ -1336,7 +1360,8 @@ export function LesionAnalysisPage() {
 
   function handleSave() {
     if (!measurement) return
-    const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
+    // The view as it is now, whole and as shown: not the close-up taken when FFR was calculated.
+    const image = canvasRef.current?.capture({ asShown: true })
     if (!image) return
 
     setSavedSnapshots((prev) => [
@@ -1593,11 +1618,17 @@ export function LesionAnalysisPage() {
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
-            style={{
-              backgroundColor: '#737373',
-              backgroundImage:
-                'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
-            }}
+            // A saved image keeps the plain light background it was taken on; the
+            // canvas draws space, and this only shows until it does.
+            style={
+              viewFrame
+                ? {
+                    backgroundColor: '#737373',
+                    backgroundImage:
+                      'radial-gradient(52.31% 138.94% at 50% 50%, #F3F4F6 0%, #E5E7EB 50%, #D1D5DC 100%)',
+                  }
+                : { backgroundColor: SPACE_COLOR }
+            }
             className={`relative overflow-hidden ${
               isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
@@ -1632,8 +1663,13 @@ export function LesionAnalysisPage() {
                   viewLocked={activeTool === 'slice' && sliceAligned}
                   onSliceAreaChange={setSliceCrossSectionArea}
                   onSliceOutlineChange={setSliceOutline}
+                  onSliceLengthwiseChange={setSliceLengthwise}
                   onModelSize={handleModelSize}
                 />
+
+                {/* Under everything else, so the markers and controls stay visible
+                    where the result card reaches them on a narrow view. */}
+                {measurement && <FfrResultOverlay {...measurement} />}
 
                 <TwoPointMarkers
                   points={annotations}
@@ -1674,14 +1710,16 @@ export function LesionAnalysisPage() {
                   )}
                 </div>
 
-                {annotations.length === 0 && !isAnnotating && !isLesionHintDismissed && (
-                  <GuidanceBubble
-                    anchor="top-left"
-                    style={{ left: '3.25rem', top: '1rem' }}
-                    message="ここをクリックして、①②の2点で病変部位を選択してください"
-                    onDismiss={dismissLesionHint}
-                  />
-                )}
+                <AnimatePresence>
+                  {annotations.length === 0 && !isAnnotating && !isLesionHintDismissed && (
+                    <GuidanceBubble
+                      anchor="top-left"
+                      style={{ left: '3.25rem', top: '1rem' }}
+                      message="ここをクリックして、①②の2点で病変部位を選択してください"
+                      onDismiss={dismissLesionHint}
+                    />
+                  )}
+                </AnimatePresence>
 
                 <div className="absolute right-4 top-4 flex flex-col gap-2">
                   {measurement && (
@@ -1708,10 +1746,13 @@ export function LesionAnalysisPage() {
                   >
                     <ZoomOut className="h-4 w-4" />
                   </button>
+                  <AnimatePresence>
                   {activeTool === 'slice' && (
                     // Moves the model away from the viewer (up, 6 mm at most) once the
                     // scissors has locked it in place; the bottom is where it was put.
-                    <div
+                    <motion.div
+                      key="depth-slider"
+                      {...fade}
                       title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
                       className="flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm"
                     >
@@ -1730,21 +1771,21 @@ export function LesionAnalysisPage() {
                         />
                       </div>
                       <span className="text-[10px] font-medium text-gray-500">手前</span>
-                    </div>
+                    </motion.div>
                   )}
+                  </AnimatePresence>
                 </div>
-
-                {measurement && <FfrResultOverlay {...measurement} />}
 
                 <PressurePointsPanel pa={livePa} pd={livePd} />
                 <AnatomyGuideThumbnail />
+                <AnimatePresence>
                 {activeTool === 'slice' && (
                   // Fixed to the 3D view; the model is what moves. The vertical
                   // line is the cutting plane seen edge-on (X is across it, Y up
                   // the line, Z the line of sight) and can be slid left and
                   // right; the horizontal line is the X axis the vessel is laid
                   // along, and stays put.
-                  <div className="pointer-events-none absolute inset-0">
+                  <motion.div key="slice-lines" {...fade} className="pointer-events-none absolute inset-0">
                     <div
                       className="pointer-events-auto absolute left-0 right-0 h-3 -translate-y-1/2 cursor-ns-resize touch-none"
                       style={{ top: `${rowY}%` }}
@@ -1754,23 +1795,23 @@ export function LesionAnalysisPage() {
                       onPointerUp={handleRowLinePointerUp}
                       onPointerCancel={handleRowLinePointerUp}
                     >
-                      <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-500/50" />
+                      <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-slate-300/50" />
                     </div>
                     <div
                       className="absolute bottom-0 top-0 w-3 -translate-x-1/2"
                       style={{ left: `${lineX}%` }}
                       title="切断面の位置（最小断面積の位置に固定されています）"
                     >
-                      <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-indigo-500/80" />
+                      <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-indigo-400/90" />
                     </div>
                     <div
                       className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
                       style={{ left: `${lineX}%`, top: `${rowY}%` }}
                     />
-                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-gray-500" style={{ top: `${rowY}%` }}>X</span>
-                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%` }}>Y</span>
-                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-gray-500" style={{ left: `${lineX}%`, top: `${rowY}%` }}>Z</span>
-                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-600" style={{ left: `${lineX}%` }}>切断面</span>
+                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-slate-300" style={{ top: `${rowY}%` }}>X</span>
+                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-slate-300" style={{ left: `${lineX}%` }}>Y</span>
+                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-slate-300" style={{ left: `${lineX}%`, top: `${rowY}%` }}>Z</span>
+                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-300" style={{ left: `${lineX}%` }}>切断面</span>
                     {(['proximal', 'distal'] as const).map((which, index) => {
                       // Each line goes through its own point, ① or ②, whose
                       // marker is its only label: one ① and one ② on screen.
@@ -1800,7 +1841,7 @@ export function LesionAnalysisPage() {
                           onPointerUp={handleLinePointerUp}
                           onPointerCancel={handleLinePointerUp}
                         >
-                          <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-gray-700/70" />
+                          <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-slate-300/70" />
                           <span className="pointer-events-none absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-gray-700 shadow-sm">
                             {isProximal ? '近位径' : '遠位径'}{' '}
                             {diameter != null ? `${formatMeasurement(diameter)} mm` : '—'}
@@ -1816,15 +1857,22 @@ export function LesionAnalysisPage() {
                         十字の中心に血管を合わせてください
                       </p>
                     )}
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
+                <AnimatePresence>
                 {activeTool === 'slice' && sliceCrossSectionArea != null && (
-                  <div className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white px-4 py-1.5 shadow-sm">
+                  <motion.div
+                    key="slice-area"
+                    {...fade}
+                    className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white px-4 py-1.5 shadow-sm"
+                  >
                     <span className="text-xs text-gray-500">
                       断面積 <span className="font-semibold text-gray-900">{formatMeasurement(sliceCrossSectionArea)}</span> mm²
                     </span>
-                  </div>
+                  </motion.div>
                 )}
+                </AnimatePresence>
                 <ViewerToolbar
                   activeTool={activeTool}
                   isPanning={activeTool === 'pan' || (activeTool === 'slice' && slicePan)}
@@ -1935,6 +1983,8 @@ export function LesionAnalysisPage() {
             cutFraction={activeTool === 'slice' ? cutFraction : null}
             crossSection={activeTool === 'slice' ? sliceOutline : null}
             crossSectionArea={activeTool === 'slice' ? sliceCrossSectionArea : null}
+            depth={activeTool === 'slice' ? (depth / 100) * SLICE_DEPTH_LIMIT : null}
+            depthCut={activeTool === 'slice' ? sliceLengthwise : null}
             isMeasuring={isMeasuring}
             awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />
@@ -1993,13 +2043,15 @@ export function LesionAnalysisPage() {
         />
       </div>
 
-      {isEditingLesion && measurement && (
-        <SelectedLesionModal
-          initialValues={selectedLesion}
-          onClose={() => setIsEditingLesion(false)}
-          onSave={handleSaveSelectedLesion}
-        />
-      )}
+      <AnimatePresence>
+        {isEditingLesion && measurement && (
+          <SelectedLesionModal
+            initialValues={selectedLesion}
+            onClose={() => setIsEditingLesion(false)}
+            onSave={handleSaveSelectedLesion}
+          />
+        )}
+      </AnimatePresence>
 
       {isInfoOpen && validModel && (
         <div
@@ -2024,17 +2076,19 @@ export function LesionAnalysisPage() {
         </div>
       )}
 
-      {isMeasuring && <LoadingOverlay message="病変を計測しています..." />}
+      <AnimatePresence>{isMeasuring && <LoadingOverlay message="病変を計測しています..." />}</AnimatePresence>
 
-      {isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}
+      <AnimatePresence>{isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}</AnimatePresence>
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          variant={toast.variant}
-          onDismiss={toast.persistent ? dismissToast : undefined}
-        />
-      )}
+      <AnimatePresence>
+        {toast && (
+          <Toast
+            message={toast.message}
+            variant={toast.variant}
+            onDismiss={toast.persistent ? dismissToast : undefined}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

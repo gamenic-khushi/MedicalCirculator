@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence } from 'motion/react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { RowActionIcons } from '@/components/common/RowActionIcons'
@@ -73,47 +74,53 @@ export function UserTable({ users, organizations, onEdit, onDelete, onDuplicate 
         </table>
       </div>
 
-      {previewing && (
-        <UserPreviewModal
-          user={previewing}
-          organizations={organizations}
-          onClose={() => setPreviewing(null)}
-          onSave={(data) =>
-            onEdit(previewing.id, {
-              category: data.category,
-              organization: data.organization,
-              name: previewing.name,
-              email: previewing.email ?? '',
-            })
-          }
-        />
-      )}
+      <AnimatePresence>
+        {previewing && (
+          <UserPreviewModal
+            user={previewing}
+            organizations={organizations}
+            onClose={() => setPreviewing(null)}
+            onSave={(data) =>
+              onEdit(previewing.id, {
+                category: data.category,
+                organization: data.organization,
+                name: previewing.name,
+                email: previewing.email ?? '',
+              })
+            }
+          />
+        )}
+      </AnimatePresence>
 
-      {editing && (
-        <UserFormModal
-          title="編集"
-          organizations={organizations}
-          initialUser={{
-            category: editing.category,
-            organization: editing.organization,
-            name: editing.name,
-            email: editing.email ?? '',
-          }}
-          onClose={() => setEditing(null)}
-          onSave={(data) => onEdit(editing.id, data)}
-        />
-      )}
+      <AnimatePresence>
+        {editing && (
+          <UserFormModal
+            title="編集"
+            organizations={organizations}
+            initialUser={{
+              category: editing.category,
+              organization: editing.organization,
+              name: editing.name,
+              email: editing.email ?? '',
+            }}
+            onClose={() => setEditing(null)}
+            onSave={(data) => onEdit(editing.id, data)}
+          />
+        )}
+      </AnimatePresence>
 
-      {pendingDeleteId && (
-        <ConfirmDialog
-          message="本当に削除しますか？"
-          onCancel={() => setPendingDeleteId(null)}
-          onConfirm={() => {
-            onDelete(pendingDeleteId)
-            setPendingDeleteId(null)
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {pendingDeleteId && (
+          <ConfirmDialog
+            message="本当に削除しますか？"
+            onCancel={() => setPendingDeleteId(null)}
+            onConfirm={() => {
+              onDelete(pendingDeleteId)
+              setPendingDeleteId(null)
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

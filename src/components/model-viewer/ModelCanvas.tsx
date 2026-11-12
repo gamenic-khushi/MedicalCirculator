@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type RefObject,
 } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Bounds, OrbitControls } from '@react-three/drei'
@@ -13,13 +14,21 @@ import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import { nearerToHeart } from '@/lib/heartDistance'
-import { computeCrossSection, loopArea, type PlaneOutline } from '@/lib/slicePlane'
+import { fadeInModel, glideZoom } from '@/lib/sceneMotion'
+import {
+  computeCrossSection,
+  lengthwiseCutAtDepth,
+  loopArea,
+  SLICE_DEPTH_LIMIT,
+  type PlaneOutline,
+} from '@/lib/slicePlane'
 import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
 import { centreLineFractionAtPlane, measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
 import { SliceCapMeshes } from './SliceCapMeshes'
+import { ViewerEnvironment } from './ViewerEnvironment'
 
 export type ViewerTool = 'rotate' | 'pan' | 'slice'
 
@@ -27,7 +36,10 @@ export interface ModelCanvasHandle {
   zoomIn: () => void
   zoomOut: () => void
   setTool: (tool: ViewerTool) => void
-  capture: () => string | null
+  // The view as an image. By default on the plain light background, without the
+  // space and the floor (for reports and learning content); `asShown` keeps
+  // exactly what the viewer shows.
+  capture: (options?: { asShown?: boolean }) => string | null
   measureVesselWidth: (xPercent: number, yPercent: number) => number | null
   measureAdaptiveReferenceWidth: (
     xPercent: number,
@@ -162,6 +174,9 @@ interface ModelCanvasProps {
   onSliceAreaChange?: (area: number | null) => void
   // The shape of the cut being measured, flattened onto the cutting plane.
   onSliceOutlineChange?: (outline: PlaneOutline | null) => void
+  // The lesion cut lengthwise at the depth slider's depth (see lengthwiseCut),
+  // or null when the cut is not between ① and ②.
+  onSliceLengthwiseChange?: (runs: LesionProfileSample[][] | null) => void
   // Called once, as soon as the model has loaded, with its largest dimension in
   // model units — lets a page tell when a model is not in millimetres.
   onModelSize?: (maxDimension: number) => void
@@ -170,11 +185,9 @@ interface ModelCanvasProps {
 interface ThreeState {
   camera: THREE.Camera
   scene: THREE.Scene
+  gl: THREE.WebGLRenderer
 }
 
-// Between ① and ②, the cut only takes in this much (mm) behind the surface the
-// horizontal line lies on, so another vessel running behind is not cut too.
-const SLICE_DEPTH_LIMIT = 6
 const FALLBACK_HIGHLIGHT_RADIUS = 0.28
 // A highlight sized strictly to the vessel's real width becomes imperceptible
 // (a handful of pixels) once the camera is framing the whole model — which is
@@ -224,10 +237,22 @@ const HEART_PROXIMITY_DECISIVE_CONFIRM_STEPS = 3
 // that's as likely to be raycasting noise as a genuine signal.
 const HEART_PROXIMITY_WIDTH_TIE_TOLERANCE = 0.1
 
+// Mounts with the model (inside its Suspense), so it fades the model in as soon
+// as it has loaded; keyed by the URL, so each new model fades in too.
+function ModelFadeIn({ groupRef }: { groupRef: RefObject<THREE.Group | null> }) {
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    const fade = fadeInModel(group)
+    return () => fade.stop()
+  }, [groupRef])
+  return null
+}
+
 function SceneAccessor({ stateRef }: { stateRef: MutableRefObject<ThreeState | null> }) {
   const three = useThree()
   useEffect(() => {
-    stateRef.current = { camera: three.camera, scene: three.scene }
+    stateRef.current = { camera: three.camera, scene: three.scene, gl: three.gl }
   })
   return null
 }
@@ -290,6 +315,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     viewLocked = false,
     onSliceAreaChange,
     onSliceOutlineChange,
+    onSliceLengthwiseChange,
     onModelSize,
   },
   ref,
@@ -300,6 +326,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const paintedMeshRef = useRef<THREE.Mesh | null>(null)
   const lastHighlightRef = useRef<{ points: THREE.Vector3[]; radius: number } | null>(null)
   const modelGroupRef = useRef<THREE.Group>(null)
+  const floorRef = useRef<THREE.Group>(null)
   const [slicePlane, setSlicePlane] = useState<THREE.Plane | null>(null)
   // Where the screen-centre line of sight meets the model; that surface point
   // lies on the cutting plane, so the cut through it is the vessel to measure.
@@ -329,10 +356,13 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   } | null>(null)
   // Set just before the camera is moved by the depth slider or the zoom.
   const holdSliceRef = useRef(false)
+  const holdGenerationRef = useRef(0)
+  // The zoom buttons' glide in progress (see glideZoom).
+  const zoomGlideRef = useRef<ReturnType<typeof glideZoom> | null>(null)
   const pendingSliceModeRef = useRef<'full' | 'focus'>('full')
   // The centre line of the lesion measured last (a station every few percent of
   // a diameter, with the length reached at each), to place the cut along it.
-  const lastSweepRef = useRef<{ centres: THREE.Vector3[]; arcs: number[] } | null>(null)
+  const lastSweepRef = useRef<{ centres: THREE.Vector3[]; profile: LesionProfileSample[] } | null>(null)
 
   useEffect(() => {
     sliceModeRef.current = sliceMode
@@ -366,9 +396,46 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   function reportCutFraction() {
     const plane = slicePlaneRef.current
     const sweep = lastSweepRef.current
-    const fraction = plane && sweep ? centreLineFractionAtPlane(plane, sweep.centres, sweep.arcs) : null
+    const fraction =
+      plane && sweep
+        ? centreLineFractionAtPlane(
+            plane,
+            sweep.centres,
+            sweep.profile.map((sample) => sample.arc),
+          )
+        : null
     onSliceCutChange?.(fraction)
     setSliceDepthLimit(fraction != null ? SLICE_DEPTH_LIMIT : null)
+    reportLengthwiseCut(fraction != null)
+  }
+
+  // The lengthwise section the depth slider moves through the lesion: the plane
+  // square to the depth direction, as far behind the surface the horizontal line
+  // lies on as the model has been slid away (0 to SLICE_DEPTH_LIMIT mm).
+  function reportLengthwiseCut(betweenPoints: boolean) {
+    if (!onSliceLengthwiseChange) return
+    const sweep = lastSweepRef.current
+    const anchor = sliceAnchorRef.current
+    const camera = threeStateRef.current?.camera
+    const modelGroup = modelGroupRef.current
+    if (!betweenPoints || !sweep || !anchor?.focus || !camera || !modelGroup) {
+      onSliceLengthwiseChange(null)
+      return
+    }
+    const meshes: THREE.Mesh[] = []
+    modelGroup.traverse((child) => {
+      if (child instanceof THREE.Mesh) meshes.push(child)
+    })
+    onSliceLengthwiseChange(
+      lengthwiseCutAtDepth(
+        meshes,
+        new THREE.Vector3(...anchor.focus),
+        -depthOffsetRef.current,
+        new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize(),
+        anchor.plane.normal,
+        sweep.profile.map((sample, index) => ({ ...sample, centre: sweep.centres[index] })),
+      ),
+    )
   }
 
   // The cutting plane is set up under the camera: it holds the screen's up
@@ -458,10 +525,18 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   }
 
   // The next set-up of the cut keeps the plane (see updateSlice); lapses after a
-  // couple of frames if the camera did not actually move.
+  // couple of frames if the camera did not actually move. Only the latest hold
+  // lapses: when the camera moves every frame (the zoom glide, dragging the
+  // depth slider), an earlier hold's lapse would otherwise land just before the
+  // set-up of a later move and let the plane be set up again under the camera.
   function holdSliceThisFrame() {
     holdSliceRef.current = true
-    requestAnimationFrame(() => requestAnimationFrame(() => (holdSliceRef.current = false)))
+    const hold = ++holdGenerationRef.current
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (holdGenerationRef.current === hold) holdSliceRef.current = false
+      }),
+    )
   }
 
   function projectToPercent(point: THREE.Vector3, camera: THREE.Camera) {
@@ -690,6 +765,13 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     holdSliceThisFrame()
     controls.update()
     emitCameraChange()
+  }
+
+  // The zoom buttons glide instead of jumping; a click during a glide adds on
+  // what that glide had left, so the view ends where the clicks add up to.
+  function zoomBy(factor: number) {
+    const left = zoomGlideRef.current?.stop() ?? 1
+    zoomGlideRef.current = glideZoom(left * factor, dolly)
   }
 
   // `root` narrows the ray to one object (the model itself), so overlays such
@@ -1115,16 +1197,29 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   }
 
   useImperativeHandle(ref, () => ({
-    zoomIn: () => dolly(0.85),
-    zoomOut: () => dolly(1.15),
+    zoomIn: () => zoomBy(0.85),
+    zoomOut: () => zoomBy(1.15),
     setTool: (tool) => {
       const controls = controlsRef.current
       if (!controls) return
       controls.mouseButtons.LEFT = tool === 'pan' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
     },
-    capture: () => {
+    capture: (options) => {
       const canvasElement = containerRef.current?.querySelector('canvas')
       if (!canvasElement) return null
+      // The canvas draws the space and the floor itself.
+      if (options?.asShown) return canvasElement.toDataURL('image/png')
+
+      // Draw the frame once more without them, take it, then put them back.
+      const three = threeStateRef.current
+      const floor = floorRef.current
+      const shownBackground = three?.scene.background ?? null
+      const floorShown = floor?.visible ?? false
+      if (three) {
+        three.scene.background = null
+        if (floor) floor.visible = false
+        three.gl.render(three.scene, three.camera)
+      }
 
       const sourceWidth = canvasElement.width
       const sourceHeight = canvasElement.height
@@ -1135,9 +1230,23 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const ctx = outputCanvas.getContext('2d')
       if (!ctx) return canvasElement.toDataURL('image/png')
 
-      ctx.fillStyle = '#000000'
-      ctx.fillRect(0, 0, sourceWidth, sourceHeight)
+      // The plain light radial gradient (52.31% × 138.94% of the box) the
+      // viewers had before the space background.
+      const background = ctx.createRadialGradient(0, 0, 0, 0, 0, 1)
+      background.addColorStop(0, '#F3F4F6')
+      background.addColorStop(0.5, '#E5E7EB')
+      background.addColorStop(1, '#D1D5DC')
+      ctx.setTransform(sourceWidth * 0.5231, 0, 0, sourceHeight * 1.3894, sourceWidth / 2, sourceHeight / 2)
+      ctx.fillStyle = background
+      ctx.fillRect(-1, -1, 2, 2)
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.drawImage(canvasElement, 0, 0, sourceWidth, sourceHeight)
+
+      if (three) {
+        three.scene.background = shownBackground
+        if (floor) floor.visible = floorShown
+        three.gl.render(three.scene, three.camera)
+      }
       return outputCanvas.toDataURL('image/png')
     },
     measureVesselWidth: (xPercent, yPercent) => computeVesselWidth(xPercent, yPercent),
@@ -1160,7 +1269,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         camera ? new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize() : undefined,
       )
       if (!result) return null
-      lastSweepRef.current = { centres: result.centres, arcs: result.profile.map((sample) => sample.arc) }
+      lastSweepRef.current = { centres: result.centres, profile: result.profile }
       reportCutFraction()
       return {
         proximalDiameter: result.proximalDiameter,
@@ -1430,12 +1539,14 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         <ambientLight intensity={0.7} />
         <directionalLight position={[5, 8, 5]} intensity={1.1} />
         <directionalLight position={[-5, -3, -5]} intensity={0.3} />
+        <ViewerEnvironment modelGroupRef={modelGroupRef} floorRef={floorRef} />
         <Suspense fallback={null}>
           <Bounds fit={!initialCamera} clip margin={1.3} maxDuration={0}>
             <group ref={modelGroupRef}>
               {/* No clipping plane: the whole model stays visible while slicing;
                   the plane is only used to measure the cut. */}
               <Model3D url={url} extension={extension} color={color} />
+              <ModelFadeIn key={url} groupRef={modelGroupRef} />
             </group>
           </Bounds>
           <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />

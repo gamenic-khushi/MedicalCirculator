@@ -1,4 +1,5 @@
 import type { Models } from 'appwrite'
+import { AnimatePresence } from 'motion/react'
 import { Plus, Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -194,24 +195,30 @@ export function DocumentsPage() {
         </div>
       )}
 
-      {isAddingFolder && (
-        <DocumentNameModal
-          title="資料登録"
-          fieldLabel="フォルダ名"
-          onClose={() => setIsAddingFolder(false)}
-          onSubmit={handleAddFolder}
-        />
-      )}
+      <AnimatePresence>
+        {isAddingFolder && (
+          <DocumentNameModal
+            title="資料登録"
+            fieldLabel="フォルダ名"
+            onClose={() => setIsAddingFolder(false)}
+            onSubmit={handleAddFolder}
+          />
+        )}
+      </AnimatePresence>
 
-      {isUploading && (
-        <DocumentUploadModal
-          folders={folders}
-          onClose={() => setIsUploading(false)}
-          onSave={handleSaveUpload}
-        />
-      )}
+      <AnimatePresence>
+        {isUploading && (
+          <DocumentUploadModal
+            folders={folders}
+            onClose={() => setIsUploading(false)}
+            onSave={handleSaveUpload}
+          />
+        )}
+      </AnimatePresence>
 
-      {toast && <Toast message={toast.message} variant={toast.variant} />}
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} variant={toast.variant} />}
+      </AnimatePresence>
     </div>
   )
 }

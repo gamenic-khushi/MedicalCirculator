@@ -41,3 +41,7 @@ functions/**/*.tar.gz
 
 # Local evidence/report scratch work — not part of the app
 evidence/
+
+# Screenshots and logs from npm run check:browser
+dev/browser-check/out/
+dev

@@ -32,11 +32,9 @@ Vessel lesion measurement and FFR estimation. The user loads a 3D vessel model, 
 ## Working with the code
 
 - **Stack:** Vite, React 19 and TypeScript, Tailwind 4, three.js, and a self-hosted Appwrite (TablesDB, not the deprecated Databases API).
-- **Running locally:** `npm run dev` is broken because of a nested `node_modules` folder that breaks Vite's scanner. Use:
-  ```bash
-  npm run build && npm run preview -- --port 5173
-  ```
+- **Running locally:** `npm run dev`. Vite's dependency scan is limited to the app (`optimizeDeps.entries` in `vite.config.ts`), because the pages under `prototypes/` import vtk.js, which isn't installed.
 - **Verifying changes:** use `npm run build`. Bare `tsc --noEmit` is a no-op on this repo's solution-style tsconfig and misses real errors.
+- **Browser checks:** `npm run check:browser` opens the lesion and 3D viewer pages in a hidden Edge (or Chrome) without logging in, runs the client-reported flows (FFR overlay, cross-section, 仮保存 image, rename, reopen), and prints PASS/FAIL. It uses a dev-only page, `dev/browser-check/`, with a fake admin and an in-memory database; it never reaches the real server and is not part of the build. Add a check to `dev/browser-check/run.mjs` when fixing a bug in those pages. Options: `--width=1180`, `--only=rename,reopen`.
 - **Text changes:** any UI text change must also update the Help page (`src/pages/HelpPage.tsx`) and the Translation Google Sheet.
 
 ## Lesion measurement

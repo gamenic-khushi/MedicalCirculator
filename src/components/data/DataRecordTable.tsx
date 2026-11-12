@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence } from 'motion/react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { RowActionIcons } from '@/components/common/RowActionIcons'
@@ -120,16 +121,18 @@ export function DataRecordTable({
         </table>
       </div>
 
-      {pendingDeleteId && (
-        <ConfirmDialog
-          message="本当に削除しますか？"
-          onCancel={() => setPendingDeleteId(null)}
-          onConfirm={() => {
-            onDelete(pendingDeleteId)
-            setPendingDeleteId(null)
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {pendingDeleteId && (
+          <ConfirmDialog
+            message="本当に削除しますか？"
+            onCancel={() => setPendingDeleteId(null)}
+            onConfirm={() => {
+              onDelete(pendingDeleteId)
+              setPendingDeleteId(null)
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

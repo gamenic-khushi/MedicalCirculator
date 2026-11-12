@@ -1,4 +1,7 @@
 import { CheckCircle2, Info, X, XCircle } from 'lucide-react'
+import { motion } from 'motion/react'
+
+import { fade, pop } from '@/lib/motion'
 
 interface ToastProps {
   message: string
@@ -8,15 +11,20 @@ interface ToastProps {
   onDismiss?: () => void
 }
 
+// Animates in on its own; to animate out too, render it inside <AnimatePresence>.
 export function Toast({ message, variant = 'success', onDismiss }: ToastProps) {
   return (
-    <div
+    <motion.div
+      {...fade}
       className={`fixed inset-0 z-50 flex items-center justify-center ${
         // A hint (info) doesn't block the page, since the user is expected to keep working.
         onDismiss || variant === 'info' ? 'pointer-events-none' : 'bg-black/10'
       }`}
     >
-      <div className="pointer-events-auto flex max-w-[90vw] items-center gap-2 rounded-xl bg-white px-5 py-3 shadow-lg">
+      <motion.div
+        {...pop}
+        className="pointer-events-auto flex max-w-[90vw] items-center gap-2 rounded-xl bg-white px-5 py-3 shadow-lg"
+      >
         {variant === 'error' ? (
           <XCircle className="h-5 w-5 shrink-0 text-red-500" />
         ) : variant === 'info' ? (
@@ -36,7 +44,7 @@ export function Toast({ message, variant = 'success', onDismiss }: ToastProps) {
             <X className="h-4 w-4" />
           </button>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

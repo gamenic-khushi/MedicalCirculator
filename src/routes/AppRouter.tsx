@@ -93,6 +93,16 @@ const router = createBrowserRouter([
   },
   { path: '/login', element: <LoginPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
+  // Development only (left out of the build): a page to try every animation on.
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/motion-lab',
+          lazy: () =>
+            import('@/pages/MotionLabPage').then((module) => ({ Component: module.MotionLabPage })),
+        },
+      ]
+    : []),
 ])
 
 export function AppRouter() {

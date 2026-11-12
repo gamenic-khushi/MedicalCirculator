@@ -1,4 +1,5 @@
 import type { Models } from 'appwrite'
+import { AnimatePresence } from 'motion/react'
 import { Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -159,16 +160,20 @@ export function UserManagementPage() {
         </div>
       )}
 
-      {isAdding && (
-        <UserFormModal
-          title="ユーザー登録"
-          organizations={organizations}
-          onClose={() => setIsAdding(false)}
-          onSave={handleAdd}
-        />
-      )}
+      <AnimatePresence>
+        {isAdding && (
+          <UserFormModal
+            title="ユーザー登録"
+            organizations={organizations}
+            onClose={() => setIsAdding(false)}
+            onSave={handleAdd}
+          />
+        )}
+      </AnimatePresence>
 
-      {toast && <Toast message={toast.message} variant={toast.variant} />}
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} variant={toast.variant} />}
+      </AnimatePresence>
     </div>
   )
 }

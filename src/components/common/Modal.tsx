@@ -1,5 +1,8 @@
 import { X } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
+
+import { fade, pop } from '@/lib/motion'
 
 interface ModalProps {
   title: string
@@ -8,6 +11,7 @@ interface ModalProps {
   panelStyle?: CSSProperties
 }
 
+// Animates in on its own; to animate out too, render it inside <AnimatePresence>.
 export function Modal({ title, onClose, children, panelStyle }: ModalProps) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -18,11 +22,13 @@ export function Modal({ title, onClose, children, panelStyle }: ModalProps) {
   }, [onClose])
 
   return (
-    <div
+    <motion.div
+      {...fade}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onClick={onClose}
     >
-      <div
+      <motion.div
+        {...pop}
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
@@ -41,7 +47,7 @@ export function Modal({ title, onClose, children, panelStyle }: ModalProps) {
         </div>
 
         <div className="px-8 py-6">{children}</div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

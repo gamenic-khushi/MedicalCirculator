@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react'
+import { AnimatePresence } from 'motion/react'
 import { useEffect, useState } from 'react'
 
 import { Toast } from '@/components/common/Toast'
@@ -70,7 +71,7 @@ export function FormulaSettingsPage() {
         </div>
       </form>
 
-      {toastMessage && <Toast message={toastMessage} />}
+      <AnimatePresence>{toastMessage && <Toast message={toastMessage} />}</AnimatePresence>
     </div>
   )
 }

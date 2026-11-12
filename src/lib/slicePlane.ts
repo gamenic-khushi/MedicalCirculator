@@ -1,6 +1,13 @@
 import * as THREE from 'three'
 import type { MeshBVH } from 'three-mesh-bvh'
 
+import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
+
+// Between ① and ②, the cut only takes in this much (mm) behind the surface the
+// horizontal line lies on, so another vessel running behind is not cut too. The
+// depth slider moves the model through the same range.
+export const SLICE_DEPTH_LIMIT = 6
+
 export interface CrossSection {
   loops: THREE.Vector3[][]
   area: number
@@ -303,6 +310,81 @@ export function outlineInPlane(
     height: maxY - minY,
     sectionLine,
   }
+}
+
+/**
+ * The vessel cut lengthwise by a plane at some depth, `loops` being that plane's
+ * cut through the model (`up` and `side` its vertical and horizontal
+ * directions). At each station of the centre line it is read on the vertical
+ * line through the station's centre: how far the cut reaches above and below
+ * that centre. Only the stretch overlapping the station's own vessel (`bottom`
+ * below to `top` above its centre) counts, so another vessel the plane crosses
+ * is left out. Returned as runs of consecutive stations the plane meets.
+ */
+export function lengthwiseCut(
+  loops: THREE.Vector3[][],
+  stations: { centre: THREE.Vector3; arc: number; top: number; bottom: number }[],
+  up: THREE.Vector3,
+  side: THREE.Vector3,
+): LesionProfileSample[][] {
+  const flat = loops.map((loop) => loop.map((point) => [point.dot(side), point.dot(up)]))
+  const runs: LesionProfileSample[][] = []
+  let run: LesionProfileSample[] = []
+  for (const { centre, arc, top, bottom } of stations) {
+    const s = centre.dot(side)
+    const t = centre.dot(up)
+    const crossings: number[] = []
+    for (const loop of flat) {
+      for (let i = 0; i < loop.length; i++) {
+        const [s1, t1] = loop[i]
+        const [s2, t2] = loop[(i + 1) % loop.length]
+        if (s1 <= s !== s2 <= s) crossings.push(t1 + ((s - s1) / (s2 - s1)) * (t2 - t1))
+      }
+    }
+    crossings.sort((a, b) => a - b)
+    // Inside the cut between each pair of crossings; take the pair that
+    // overlaps the station's own vessel the most.
+    let best: [number, number] | null = null
+    let bestOverlap = 0
+    for (let i = 0; i + 1 < crossings.length; i += 2) {
+      const overlap = Math.min(crossings[i + 1], t + top) - Math.max(crossings[i], t - bottom)
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap
+        best = [crossings[i], crossings[i + 1]]
+      }
+    }
+    if (best) {
+      run.push({ arc, top: best[1] - t, bottom: t - best[0] })
+    } else if (run.length > 0) {
+      runs.push(run)
+      run = []
+    }
+  }
+  if (run.length > 0) runs.push(run)
+  return runs
+}
+
+/**
+ * The lesion cut lengthwise `depth` mm behind `front` (the surface point the
+ * horizontal line lies on), by the plane square to the depth direction, which
+ * runs away from the viewer (`up` × `side`, `side` being the cutting plane's
+ * normal). Read at each station as lengthwiseCut does.
+ */
+export function lengthwiseCutAtDepth(
+  meshes: THREE.Mesh[],
+  front: THREE.Vector3,
+  depth: number,
+  up: THREE.Vector3,
+  side: THREE.Vector3,
+  stations: { centre: THREE.Vector3; arc: number; top: number; bottom: number }[],
+): LesionProfileSample[][] {
+  const depthAxis = new THREE.Vector3().crossVectors(up, side).normalize()
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+    depthAxis,
+    front.clone().addScaledVector(depthAxis, depth),
+  )
+  const loops = meshes.flatMap((mesh) => computeCrossSection(mesh, plane)?.loops ?? [])
+  return lengthwiseCut(loops, stations, up, side)
 }
 
 // Fan triangulation from the loop's own centroid — sufficient for the

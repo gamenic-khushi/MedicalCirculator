@@ -1,7 +1,10 @@
 import { Table2, Trash2 } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
+import { EASE_OUT } from '@/lib/motion'
 import type { SavedSnapshot } from '@/types/viewerState'
 
 interface SavedSnapshotsPanelProps {
@@ -89,47 +92,61 @@ export function SavedSnapshotsPanel({
             </tr>
           </thead>
           <tbody>
-            {[...savedSnapshots].reverse().map((snapshot) => (
-              <tr key={snapshot.id} className="divide-x divide-gray-100 border-t border-gray-100">
-                <td className="px-3 py-4">
-                  <p className="mb-2 text-xs text-gray-500">{snapshot.date}</p>
-                  <div className="h-20 w-32 overflow-hidden rounded-lg bg-gray-800">
-                    <img
-                      src={snapshot.image}
-                      alt="保存されたモデル画像"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                </td>
-                <td className="px-3 py-4 text-center text-gray-900">{snapshot.upstreamSize}</td>
-                <td className="px-3 py-4 text-center text-gray-900">{snapshot.downstreamSize}</td>
-                <td className="px-3 py-4 text-center text-gray-900">{snapshot.pd}</td>
-                <td className="px-3 py-4 text-center text-gray-900">{snapshot.pa}</td>
-                <td className="px-3 py-4 text-center">
-                  <button
-                    type="button"
-                    onClick={() => setPendingDeleteId(snapshot.id)}
-                    className="rounded p-1 text-red-500 transition hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {/* A newly saved row slides in at the top; a deleted one fades out.
+                Rows already there when the list first shows don't animate. */}
+            <AnimatePresence initial={false}>
+              {[...savedSnapshots].reverse().map((snapshot) => (
+                <motion.tr
+                  key={snapshot.id}
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                  transition={{ duration: 0.25, ease: EASE_OUT }}
+                  className="divide-x divide-gray-100 border-t border-gray-100"
+                >
+                  <td className="px-3 py-4">
+                    <p className="mb-2 text-xs text-gray-500">{snapshot.date}</p>
+                    {/* The whole image, as the viewer showed it; the box matches its edges. */}
+                    <div className="h-20 w-32 overflow-hidden rounded-lg" style={{ backgroundColor: SPACE_COLOR }}>
+                      <img
+                        src={snapshot.image}
+                        alt="保存されたモデル画像"
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+                  </td>
+                  <td className="px-3 py-4 text-center text-gray-900">{snapshot.upstreamSize}</td>
+                  <td className="px-3 py-4 text-center text-gray-900">{snapshot.downstreamSize}</td>
+                  <td className="px-3 py-4 text-center text-gray-900">{snapshot.pd}</td>
+                  <td className="px-3 py-4 text-center text-gray-900">{snapshot.pa}</td>
+                  <td className="px-3 py-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteId(snapshot.id)}
+                      className="rounded p-1 text-red-500 transition hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </motion.tr>
+              ))}
+            </AnimatePresence>
           </tbody>
         </table>
       </div>
 
-      {pendingDeleteId && (
-        <ConfirmDialog
-          message="本当に削除しますか？"
-          onCancel={() => setPendingDeleteId(null)}
-          onConfirm={() => {
-            onDelete(pendingDeleteId)
-            setPendingDeleteId(null)
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {pendingDeleteId && (
+          <ConfirmDialog
+            message="本当に削除しますか？"
+            onCancel={() => setPendingDeleteId(null)}
+            onConfirm={() => {
+              onDelete(pendingDeleteId)
+              setPendingDeleteId(null)
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

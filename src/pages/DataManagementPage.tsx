@@ -1,4 +1,5 @@
 import type { Models } from 'appwrite'
+import { AnimatePresence } from 'motion/react'
 import { Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -154,7 +155,9 @@ export function DataManagementPage() {
         </div>
       )}
 
-      {toast && <Toast message={toast.message} variant={toast.variant} />}
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} variant={toast.variant} />}
+      </AnimatePresence>
     </div>
   )
 }

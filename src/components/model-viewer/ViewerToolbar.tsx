@@ -1,4 +1,5 @@
 import { Lock, Maximize, Move, RefreshCw, Rotate3d, Scissors } from 'lucide-react'
+import { AnimatePresence } from 'motion/react'
 import { useEffect } from 'react'
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
@@ -59,23 +60,27 @@ export function ViewerToolbar({
           the toolbar — with both hints visible at once (a fresh session that
           hasn't touched either button yet), flush positioning put them at
           the same height and they overlapped each other. */}
-      {showHints && showSlice && activeTool !== 'slice' && !isSliceHintDismissed && (
-        <GuidanceBubble
-          anchor="bottom-left"
-          className="bottom-full left-1/2 -translate-x-1/2"
-          style={{ marginBottom: isRotatePanHintDismissed ? '0.5rem' : '4.5rem' }}
-          message="血管を輪切りにして断面積を確認できます"
-          onDismiss={dismissSliceHint}
-        />
-      )}
-      {showHints && !isRotatePanHintDismissed && (
-        <GuidanceBubble
-          anchor="bottom-left"
-          className="bottom-full left-0 mb-2"
-          message="「回転」と「移動」が1つのボタンにまとまりました。クリックで切り替えられます"
-          onDismiss={dismissRotatePanHint}
-        />
-      )}
+      <AnimatePresence>
+        {showHints && showSlice && activeTool !== 'slice' && !isSliceHintDismissed && (
+          <GuidanceBubble
+            anchor="bottom-left"
+            className="bottom-full left-1/2 -translate-x-1/2"
+            style={{ marginBottom: isRotatePanHintDismissed ? '0.5rem' : '4.5rem' }}
+            message="血管を輪切りにして断面積を確認できます"
+            onDismiss={dismissSliceHint}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showHints && !isRotatePanHintDismissed && (
+          <GuidanceBubble
+            anchor="bottom-left"
+            className="bottom-full left-0 mb-2"
+            message="「回転」と「移動」が1つのボタンにまとまりました。クリックで切り替えられます"
+            onDismiss={dismissRotatePanHint}
+          />
+        )}
+      </AnimatePresence>
       <button
         type="button"
         onClick={onReset}
