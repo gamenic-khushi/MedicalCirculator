@@ -48,10 +48,6 @@ function halfHeightFor(diameter: number, maxDiameter: number) {
   return Math.max(MIN_HALF_HEIGHT, ratio * MAX_HALF_HEIGHT)
 }
 
-function formatLength(length: number) {
-  return length < 10 ? length.toFixed(2) : length.toFixed(1)
-}
-
 const SECTION_WIDTH = 300
 const SECTION_HEIGHT = 150
 // Share of the picture's height (or width, for a cut wider than tall) the cut fills.
@@ -208,9 +204,6 @@ function TransverseSection({
       </svg>
       <p className="text-center text-[10px] text-gray-500">
         {area != null && <span className="block font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</span>}
-        <span className="block">
-          上下 {formatLength(outline.height)} mm × 奥行 {formatLength(outline.width)} mm
-        </span>
       </p>
     </div>
   )
