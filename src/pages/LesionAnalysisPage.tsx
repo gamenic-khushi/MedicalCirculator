@@ -227,7 +227,7 @@ const SELECTED_LESION_FIELDS: {
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
-  { key: 'stenosisLength', label: '狭窄長', unit: 'mm' },
+  { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
   { key: 'lesionPosition', label: '病変位置', unit: '', readOnly: true },
 ]
 
