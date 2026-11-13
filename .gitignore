@@ -45,3 +45,8 @@ evidence/
 # Screenshots and logs from npm run check:browser
 dev/browser-check/out/
 dev
+
+# Playwright
+dist-e2e
+test-results
+playwright-report
