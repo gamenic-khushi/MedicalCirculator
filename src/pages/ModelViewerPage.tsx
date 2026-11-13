@@ -21,6 +21,7 @@ import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPan
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
+import { useFfrCardPlacement } from '@/hooks/useFfrCardPlacement'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
 import { useViewerState } from '@/hooks/useViewerState'
@@ -31,6 +32,7 @@ import {
   findOutOfRangeFfrInputs,
   type FfrCubicInputs,
 } from '@/lib/ffrCubicModel'
+import { captureViewAsShown } from '@/lib/captureViewAsShown'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
@@ -118,6 +120,13 @@ export function ModelViewerPage() {
     observer.observe(container)
     return () => observer.disconnect()
   }, [])
+
+  // The FFR card is placed from where the circled spot is now, so it follows
+  // the lesion when the view turns or zooms (the circle is hidden by then).
+  const ffrPlacement = useFfrCardPlacement(
+    canvasAreaRef,
+    ffrResult ? (annotations[annotations.length - 1] ?? null) : null,
+  )
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -378,9 +387,16 @@ export function ModelViewerPage() {
     canvasRef.current?.clearSelection()
   }
 
-  function handleSaveSnapshot() {
-    // The view as it is now, whole (not cropped around the lesion), as shown.
-    const image = canvasRef.current?.capture({ asShown: true })
+  async function handleSaveSnapshot() {
+    if (!canvasAreaRef.current) return
+    const date = formatSnapshotDate(new Date())
+    // The view as it is now, whole (not cropped around the lesion), as shown,
+    // the circle and the FFR card included. The 3D view alone if that can't
+    // be drawn, rather than nothing.
+    const image = await captureViewAsShown(canvasAreaRef.current).catch((error) => {
+      console.error(error)
+      return canvasRef.current?.capture({ asShown: true })
+    })
     if (!image) return
 
     const pa = bloodPressure.trim() || '80'
@@ -390,7 +406,7 @@ export function ModelViewerPage() {
       {
         id: generateId(),
         image,
-        date: formatSnapshotDate(new Date()),
+        date,
         upstreamSize: upstreamDiameter.trim() ? `${upstreamDiameter}mm` : '4mm',
         downstreamSize: downstreamDiameter.trim() ? `${downstreamDiameter}mm` : '3mm',
         pd: `${pdValue} mmHg`,
@@ -575,7 +591,7 @@ export function ModelViewerPage() {
                 />
               ))}
 
-            <div className="absolute left-4 top-4 flex flex-col gap-2">
+            <div data-ffr-keep-clear className="absolute left-4 top-4 flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => setIsAnnotating((value) => !value)}
@@ -590,7 +606,7 @@ export function ModelViewerPage() {
               </button>
             </div>
 
-            <div className="absolute right-4 top-4 flex flex-col gap-2">
+            <div data-ffr-keep-clear className="absolute right-4 top-4 flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => canvasRef.current?.zoomIn()}
@@ -607,7 +623,7 @@ export function ModelViewerPage() {
               </button>
             </div>
 
-            {ffrResult && <FfrResultOverlay {...ffrResult} />}
+            {ffrResult && <FfrResultOverlay {...ffrResult} {...ffrPlacement} />}
 
             <PressurePointsPanel pa={ffrResult ? calculatedPa : ''} pd={ffrResult ? pd : ''} />
             <AnatomyGuideThumbnail />
@@ -621,7 +637,7 @@ export function ModelViewerPage() {
             />
 
             {isFullscreen && (
-              <div className="absolute bottom-4 right-4 rounded-full bg-black/40 px-3 py-1 text-xs text-white">
+              <div data-ffr-keep-clear className="absolute bottom-4 right-4 rounded-full bg-black/40 px-3 py-1 text-xs text-white">
                 Escキーで終了
               </div>
             )}

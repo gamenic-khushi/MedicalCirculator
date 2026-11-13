@@ -55,7 +55,7 @@ export function ViewerToolbar({
   }, [activeTool, isSliceHintDismissed, dismissSliceHint])
 
   return (
-    <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-gray-100 bg-white p-1 shadow-sm">
+    <div data-ffr-keep-clear className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-gray-100 bg-white p-1 shadow-sm">
       {/* Stacked with a fixed pixel gap rather than both sitting flush against
           the toolbar — with both hints visible at once (a fresh session that
           hasn't touched either button yet), flush positioning put them at

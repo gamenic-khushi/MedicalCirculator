@@ -1,4 +1,4 @@
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useRef, useState } from 'react'
 import * as THREE from 'three'
 import { STLExporter } from 'three-stdlib'
@@ -12,7 +12,9 @@ import { FfrResultOverlay } from '@/components/model-viewer/FfrResultOverlay'
 import { ModelCanvas, type ModelCanvasHandle } from '@/components/model-viewer/ModelCanvas'
 import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPanel'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
+import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { generateId } from '@/lib/id'
+import { reveal } from '@/lib/motion'
 import type { SavedSnapshot } from '@/types/viewerState'
 
 // Development only (see AppRouter): every animation in the app on one page, to
@@ -71,6 +73,8 @@ export function MotionLabPage() {
   const [loading, setLoading] = useState(false)
   const [hint, setHint] = useState(true)
   const [ffrRun, setFfrRun] = useState(0)
+  const [ffrChanged, setFfrChanged] = useState(false)
+  const [shapeRun, setShapeRun] = useState(0)
   const [points, setPoints] = useState<{ id: string; x: number; y: number }[]>([])
   const [snapshots, setSnapshots] = useState<SavedSnapshot[]>([sampleSnapshot()])
   // shortcut: the generated models' blob URLs are never revoked (a few kB each, development only).
@@ -149,10 +153,15 @@ export function MotionLabPage() {
           </div>
         </Section>
 
-        <Section title="FFR result">
-          <button type="button" className={button} onClick={() => setFfrRun((run) => run + 1)}>
-            Replay
-          </button>
+        <Section title="FFR result (values glow when they change)">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={button} onClick={() => setFfrRun((run) => run + 1)}>
+              Replay
+            </button>
+            <button type="button" className={button} onClick={() => setFfrChanged((on) => !on)}>
+              Change values
+            </button>
+          </div>
           <div className="relative mt-3 h-64 rounded-xl bg-gray-100">
             <FfrResultOverlay
               key={ffrRun}
@@ -160,10 +169,24 @@ export function MotionLabPage() {
               originY={70}
               labelX={55}
               labelY={18}
-              stenosisRate={62}
-              ffrValue={0.78}
+              stenosisRate={ffrChanged ? 55 : 62}
+              ffrValue={ffrChanged ? 0.84 : 0.78}
             />
           </div>
+        </Section>
+
+        <Section title="Shape block (the shape draws in from ① to ②)">
+          <button type="button" className={button} onClick={() => setShapeRun((run) => run + 1)}>
+            Measure again
+          </button>
+          <motion.div key={shapeRun} {...reveal} className="mt-3">
+            <VesselShapeDiagram
+              proximalDiameter={3.2}
+              minDiameter={1.4}
+              distalDiameter={2.9}
+              stenosisLength={6}
+            />
+          </motion.div>
         </Section>
 
         <Section title="3D viewer (model fade-in, zoom glide)">

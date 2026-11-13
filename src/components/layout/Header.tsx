@@ -16,10 +16,7 @@ const INFO_MENU_ITEMS = [
   { label: '資料', to: '/documents' },
 ]
 
-const SETTINGS_MENU_ITEMS = [
-  { label: '計算式設定', to: '/settings/formula' },
-  { label: 'ユーザー管理', to: '/users' },
-]
+const SETTINGS_MENU_ITEMS = [{ label: 'ユーザー管理', to: '/users' }]
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)

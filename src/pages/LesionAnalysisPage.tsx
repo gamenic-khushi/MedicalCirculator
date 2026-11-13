@@ -1,6 +1,14 @@
 import { Query, type Models } from 'appwrite'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react'
+import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
 
@@ -24,12 +32,14 @@ import {
 } from '@/components/model-viewer/SelectedLesionModal'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
-import { fade } from '@/lib/motion'
+import { fade, reveal } from '@/lib/motion'
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
 import { useAuth } from '@/hooks/useAuth'
+import { useFfrCardPlacement } from '@/hooks/useFfrCardPlacement'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
+import { useHighlightOnChange } from '@/hooks/useHighlightOnChange'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -42,6 +52,7 @@ import {
   type FfrCubicInputKey,
   type FfrCubicInputs,
 } from '@/lib/ffrCubicModel'
+import { captureViewAsShown } from '@/lib/captureViewAsShown'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
@@ -267,7 +278,8 @@ function LesionSnapshotPanel({
     <div className="flex-1">
       <p className="text-sm font-semibold text-gray-900">3D狭窄形状プレビュー</p>
       {/* Each state fades into the next (the old one out first, so they never
-          stack up). The diagram itself redraws immediately as values change. */}
+          stack up); a new shape draws in from ① to ②. The diagram itself
+          redraws immediately as values change. */}
       <AnimatePresence mode="wait" initial={false}>
       {isMeasuring ? (
         <motion.div
@@ -278,7 +290,7 @@ function LesionSnapshotPanel({
           計測中...
         </motion.div>
       ) : hasShape ? (
-        <motion.div key="shape" {...fade} className="mt-3">
+        <motion.div key="shape" {...reveal} className="mt-3">
           <VesselShapeDiagram
             proximalDiameter={proximalDiameter}
             minDiameter={minDiameter}
@@ -308,12 +320,20 @@ function LesionSnapshotPanel({
   )
 }
 
+// A 選択病変 value, glowing when a measurement (or another field) changes it.
+function GlowingInput({
+  delayMs,
+  ...props
+}: ComponentProps<'input'> & { value: string; delayMs: number }) {
+  const ref = useHighlightOnChange<HTMLInputElement>(props.value, delayMs)
+  return <input ref={ref} {...props} />
+}
+
 export function LesionAnalysisPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = isAdminCategory(user?.category)
   const { model, setModel } = useModel3D()
-  const validModel = model && model.file instanceof File ? model : null
   const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshot[]>([])
   const location = useLocation()
   const navigationState = location.state as {
@@ -325,6 +345,10 @@ export function LesionAnalysisPage() {
   } | null
   const dataRecordId = navigationState?.dataRecordId
   const viewFrame = navigationState?.viewFrame ?? null
+  // A saved frame (保存済みキャプチャ) is shown on its own, the same whether or
+  // not a model from an earlier analysis is still in memory: not renamable, and
+  // no model info.
+  const validModel = !viewFrame && model && model.file instanceof File ? model : null
   const initialBloodPressure = navigationState?.bloodPressure
   const initialAnnotations =
     navigationState?.annotations && navigationState.annotations.length === 2
@@ -415,6 +439,15 @@ export function LesionAnalysisPage() {
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
+  // The FFR card is placed from where ① and ② are now, so it follows the lesion
+  // when the view turns or zooms, and never sits on either point.
+  const ffrPlacement = useFfrCardPlacement(
+    canvasAreaRef,
+    measurement && annotations.length === 2
+      ? { x: (annotations[0].x + annotations[1].x) / 2, y: (annotations[0].y + annotations[1].y) / 2 }
+      : null,
+    annotations,
+  )
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
@@ -1249,7 +1282,7 @@ export function LesionAnalysisPage() {
       )
     }
 
-    const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds)
+    const { labelX, labelY } = computeFfrLabelPosition(target.x, target.y, bounds, annotations)
 
     setMeasurement({
       originX: target.x,
@@ -1356,10 +1389,16 @@ export function LesionAnalysisPage() {
     showToast('選択病変を更新しました')
   }
 
-  function handleSave() {
-    if (!measurement) return
-    // The view as it is now, whole and as shown: not the close-up taken when FFR was calculated.
-    const image = canvasRef.current?.capture({ asShown: true })
+  async function handleSave() {
+    if (!measurement || !canvasAreaRef.current) return
+    const date = formatSnapshotDate(new Date())
+    // The view as it is now, whole and as shown, ① ② and the lines included:
+    // not the close-up taken when FFR was calculated. The 3D view alone if
+    // that can't be drawn, rather than nothing.
+    const image = await captureViewAsShown(canvasAreaRef.current).catch((error) => {
+      console.error(error)
+      return canvasRef.current?.capture({ asShown: true })
+    })
     if (!image) return
 
     setSavedSnapshots((prev) => [
@@ -1367,7 +1406,7 @@ export function LesionAnalysisPage() {
       {
         id: generateId(),
         image,
-        date: formatSnapshotDate(new Date()),
+        date,
         upstreamSize: params.upstreamSize ? `${params.upstreamSize} mm` : '—',
         downstreamSize: params.downstreamSize ? `${params.downstreamSize} mm` : '—',
         pd: params.pd ? `${params.pd} mmHg` : '—',
@@ -1504,10 +1543,19 @@ export function LesionAnalysisPage() {
     const pd = (Number(pa) * ffrValue).toFixed(1)
     const parameter = Math.abs(Number(pa) - Number(pd)).toFixed(1)
     const averageDiameter = (ffrInputs.dp + ffrInputs.dd) / 2
-    const image = snapshotImage ?? canvasRef.current?.capture() ?? ''
 
     setIsSavingHistory(true)
     try {
+      // The view as shown, ① ② and the lines included, as 仮保存 takes it (the
+      // client wants the saved data to look like the measurement). The plain
+      // close-up if that can't be drawn, rather than no image.
+      const plain = () => snapshotImage ?? canvasRef.current?.capture() ?? ''
+      const image = canvasAreaRef.current
+        ? await captureViewAsShown(canvasAreaRef.current).catch((error) => {
+            console.error(error)
+            return plain()
+          })
+        : plain()
       const row = await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
         ...(dataRecordId ? { dataRecordId } : {}),
         image,
@@ -1667,7 +1715,7 @@ export function LesionAnalysisPage() {
 
                 {/* Under everything else, so the markers and controls stay visible
                     where the result card reaches them on a narrow view. */}
-                {measurement && <FfrResultOverlay {...measurement} />}
+                {measurement && <FfrResultOverlay {...measurement} {...ffrPlacement} />}
 
                 <TwoPointMarkers
                   points={annotations}
@@ -1683,7 +1731,7 @@ export function LesionAnalysisPage() {
                   onDraggingChange={setIsDraggingPoint}
                 />
 
-                <div className="absolute left-4 top-4 flex flex-col gap-2">
+                <div data-ffr-keep-clear className="absolute left-4 top-4 flex flex-col gap-2">
                   <button
                     type="button"
                     onClick={() => setIsAnnotating((value) => !value)}
@@ -1719,7 +1767,7 @@ export function LesionAnalysisPage() {
                   )}
                 </AnimatePresence>
 
-                <div className="absolute right-4 top-4 flex flex-col gap-2">
+                <div data-ffr-keep-clear className="absolute right-4 top-4 flex flex-col gap-2">
                   {measurement && (
                     <button
                       type="button"
@@ -1911,7 +1959,7 @@ export function LesionAnalysisPage() {
               <p className="text-[11px] text-gray-400">自動計測値</p>
             </div>
             <div className="mt-3 flex flex-col gap-2">
-              {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }) => {
+              {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }, index) => {
                 const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
                 const range = ffrKey ? ffrRangeFor(ffrKey, Number(bloodPressure) || 100) : null
                 const numericValue = Number(selectedLesion[key])
@@ -1944,7 +1992,9 @@ export function LesionAnalysisPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-1">
-                      <input
+                      <GlowingInput
+                        // After a measurement, top to bottom, one after another.
+                        delayMs={index * 50}
                         type="text"
                         value={selectedLesion[key]}
                         readOnly={readOnly}
@@ -2051,28 +2101,32 @@ export function LesionAnalysisPage() {
         )}
       </AnimatePresence>
 
-      {isInfoOpen && validModel && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={() => setIsInfoOpen(false)}
-        >
+      {/* Into <body>, outside the page, like the app's other dialogs. */}
+      {isInfoOpen &&
+        validModel &&
+        createPortal(
           <div
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-            className="relative w-full max-w-xs overflow-hidden rounded-2xl bg-white shadow-xl [&>div]:border-t-0"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={() => setIsInfoOpen(false)}
           >
-            <button
-              type="button"
-              onClick={() => setIsInfoOpen(false)}
-              className="absolute -right-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm transition hover:text-gray-600"
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(event) => event.stopPropagation()}
+              className="relative w-full max-w-xs overflow-hidden rounded-2xl bg-white shadow-xl [&>div]:border-t-0"
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-            <ModelInfoCard model={validModel} />
-          </div>
-        </div>
-      )}
+              <button
+                type="button"
+                onClick={() => setIsInfoOpen(false)}
+                className="absolute -right-3 -top-3 flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm transition hover:text-gray-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <ModelInfoCard model={validModel} />
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <AnimatePresence>{isMeasuring && <LoadingOverlay message="病変を計測しています..." />}</AnimatePresence>
 

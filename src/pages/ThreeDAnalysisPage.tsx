@@ -13,7 +13,7 @@ import { createModel3DFile } from '@/types/model'
 type DataRecordRow = Models.Row & Omit<DataRecord, 'id'>
 
 const DEFAULT_FOLDER = '２D心弁解析'
-const DEFAULT_STUDY_NAME = '２D心弁解析'
+const STUDY_NAME_REQUIRED = '学習名を入力してください'
 
 function todayDisplayDate(): string {
   const now = new Date()
@@ -26,22 +26,36 @@ interface ThreeDAnalysisPageProps {
   viewerPath?: string
 }
 
-export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: ThreeDAnalysisPageProps) {
+export function ThreeDAnalysisPage({
+  viewerPath = '/3d-analysis/viewer',
+}: ThreeDAnalysisPageProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
   const dataRecordId = (location.state as { dataRecordId?: string } | null)?.dataRecordId
   const inputRef = useRef<HTMLInputElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
   const { model, setModel } = useModel3D()
   const [studyName, setStudyName] = useState('')
+  // Set once a file was asked for without a name; the message shows while it is still empty.
+  const [askedWithoutName, setAskedWithoutName] = useState(false)
+  const nameMissing = askedWithoutName && !studyName.trim()
 
   useEffect(() => {
     if (model) navigate(viewerPath, { replace: true, state: { dataRecordId } })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, navigate, viewerPath])
 
+  // 学習名 is required: without it, say so instead of taking a file.
+  function hasStudyName() {
+    if (studyName.trim()) return true
+    setAskedWithoutName(true)
+    nameRef.current?.focus()
+    return false
+  }
+
   async function loadFile(file: File) {
-    const resolvedStudyName = studyName.trim() || DEFAULT_STUDY_NAME
+    const resolvedStudyName = studyName.trim()
     setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: resolvedStudyName }))
 
     let resolvedDataRecordId = dataRecordId
@@ -67,7 +81,7 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()
-    handleFileSelected(event.dataTransfer.files)
+    if (hasStudyName()) handleFileSelected(event.dataTransfer.files)
   }
 
   return (
@@ -79,13 +93,23 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
         <label className="flex items-center gap-4 text-sm text-gray-700">
           <span className="w-16 shrink-0 font-medium">学習名</span>
           <input
+            ref={nameRef}
             type="text"
+            required
             value={studyName}
             onChange={(event) => setStudyName(event.target.value)}
-            placeholder={DEFAULT_STUDY_NAME}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-indigo-400"
+            aria-invalid={nameMissing}
+            aria-describedby={nameMissing ? 'study-name-error' : undefined}
+            className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 outline-none focus:border-indigo-400 ${
+              nameMissing ? 'border-red-400' : 'border-gray-200'
+            }`}
           />
         </label>
+        {nameMissing && (
+          <p id="study-name-error" className="pl-20 text-sm text-red-600">
+            {STUDY_NAME_REQUIRED}
+          </p>
+        )}
       </div>
 
       <div
@@ -95,7 +119,7 @@ export function ThreeDAnalysisPage({ viewerPath = '/3d-analysis/viewer' }: Three
       >
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => hasStudyName() && inputRef.current?.click()}
           className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
         >
           フォルダを開く

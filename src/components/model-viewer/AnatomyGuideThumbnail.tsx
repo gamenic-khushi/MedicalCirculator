@@ -1,5 +1,6 @@
 import { Maximize2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import arteryImage from '@/assets/image/artery.png'
 
@@ -16,7 +17,10 @@ export function AnatomyGuideThumbnail() {
   }, [isExpanded])
 
   return (
-    <div className="absolute bottom-4 left-4 w-28 rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
+    <div
+      data-ffr-keep-clear
+      className="absolute bottom-4 left-4 w-28 rounded-lg border border-gray-100 bg-white p-2 shadow-sm"
+    >
       <div className="flex items-center justify-between text-[11px] font-medium text-gray-600">
         解剖学ガイド
         <button
@@ -32,39 +36,42 @@ export function AnatomyGuideThumbnail() {
         <img src={arteryImage} alt="解剖学ガイド" className="h-full w-full object-cover" />
       </div>
 
-      {isExpanded && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={() => setIsExpanded(false)}
-        >
+      {/* Into <body>, outside the page, like the app's other dialogs. */}
+      {isExpanded &&
+        createPortal(
           <div
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-            className="relative w-full max-w-md"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+            onClick={() => setIsExpanded(false)}
           >
-            <h2 className="mb-3 text-sm font-semibold text-white">解剖学ガイド</h2>
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(event) => event.stopPropagation()}
+              className="relative w-full max-w-md"
+            >
+              <h2 className="mb-3 text-sm font-semibold text-white">解剖学ガイド</h2>
 
-            <div className="relative rounded-2xl bg-white p-4 shadow-xl">
-              <button
-                type="button"
-                onClick={() => setIsExpanded(false)}
-                className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-md transition hover:text-gray-900"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="relative rounded-2xl bg-white p-4 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(false)}
+                  className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-md transition hover:text-gray-900"
+                >
+                  <X className="h-4 w-4" />
+                </button>
 
-              <div className="overflow-hidden rounded-lg">
-                <img
-                  src={arteryImage}
-                  alt="解剖学ガイド"
-                  className="w-full scale-105 object-contain"
-                />
+                <div className="overflow-hidden rounded-lg">
+                  <img
+                    src={arteryImage}
+                    alt="解剖学ガイド"
+                    className="w-full scale-105 object-contain"
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

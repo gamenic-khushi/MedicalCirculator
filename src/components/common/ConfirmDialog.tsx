@@ -1,5 +1,6 @@
 import { Trash2, X } from 'lucide-react'
 import { motion } from 'motion/react'
+import { createPortal } from 'react-dom'
 
 import { fade, pop } from '@/lib/motion'
 
@@ -19,7 +20,8 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  return (
+  // Into <body>, outside the page: a page rising in as it opens never moves it.
+  return createPortal(
     <motion.div
       {...fade}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
@@ -63,6 +65,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   )
 }

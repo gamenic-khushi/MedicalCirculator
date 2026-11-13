@@ -1,5 +1,6 @@
 import { CheckCircle2, Info, X, XCircle } from 'lucide-react'
 import { motion } from 'motion/react'
+import { createPortal } from 'react-dom'
 
 import { fade, pop } from '@/lib/motion'
 
@@ -13,7 +14,8 @@ interface ToastProps {
 
 // Animates in on its own; to animate out too, render it inside <AnimatePresence>.
 export function Toast({ message, variant = 'success', onDismiss }: ToastProps) {
-  return (
+  // Into <body>, outside the page: a page rising in as it opens never moves it.
+  return createPortal(
     <motion.div
       {...fade}
       className={`fixed inset-0 z-50 flex items-center justify-center ${
@@ -45,6 +47,7 @@ export function Toast({ message, variant = 'success', onDismiss }: ToastProps) {
           </button>
         )}
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   )
 }

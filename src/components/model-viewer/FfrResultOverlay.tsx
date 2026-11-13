@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 
+import { useHighlightOnChange } from '@/hooks/useHighlightOnChange'
 import { EASE_OUT, SPRING } from '@/lib/motion'
 
 interface FfrResultOverlayProps {
@@ -9,6 +10,8 @@ interface FfrResultOverlayProps {
   labelY: number
   stenosisRate: number
   ffrValue: number
+  // The small card, for cramped views: 狭窄率 and FFR on two lines, no bar.
+  compact?: boolean
 }
 
 const TICKS = ['1.0', '0.5', '0.0']
@@ -32,10 +35,31 @@ export function FfrResultOverlay({
   labelY,
   stenosisRate,
   ffrValue,
+  compact = false,
 }: FfrResultOverlayProps) {
   const pointerTop = (1 - ffrValue) * 100
+  // The small card's dot: the bar's colour at the value (emerald at 1.0, amber
+  // at 0.5, red at 0.0, mixed as the gradient is).
+  const dotColor =
+    ffrValue >= 0.5
+      ? `color-mix(in oklab, var(--color-amber-400), var(--color-emerald-500) ${(ffrValue - 0.5) * 200}%)`
+      : `color-mix(in oklab, var(--color-red-500), var(--color-amber-400) ${ffrValue * 200}%)`
+  // Both glow when they change (an edited lesion field, a new blood pressure).
+  const stenosisRef = useHighlightOnChange<HTMLSpanElement>(String(stenosisRate))
+  const ffrRef = useHighlightOnChange<HTMLSpanElement>(ffrValue.toFixed(2))
+  const stenosisRow = (
+    <span
+      ref={stenosisRef}
+      className="flex items-center gap-1.5 whitespace-nowrap rounded text-xs font-medium text-gray-800"
+    >
+      <span className="h-2 w-2 rotate-45 bg-blue-500" />
+      狭窄率 {stenosisRate}%
+    </span>
+  )
   const elbowDirection = labelX >= originX ? 1 : -1
-  const elbowX = labelX - elbowDirection * ELBOW_LENGTH_PERCENT
+  // Never past the lesion, or a card close beside it gets a zigzag line.
+  const elbowX =
+    labelX - elbowDirection * Math.min(ELBOW_LENGTH_PERCENT, Math.abs(labelX - originX))
 
   return (
     <div className="pointer-events-none absolute inset-0">
@@ -64,67 +88,86 @@ export function FfrResultOverlay({
         />
       </svg>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2, delay: CARD_DELAY }}
-        style={{
-          left: `calc(${labelX}% - ${TICK_COLUMN_WIDTH + TICK_GAP}px)`,
-          top: `calc(${labelY}% + ${BAR_TOP_OFFSET}px)`,
-          width: TICK_COLUMN_WIDTH,
-          height: BAR_HEIGHT,
-        }}
-        className="absolute text-[11px] text-slate-300"
-      >
-        {TICKS.map((tick, index) => (
-          <span
-            key={tick}
-            className="absolute right-0 -translate-y-1/2 whitespace-nowrap"
-            style={{ top: `${(index / (TICKS.length - 1)) * 100}%` }}
-          >
-            {tick}
-          </span>
-        ))}
-      </motion.div>
-
       {/* 狭窄率 is in the card, hung below the end of the leader line, so it never
-          lands on the diameter labels of the scissors' lines above. */}
+          lands on the diameter labels of the scissors' lines above. The card
+          hangs away from the lesion: right of that end, or left of it. */}
       <motion.div
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ ...SPRING, delay: CARD_DELAY }}
-        style={{ left: `${labelX}%`, top: `${labelY}%`, transformOrigin: 'top left' }}
-        className="absolute flex flex-col gap-1.5 rounded-xl bg-white p-2.5 shadow-md"
+        style={{
+          left: `${labelX}%`,
+          top: `${labelY}%`,
+          transformOrigin: elbowDirection > 0 ? 'top left' : 'top right',
+        }}
+        className={`absolute flex flex-col gap-1.5 rounded-xl bg-white p-2.5 shadow-md ${
+          elbowDirection > 0 ? '' : '-translate-x-full'
+        } ${compact ? 'w-[108px]' : ''}`}
       >
-        <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-gray-800">
-          <span className="h-2 w-2 rotate-45 bg-blue-500" />
-          狭窄率 {stenosisRate}%
-        </span>
-
-        <span className="text-xs font-semibold text-gray-900">FFR</span>
-
-        <div className="flex items-start gap-1">
-          <div
-            style={{ height: BAR_HEIGHT }}
-            className="w-3 shrink-0 rounded-full bg-gradient-to-b from-emerald-500 via-amber-400 to-red-500"
-          />
-
-          <div style={{ height: BAR_HEIGHT }} className="relative w-[4.5rem]">
-            {/* Starts at the top of the bar (1.0) and settles on the value. */}
-            <motion.div
-              initial={{ y: (-pointerTop / 100) * BAR_HEIGHT }}
-              animate={{ y: 0 }}
-              transition={{ ...SPRING, bounce: 0.2, delay: CARD_DELAY + 0.1 }}
-              className="absolute left-0 flex -translate-y-1/2 items-center gap-1"
-              style={{ top: `${pointerTop}%` }}
+        {compact ? (
+          <>
+            {stenosisRow}
+            <span
+              ref={ffrRef}
+              className="flex items-center gap-1.5 whitespace-nowrap rounded text-xs font-semibold text-gray-900"
             >
-              <span className="h-0 w-0 border-y-4 border-r-4 border-y-transparent border-r-gray-800" />
-              <span className="whitespace-nowrap text-xs font-semibold text-gray-900">
-                FFR- {ffrValue.toFixed(2)}
-              </span>
-            </motion.div>
-          </div>
-        </div>
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: dotColor }} />
+              FFR- {ffrValue.toFixed(2)}
+            </span>
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                top: BAR_TOP_OFFSET,
+                marginRight: TICK_GAP,
+                width: TICK_COLUMN_WIDTH,
+                height: BAR_HEIGHT,
+              }}
+              className="absolute right-full text-[11px] text-slate-300"
+            >
+              {TICKS.map((tick, index) => (
+                <span
+                  key={tick}
+                  className="absolute right-0 -translate-y-1/2 whitespace-nowrap"
+                  style={{ top: `${(index / (TICKS.length - 1)) * 100}%` }}
+                >
+                  {tick}
+                </span>
+              ))}
+            </div>
+
+            {stenosisRow}
+
+            <span className="text-xs font-semibold text-gray-900">FFR</span>
+
+            <div className="flex items-start gap-1">
+              <div
+                style={{ height: BAR_HEIGHT }}
+                className="w-3 shrink-0 rounded-full bg-gradient-to-b from-emerald-500 via-amber-400 to-red-500"
+              />
+
+              <div style={{ height: BAR_HEIGHT }} className="relative w-[4.5rem]">
+                {/* Starts at the top of the bar (1.0) and settles on the value. */}
+                <motion.div
+                  initial={{ y: (-pointerTop / 100) * BAR_HEIGHT }}
+                  animate={{ y: 0 }}
+                  transition={{ ...SPRING, bounce: 0.2, delay: CARD_DELAY + 0.1 }}
+                  className="absolute left-0 flex -translate-y-1/2 items-center gap-1"
+                  style={{ top: `${pointerTop}%` }}
+                >
+                  <span className="h-0 w-0 border-y-4 border-r-4 border-y-transparent border-r-gray-800" />
+                  <span
+                    ref={ffrRef}
+                    className="whitespace-nowrap rounded text-xs font-semibold text-gray-900"
+                  >
+                    FFR- {ffrValue.toFixed(2)}
+                  </span>
+                </motion.div>
+              </div>
+            </div>
+          </>
+        )}
       </motion.div>
     </div>
   )

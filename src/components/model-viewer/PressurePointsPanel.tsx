@@ -1,3 +1,5 @@
+import { useHighlightOnChange } from '@/hooks/useHighlightOnChange'
+
 interface PressurePointsPanelProps {
   pa: string
   pd: string
@@ -12,7 +14,10 @@ export function PressurePointsPanel({ pa, pd }: PressurePointsPanelProps) {
   const values = { Pa: pa, Pd: pd }
 
   return (
-    <div className="absolute right-4 top-[78%] flex -translate-y-1/2 flex-col gap-2">
+    <div
+      data-ffr-keep-clear
+      className="absolute right-4 top-[78%] flex -translate-y-1/2 flex-col gap-2"
+    >
       {POINTS.map((point) => (
         <div
           key={point.key}
@@ -20,10 +25,20 @@ export function PressurePointsPanel({ pa, pd }: PressurePointsPanelProps) {
         >
           <span className={`h-2 w-2 rounded-full ${point.dotClassName}`} />
           <span className="text-xs font-medium text-gray-700">{point.key}</span>
-          <span className="w-14 text-xs text-gray-900">{values[point.key] || '—'}</span>
+          <PressureValue value={values[point.key]} />
           <span className="text-xs text-gray-400">mmHg</span>
         </div>
       ))}
     </div>
+  )
+}
+
+// Glows as the value follows the lesion fields and blood pressure.
+function PressureValue({ value }: { value: string }) {
+  const ref = useHighlightOnChange<HTMLSpanElement>(value)
+  return (
+    <span ref={ref} className="w-14 rounded text-xs text-gray-900">
+      {value || '—'}
+    </span>
   )
 }
