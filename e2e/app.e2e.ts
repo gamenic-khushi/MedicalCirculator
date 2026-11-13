@@ -88,6 +88,47 @@ test.describe('lesion analysis page', () => {
   })
 })
 
+test.describe('font size (文字サイズ)', () => {
+  const rootSize = (page: Page) =>
+    page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+
+  test('is in the user menu for everyone, scales the page and is remembered', async ({ page }) => {
+    // A general user, not an admin: the setting is not an admin-only one.
+    await useFakeAppwrite(page, { category: 'learning_user' })
+    await page.goto('/help')
+    expect(await rootSize(page)).toBe('16px')
+
+    await page.getByRole('button', { name: 'E2E Admin' }).click()
+    await page.getByRole('radio', { name: '大' }).click()
+    expect(await rootSize(page)).toBe('18px')
+    await expect(page.getByRole('radio', { name: '大' })).toHaveAttribute('aria-checked', 'true')
+
+    await page.reload()
+    expect(await rootSize(page)).toBe('18px')
+
+    await page.getByRole('button', { name: 'E2E Admin' }).click()
+    await page.getByRole('radio', { name: '小' }).click()
+    expect(await rootSize(page)).toBe('14px')
+  })
+})
+
+test.describe('documents page (資料)', () => {
+  test('a saved folder with no file is listed', async ({ page }) => {
+    await useFakeAppwrite(page, {
+      tables: {
+        document_folders: [{ $id: 'folder-1', name: '空のフォルダ' }],
+        documents: [
+          { $id: 'doc-1', date: '2026/11/01', fileName: '資料A', folder: '使用中のフォルダ' },
+        ],
+      },
+    })
+    await page.goto('/documents')
+    await expect(page.getByText('空のフォルダ')).toBeVisible()
+    await expect(page.getByText('ファイルがありません')).toBeVisible()
+    await expect(page.getByText('資料A')).toBeVisible()
+  })
+})
+
 test.describe('help page', () => {
   test('describes the current screens', async ({ page }) => {
     await useFakeAppwrite(page)

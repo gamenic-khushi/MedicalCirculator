@@ -60,6 +60,16 @@ export function DocumentsPage() {
     return documents.filter((document) => document.fileName.toLowerCase().includes(normalized))
   }, [documents, query])
 
+  // Saved folders with no file yet are listed too (narrowed by the search box).
+  const emptyFolders = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    return folders.filter(
+      (folder) =>
+        !documents.some((document) => document.folder === folder) &&
+        (!normalized || folder.toLowerCase().includes(normalized)),
+    )
+  }, [folders, documents, query])
+
   async function handleAddFolder(folderName: string) {
     try {
       await databaseService.create<DocumentFolderRow>('document_folders', { name: folderName })
@@ -188,6 +198,7 @@ export function DocumentsPage() {
           <DocumentFileTable
             documents={filteredDocuments}
             folders={folders}
+            emptyFolders={emptyFolders}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onDuplicate={handleDuplicate}

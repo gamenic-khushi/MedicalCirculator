@@ -124,7 +124,7 @@ export function FfrResultOverlay({
                 width: TICK_COLUMN_WIDTH,
                 height: BAR_HEIGHT,
               }}
-              className="absolute right-full text-[11px] text-slate-300"
+              className="absolute right-full text-[0.6875rem] text-slate-300"
             >
               {TICKS.map((tick, index) => (
                 <span

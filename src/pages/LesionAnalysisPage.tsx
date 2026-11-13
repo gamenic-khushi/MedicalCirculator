@@ -1802,7 +1802,7 @@ export function LesionAnalysisPage() {
                       title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
                       className="flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm"
                     >
-                      <span className="text-[10px] font-medium text-gray-500">奥</span>
+                      <span className="text-[0.625rem] font-medium text-gray-500">奥</span>
                       <div className="relative h-24 w-5">
                         <input
                           type="range"
@@ -1816,7 +1816,7 @@ export function LesionAnalysisPage() {
                           className="absolute left-1/2 top-1/2 h-5 w-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-pointer accent-indigo-600"
                         />
                       </div>
-                      <span className="text-[10px] font-medium text-gray-500">手前</span>
+                      <span className="text-[0.625rem] font-medium text-gray-500">手前</span>
                     </motion.div>
                   )}
                   </AnimatePresence>
@@ -1854,10 +1854,10 @@ export function LesionAnalysisPage() {
                       className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600 bg-white/60"
                       style={{ left: `${lineX}%`, top: `${rowY}%` }}
                     />
-                    <span className="absolute right-2 mt-1 text-[10px] font-semibold text-slate-300" style={{ top: `${rowY}%` }}>X</span>
-                    <span className="absolute top-1 ml-1.5 text-[10px] font-semibold text-slate-300" style={{ left: `${lineX}%` }}>Y</span>
-                    <span className="absolute ml-3 mt-1 text-[10px] font-semibold text-slate-300" style={{ left: `${lineX}%`, top: `${rowY}%` }}>Z</span>
-                    <span className="absolute bottom-16 ml-1.5 text-[10px] font-medium text-indigo-300" style={{ left: `${lineX}%` }}>切断面</span>
+                    <span className="absolute right-2 mt-1 text-[0.625rem] font-semibold text-slate-300" style={{ top: `${rowY}%` }}>X</span>
+                    <span className="absolute top-1 ml-1.5 text-[0.625rem] font-semibold text-slate-300" style={{ left: `${lineX}%` }}>Y</span>
+                    <span className="absolute ml-3 mt-1 text-[0.625rem] font-semibold text-slate-300" style={{ left: `${lineX}%`, top: `${rowY}%` }}>Z</span>
+                    <span className="absolute bottom-16 ml-1.5 text-[0.625rem] font-medium text-indigo-300" style={{ left: `${lineX}%` }}>切断面</span>
                     {(['proximal', 'distal'] as const).map((which, index) => {
                       // Each line goes through its own point, ① or ②, whose
                       // marker is its only label: one ① and one ② on screen.
@@ -1888,7 +1888,7 @@ export function LesionAnalysisPage() {
                           onPointerCancel={handleLinePointerUp}
                         >
                           <div className="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-slate-300/70" />
-                          <span className="pointer-events-none absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-gray-700 shadow-sm">
+                          <span className="pointer-events-none absolute left-1/2 top-[4.5rem] ml-1 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[0.625rem] text-gray-700 shadow-sm">
                             {isProximal ? '近位径' : '遠位径'}{' '}
                             {diameter != null ? `${formatMeasurement(diameter)} mm` : '—'}
                           </span>
@@ -1956,7 +1956,7 @@ export function LesionAnalysisPage() {
           <div className="flex-1">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">選択病変</p>
-              <p className="text-[11px] text-gray-400">自動計測値</p>
+              <p className="text-[0.6875rem] text-gray-400">自動計測値</p>
             </div>
             <div className="mt-3 flex flex-col gap-2">
               {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }, index) => {
@@ -1980,13 +1980,13 @@ export function LesionAnalysisPage() {
                       {range && (
                         <span
                           title="FFRの推定式の学習範囲です。範囲外の値ではFFRを計算できません"
-                          className={`text-[10px] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
+                          className={`text-[0.625rem] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
                         >
                           学習範囲 {formatRangeBound(range[0], 'min')}〜{formatRangeBound(range[1], 'max')}
                         </span>
                       )}
                       {key === 'stenosisLength' && lengthAdjustment && (
-                        <span title={lengthAdjustment.message} className="text-[10px] text-amber-600">
+                        <span title={lengthAdjustment.message} className="text-[0.625rem] text-amber-600">
                           FFRの計算には {lengthAdjustment.used} mm を使用
                         </span>
                       )}

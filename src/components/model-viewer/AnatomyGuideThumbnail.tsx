@@ -21,7 +21,7 @@ export function AnatomyGuideThumbnail() {
       data-ffr-keep-clear
       className="absolute bottom-4 left-4 w-28 rounded-lg border border-gray-100 bg-white p-2 shadow-sm"
     >
-      <div className="flex items-center justify-between text-[11px] font-medium text-gray-600">
+      <div className="flex items-center justify-between text-[0.6875rem] font-medium text-gray-600">
         解剖学ガイド
         <button
           type="button"

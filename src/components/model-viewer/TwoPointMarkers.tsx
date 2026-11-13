@@ -93,7 +93,7 @@ export function TwoPointMarkers({ points, draggable, onDragPoint, onDragEnd, onD
                   }
                 : undefined
             }
-            className={`absolute flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[10px] font-bold text-white ${style.border} ${style.bg} ${
+            className={`absolute flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[0.625rem] font-bold text-white ${style.border} ${style.bg} ${
               draggable ? 'cursor-move' : 'pointer-events-none'
             }`}
           >

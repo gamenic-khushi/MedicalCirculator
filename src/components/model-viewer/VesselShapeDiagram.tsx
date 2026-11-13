@@ -113,7 +113,7 @@ function TransverseSection({
           aria-hidden
         />
       )}
-      <p className="text-[11px] font-semibold text-indigo-600">切断面の横断面</p>
+      <p className="text-[0.6875rem] font-semibold text-indigo-600">切断面の横断面</p>
       <svg viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="w-full">
         <rect
           x={1}
@@ -202,7 +202,7 @@ function TransverseSection({
           </g>
         )}
       </svg>
-      <p className="text-center text-[10px] text-gray-500">
+      <p className="text-center text-[0.625rem] text-gray-500">
         {area != null && <span className="block font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</span>}
       </p>
     </div>
@@ -374,7 +374,7 @@ function MeasuredShape({
           </g>
         )}
       </svg>
-      <div className={`relative w-full px-1 text-[11px] font-medium text-gray-500 ${crowded ? 'h-8' : 'h-4'}`}>
+      <div className={`relative w-full px-1 text-[0.6875rem] font-medium text-gray-500 ${crowded ? 'h-8' : 'h-4'}`}>
         <span className="absolute left-1 top-0">① 近位側</span>
         <span
           className={`absolute -translate-x-1/2 whitespace-nowrap ${crowded ? 'top-4' : 'top-0'}`}
@@ -463,12 +463,12 @@ function GeneratedShape({
         <EndMarker x={x0} color={PROXIMAL_COLOR} label="①" />
         <EndMarker x={x1} color={DISTAL_COLOR} label="②" />
       </svg>
-      <div className="flex w-full justify-between px-1 text-[11px] font-medium text-gray-500">
+      <div className="flex w-full justify-between px-1 text-[0.6875rem] font-medium text-gray-500">
         <span>① 近位側</span>
         <span>狭窄中心</span>
         <span>② 遠位側</span>
       </div>
-      <p className="text-center text-[10px] text-gray-400">入力値に基づき滑らかにつながる形状を生成</p>
+      <p className="text-center text-[0.625rem] text-gray-400">入力値に基づき滑らかにつながる形状を生成</p>
     </div>
   )
 }

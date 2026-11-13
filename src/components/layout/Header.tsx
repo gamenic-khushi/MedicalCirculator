@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
+import { FontSizeSelector } from './FontSizeSelector'
 import { Logo } from './Logo'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
@@ -161,6 +162,7 @@ export function Header() {
                     ))}
                   </>
                 )}
+                <FontSizeSelector tone="light" />
                 <button
                   type="button"
                   onClick={() => void handleLogout()}
@@ -249,6 +251,7 @@ export function Header() {
                 ))}
               </>
             )}
+            <FontSizeSelector tone="dark" />
             <button
               type="button"
               onClick={() => void handleLogout()}
