@@ -6,7 +6,7 @@ import { makeStenosisStl } from './support/stenosisModel'
 // The value box of a row in the 選択病変 panel, found by the row's label.
 function field(page: Page, label: string) {
   return page.locator(
-    `xpath=//span[normalize-space(.)="${label}"]/ancestor::div[contains(@class,"justify-between")][1]//input`,
+    `xpath=//span[normalize-space(.)="${label}"]/ancestor::div[@data-lesion-field][1]//input`,
   )
 }
 
@@ -58,13 +58,46 @@ test.describe('upload page', () => {
 })
 
 test.describe('lesion analysis page', () => {
-  test('the 狭窄長 cannot be edited, the diameters can', async ({ page }) => {
+  test('only the proximal and distal diameters can be edited', async ({ page }) => {
     await useFakeAppwrite(page)
     await uploadModel(page, 'E2Eの学習')
-    await expect(field(page, '狭窄長')).toHaveJSProperty('readOnly', true)
-    await expect(field(page, '最小断面積')).toHaveJSProperty('readOnly', true)
+    for (const label of ['狭窄長', '最小断面積', '最小血管径', '狭窄率', '病変位置']) {
+      await expect(field(page, label)).toHaveJSProperty('readOnly', true)
+    }
     await expect(field(page, '病変近位径')).toHaveJSProperty('readOnly', false)
     await expect(field(page, '病変遠位径')).toHaveJSProperty('readOnly', false)
+  })
+
+  test('the layout: menu on the left, vertical block labels, 血圧 on one line', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, 'E2Eの学習')
+
+    // The global menu is a column down the left edge; there is no top bar.
+    const sidebar = (await page.locator('aside').boundingBox())!
+    expect(sidebar.x).toBe(0)
+    expect(sidebar.height).toBeGreaterThan(sidebar.width * 4)
+    await expect(page.locator('header')).toBeHidden()
+
+    // The four blocks are named by labels written vertically at their left edge.
+    for (const name of ['3Dビュアー', '選択病変 形状', '測定', '仮保存一覧']) {
+      const label = page.getByText(name, { exact: true })
+      await expect(label).toBeVisible()
+      expect(await label.evaluate((el) => getComputedStyle(el.parentElement!).writingMode)).toBe(
+        'vertical-rl',
+      )
+    }
+    await expect(page.getByText('3Dブロック')).toHaveCount(0)
+
+    // The name 血圧 and its value are side by side.
+    const name = (await page.getByText('血圧', { exact: true }).boundingBox())!
+    const value = (await page.locator('input[type=number]').first().boundingBox())!
+    expect(Math.abs(name.y + name.height / 2 - (value.y + value.height / 2))).toBeLessThan(12)
+    expect(value.x).toBeGreaterThan(name.x)
+
+    // The name of the label and its value are close: no wide gap in the rows.
+    const label = (await page.getByText('病変近位径', { exact: true }).boundingBox())!
+    const box = (await field(page, '病変近位径').boundingBox())!
+    expect(box.x - (label.x + label.width)).toBeLessThan(100)
   })
 
   test('two points on the vessel are measured', async ({ page }) => {
@@ -136,6 +169,8 @@ test.describe('help page', () => {
     const text = await page.locator('main').innerText()
     expect(text).toContain('3D狭窄形状プレビュー')
     expect(text).toContain('格子')
+    expect(text).toContain('画面の左側')
+    expect(text).not.toContain('形状ブロック')
     // Texts that were removed from the app must not come back.
     expect(text).not.toContain('宇宙')
     expect(text).not.toContain('生成される3D狭窄形状')

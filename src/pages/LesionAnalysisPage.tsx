@@ -14,6 +14,7 @@ import { ArrowLeftRight, Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } f
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
+import { SideLabel } from '@/components/common/SideLabel'
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
@@ -223,7 +224,7 @@ const SELECTED_LESION_FIELDS: {
   readOnly?: boolean
 }[] = [
   { key: 'lesionProximalDiameter', label: '病変近位径', unit: 'mm' },
-  { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm' },
+  { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm', readOnly: true },
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
@@ -1630,17 +1631,22 @@ export function LesionAnalysisPage() {
                   setIsEditingTitle(false)
                 }
               }}
-              className="rounded border border-indigo-300 px-2 py-1 text-2xl font-bold text-gray-900 outline-none focus:border-indigo-400"
+              className="rounded border border-indigo-300 px-2 text-2xl font-bold leading-tight text-gray-900 outline-none focus:border-indigo-400"
             />
           ) : (
+            // The name sits in a dashed box with a pencil, so it is clear it can be
+            // edited right here by clicking it.
             <h1
               onClick={validModel ? handleStartEditingTitle : undefined}
               title={validModel ? 'クリックして編集' : undefined}
-              className={`text-2xl font-bold text-gray-900 ${
-                validModel ? 'cursor-pointer rounded px-2 py-1 hover:bg-gray-50' : ''
+              className={`flex items-center gap-2 text-2xl font-bold leading-tight text-gray-900 ${
+                validModel
+                  ? 'cursor-pointer rounded border border-dashed border-gray-300 px-2 transition hover:border-indigo-400 hover:bg-white'
+                  : ''
               }`}
             >
               {validModel?.studyName ?? '保存済みキャプチャ'}
+              {validModel && <Pencil aria-hidden className="h-4 w-4 shrink-0 text-gray-400" />}
             </h1>
           )}
           {validModel && (
@@ -1655,12 +1661,11 @@ export function LesionAnalysisPage() {
           )}
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* 3Dブロック */}
-        <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
-            3Dブロック
-          </p>
+      <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* 3Dビュアー */}
+        <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <SideLabel>3Dビュアー</SideLabel>
+          <div className="flex min-w-0 flex-1 flex-col">
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
@@ -1945,17 +1950,16 @@ export function LesionAnalysisPage() {
               </button>
             </div>
           )}
+          </div>
         </div>
 
-        {/* 形状ブロック */}
-        <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
-            形状ブロック
-          </p>
-          <div className="flex flex-col gap-4 p-4 sm:flex-row">
+        {/* 選択病変 形状 */}
+        <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <SideLabel>選択病変 形状</SideLabel>
+          <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row">
           <div className="flex-1">
             <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900">選択病変</p>
+              <p className="text-sm font-semibold text-gray-900">計測値</p>
               <p className="text-[0.6875rem] text-gray-400">自動計測値</p>
             </div>
             <div className="mt-3 flex flex-col gap-2">
@@ -1974,48 +1978,53 @@ export function LesionAnalysisPage() {
                   selectedLesion[key] !== '' &&
                   (!Number.isFinite(rangeValue) || rangeValue < range[0] || rangeValue > range[1])
                 return (
-                  <div key={key} className="flex items-center justify-between gap-2 text-xs">
-                    <div className="flex flex-col">
-                      <span className="text-gray-500">{label}</span>
-                      {range && (
-                        <span
-                          title="FFRの推定式の学習範囲です。範囲外の値ではFFRを計算できません"
-                          className={`text-[0.625rem] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
-                        >
-                          学習範囲 {formatRangeBound(range[0], 'min')}〜{formatRangeBound(range[1], 'max')}
-                        </span>
-                      )}
-                      {key === 'stenosisLength' && lengthAdjustment && (
-                        <span title={lengthAdjustment.message} className="text-[0.625rem] text-amber-600">
-                          FFRの計算には {lengthAdjustment.used} mm を使用
-                        </span>
-                      )}
+                  <div key={key} data-lesion-field={key} className="flex flex-col text-xs">
+                    {/* The name and its value side by side with no gap; the hints go on a line below. */}
+                    <div className="flex items-center gap-2">
+                      <span className="w-[4.75rem] shrink-0 text-gray-500">{label}</span>
+                      <div className="flex items-center gap-1">
+                        <GlowingInput
+                          // After a measurement, top to bottom, one after another.
+                          delayMs={index * 50}
+                          type="text"
+                          value={selectedLesion[key]}
+                          readOnly={readOnly}
+                          title={readOnly ? '自動計算される値です（直接編集はできません）' : undefined}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (event) => handleSelectedLesionFieldChange(key, event.target.value)
+                          }
+                          className={`w-16 rounded border px-1.5 py-1 text-right outline-none ${
+                            isOutOfRange
+                              ? 'border-red-300 text-red-500'
+                              : readOnly
+                                ? `cursor-default border-gray-100 bg-gray-50 ${
+                                    key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-400'
+                                  }`
+                                : 'border-gray-200 text-gray-900 focus:border-indigo-400'
+                          }`}
+                        />
+                        <span className="w-6 shrink-0 text-gray-400">{unit}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <GlowingInput
-                        // After a measurement, top to bottom, one after another.
-                        delayMs={index * 50}
-                        type="text"
-                        value={selectedLesion[key]}
-                        readOnly={readOnly}
-                        title={readOnly ? '自動計算される値です（直接編集はできません）' : undefined}
-                        onChange={
-                          readOnly
-                            ? undefined
-                            : (event) => handleSelectedLesionFieldChange(key, event.target.value)
-                        }
-                        className={`w-16 rounded border px-1.5 py-1 text-right outline-none ${
-                          isOutOfRange
-                            ? 'border-red-300 text-red-500'
-                            : readOnly
-                              ? `cursor-default border-gray-100 bg-gray-50 ${
-                                  key === 'stenosisRate' ? 'text-blue-600' : 'text-gray-400'
-                                }`
-                              : 'border-gray-200 text-gray-900 focus:border-indigo-400'
-                        }`}
-                      />
-                      <span className="w-6 shrink-0 text-gray-400">{unit}</span>
-                    </div>
+                    {(range || (key === 'stenosisLength' && lengthAdjustment)) && (
+                      <div className="mt-0.5 flex flex-col">
+                        {range && (
+                          <span
+                            title="FFRの推定式の学習範囲です。範囲外の値ではFFRを計算できません"
+                            className={`text-[0.625rem] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
+                          >
+                            学習範囲 {formatRangeBound(range[0], 'min')}〜{formatRangeBound(range[1], 'max')}
+                          </span>
+                        )}
+                        {key === 'stenosisLength' && lengthAdjustment && (
+                          <span title={lengthAdjustment.message} className="text-[0.625rem] text-amber-600">
+                            FFRの計算には {lengthAdjustment.used} mm を使用
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -2040,13 +2049,11 @@ export function LesionAnalysisPage() {
         </div>
       </div>
 
-      {/* 測定ブロック */}
-      <div className="mt-4 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <p className="border-b border-gray-100 p-4 text-sm font-semibold text-gray-900">
-          測定ブロック
-        </p>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="sm:max-w-xs sm:flex-1">
+      {/* 測定 */}
+      <div className="mt-4 flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <SideLabel>測定</SideLabel>
+        <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="sm:max-w-sm sm:flex-1">
             <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />
           </div>
           {!viewFrame && (

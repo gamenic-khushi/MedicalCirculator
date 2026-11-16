@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { SideLabel } from '@/components/common/SideLabel'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { EASE_OUT } from '@/lib/motion'
 import type { SavedSnapshot } from '@/types/viewerState'
@@ -58,27 +59,31 @@ export function SavedSnapshotsPanel({
     </div>
   )
 
+  // The name 仮保存一覧 is the vertical label at the left; the buttons sit on the right.
+  const actionsRow = (onDownloadPdf || onSaveToHistory) && (
+    <div className="flex justify-end border-b border-gray-100 p-4">{headerActions}</div>
+  )
+
   if (savedSnapshots.length === 0) {
     return (
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 p-4">
-          <span className="text-sm font-semibold text-gray-900">仮保存一覧</span>
-          {headerActions}
-        </div>
-        <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
-          <Table2 className="h-6 w-6 text-gray-300" />
-          <p className="text-xs text-gray-400">利用可能なデータがありません</p>
+      <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <SideLabel>仮保存一覧</SideLabel>
+        <div className="min-w-0 flex-1">
+          {actionsRow}
+          <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
+            <Table2 className="h-6 w-6 text-gray-300" />
+            <p className="text-xs text-gray-400">利用可能なデータがありません</p>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 p-4">
-        <span className="text-sm font-semibold text-gray-900">仮保存一覧</span>
-        {headerActions}
-      </div>
+    <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <SideLabel>仮保存一覧</SideLabel>
+      <div className="min-w-0 flex-1">
+      {actionsRow}
       <div className="pill-scrollbar overflow-x-auto">
         <table className="w-full min-w-[820px] text-left text-sm">
           <thead>
@@ -147,6 +152,7 @@ export function SavedSnapshotsPanel({
           />
         )}
       </AnimatePresence>
+      </div>
     </div>
   )
 }

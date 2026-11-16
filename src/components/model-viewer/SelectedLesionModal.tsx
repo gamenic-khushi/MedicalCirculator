@@ -25,7 +25,7 @@ const NUMBER_FIELDS: {
   readOnly?: boolean
 }[] = [
   { key: 'lesionProximalDiameter', label: '病変近位径', unit: 'mm' },
-  { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm' },
+  { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm', readOnly: true },
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
@@ -45,7 +45,7 @@ export function SelectedLesionModal({ initialValues, onClose, onSave }: Selected
     <Modal title="選択病変" onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <p className="text-xs text-gray-400">
-          3Dモデルから自動計測された値です。径は修正できます。狭窄長は最小断面積の1.5倍以内が続く区間の長さとして自動計算された値で、修正できません。この値はFFRの計算にも使用されます。
+          3Dモデルから自動計測された値です。修正できるのは病変近位径と病変遠位径だけです。最小血管径と狭窄長は自動計算された値で、修正できません（狭窄長は最小断面積の1.5倍以内が続く区間の長さです）。これらの値はFFRの計算にも使用されます。
         </p>
 
         {NUMBER_FIELDS.map(({ key, label, unit, readOnly }) => (

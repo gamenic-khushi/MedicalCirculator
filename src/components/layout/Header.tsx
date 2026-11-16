@@ -1,27 +1,20 @@
-import { ChevronDown, Menu, User, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { FontSizeSelector } from './FontSizeSelector'
 import { Logo } from './Logo'
+import { INFO_MENU_ITEMS, NAV_ITEMS, SETTINGS_MENU_ITEMS } from './navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { useModel3D } from '@/hooks/useModel3D'
-import { dropdown, expand } from '@/lib/motion'
+import { expand } from '@/lib/motion'
 import { isAdminCategory } from '@/types/user'
 
-const NAV_ITEMS = [{ label: '3D解析', to: '/data', adminOnly: true }]
-
-const INFO_MENU_ITEMS = [
-  { label: '学会', to: '/conference' },
-  { label: '資料', to: '/documents' },
-]
-
-const SETTINGS_MENU_ITEMS = [{ label: 'ユーザー管理', to: '/users' }]
-
+// The top bar for phones and narrow windows. From the lg width on, the global
+// menu is the left-hand Sidebar instead and this bar is hidden.
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isInfoOpen, setIsInfoOpen] = useState(false)
   const { user, logout } = useAuth()
   const { setModel } = useModel3D()
   const navigate = useNavigate()
@@ -35,173 +28,52 @@ export function Header() {
     navigate('/login', { replace: true })
   }
 
-  const infoRef = useRef<HTMLDivElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const drawerRef = useRef<HTMLElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    if (!isInfoOpen && !isMenuOpen) return
+    if (!isMenuOpen) return
 
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node
-      if (isInfoOpen && !infoRef.current?.contains(target)) {
-        setIsInfoOpen(false)
-      }
-      if (
-        isMenuOpen &&
-        !menuRef.current?.contains(target) &&
-        !drawerRef.current?.contains(target)
-      ) {
+      if (!headerRef.current?.contains(event.target as Node)) {
         setIsMenuOpen(false)
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isInfoOpen, isMenuOpen])
+  }, [isMenuOpen])
+
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    `rounded-lg px-3 py-2 text-sm font-medium transition ${
+      isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
+    }`
 
   return (
-    <header className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-8 lg:px-14">
+    <header
+      ref={headerRef}
+      className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-8 lg:hidden"
+    >
       <div className="flex h-16 items-center justify-between">
-        <div className="flex items-center gap-8 lg:gap-16">
-          <Logo />
-          <nav className="hidden items-center gap-2 lg:flex lg:gap-8">
-            {visibleNavItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                    isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
-                  }`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-
-            {isAdmin && (
-              <div ref={infoRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsInfoOpen((value) => !value)}
-                  className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-white/90 transition hover:text-white"
-                >
-                  情報
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${isInfoOpen ? 'rotate-180' : ''}`}
-                  />
-                </button>
-
-                <AnimatePresence>
-                  {isInfoOpen && (
-                    <motion.div
-                      {...dropdown}
-                      style={{ transformOrigin: 'top left' }}
-                      className="absolute left-0 top-full z-10 mt-2 w-40 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10"
-                    >
-                      {INFO_MENU_ITEMS.map((item) => (
-                        <NavLink
-                          key={item.to}
-                          to={item.to}
-                          onClick={() => setIsInfoOpen(false)}
-                          className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-                        >
-                          {item.label}
-                        </NavLink>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
-          </nav>
-        </div>
-
-        <div ref={menuRef} className="relative flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsMenuOpen((value) => !value)}
-            className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/20 lg:inline-flex"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-blue-600">
-              <User className="h-4 w-4" />
-            </span>
-            <span className="text-sm font-medium text-white">{user?.name ?? 'ユーザー'}</span>
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-
-          <AnimatePresence>
-            {isMenuOpen && (
-              <motion.div
-                {...dropdown}
-                style={{ transformOrigin: 'top right' }}
-                className="absolute right-0 top-14 z-10 hidden w-48 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10 lg:block"
-              >
-                <NavLink
-                  to="/help"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="block rounded-2xl px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-                >
-                  ヘルプ
-                </NavLink>
-                {isAdmin && (
-                  <>
-                    <p className="px-3 pt-1.5 pb-1 text-xs font-semibold text-gray-400">設定</p>
-                    {SETTINGS_MENU_ITEMS.map((item) => (
-                      <NavLink
-                        key={item.to}
-                        to={item.to}
-                        onClick={() => setIsMenuOpen(false)}
-                        className="block rounded-2xl px-3 py-2 pl-6 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-                      >
-                        {item.label}
-                      </NavLink>
-                    ))}
-                  </>
-                )}
-                <FontSizeSelector tone="light" />
-                <button
-                  type="button"
-                  onClick={() => void handleLogout()}
-                  className="block w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-                >
-                  ログアウト
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <button
-            type="button"
-            onClick={() => setIsMenuOpen((value) => !value)}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white transition hover:bg-white/10 lg:hidden"
-            title="メニュー"
-          >
-            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-        </div>
+        <Logo />
+        <button
+          type="button"
+          onClick={() => setIsMenuOpen((value) => !value)}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-white transition hover:bg-white/10"
+          title="メニュー"
+        >
+          {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
       </div>
 
       <AnimatePresence>
         {isMenuOpen && (
-          <motion.nav
-            {...expand}
-            ref={drawerRef}
-            className="flex flex-col gap-1 overflow-hidden pb-4 lg:hidden"
-          >
+          <motion.nav {...expand} className="flex flex-col gap-1 overflow-hidden pb-4">
             {visibleNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 onClick={() => setIsMenuOpen(false)}
-                className={({ isActive }) =>
-                  `rounded-lg px-3 py-2 text-sm font-medium transition ${
-                    isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
-                  }`
-                }
+                className={linkClass}
               >
                 {item.label}
               </NavLink>
@@ -212,24 +84,12 @@ export function Header() {
                   key={item.to}
                   to={item.to}
                   onClick={() => setIsMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `rounded-lg px-3 py-2 text-sm font-medium transition ${
-                      isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
-                    }`
-                  }
+                  className={linkClass}
                 >
                   {item.label}
                 </NavLink>
               ))}
-            <NavLink
-              to="/help"
-              onClick={() => setIsMenuOpen(false)}
-              className={({ isActive }) =>
-                `rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
-                }`
-              }
-            >
+            <NavLink to="/help" onClick={() => setIsMenuOpen(false)} className={linkClass}>
               ヘルプ
             </NavLink>
             {isAdmin && (
@@ -240,11 +100,7 @@ export function Header() {
                     key={item.to}
                     to={item.to}
                     onClick={() => setIsMenuOpen(false)}
-                    className={({ isActive }) =>
-                      `rounded-lg px-3 py-2 pl-6 text-sm font-medium transition ${
-                        isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:text-white'
-                      }`
-                    }
+                    className={({ isActive }) => `${linkClass({ isActive })} pl-6`}
                   >
                     {item.label}
                   </NavLink>
