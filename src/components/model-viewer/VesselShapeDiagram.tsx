@@ -70,24 +70,28 @@ function TransverseSection({
   depth,
   connectorLeft,
 }: {
-  outline: PlaneOutline
+  // Null until there is a cut to show: the frame is drawn all the same, so the
+  // block keeps its size when the cut arrives.
+  outline: PlaneOutline | null
   area?: number | null
   depth?: number | null
   // Where the cutting line stands along the diagram above, in percent of its
   // width, so a short stem can lead from the line down to this picture.
   connectorLeft: number | null
 }) {
-  const line = outline.sectionLine
+  const line = outline?.sectionLine
   // Where the horizontal line meets the vessel's surface: the front of the range.
   const front = line?.x ?? null
   // The outline is centred on its own middle, so x = y = 0 is the picture's centre.
-  const scale = Math.min(
-    (SECTION_WIDTH * SECTION_FILL) / Math.max(outline.width, 1e-9),
-    (SECTION_HEIGHT * SECTION_FILL) / Math.max(outline.height, 1e-9),
-  )
+  const scale = outline
+    ? Math.min(
+        (SECTION_WIDTH * SECTION_FILL) / Math.max(outline.width, 1e-9),
+        (SECTION_HEIGHT * SECTION_FILL) / Math.max(outline.height, 1e-9),
+      )
+    : 1
   const xOf = (x: number) => SECTION_WIDTH / 2 + x * scale
   const yOf = (y: number) => SECTION_HEIGHT / 2 - y * scale
-  const path = `M ${outline.points.map(([x, y]) => `${xOf(x).toFixed(2)} ${yOf(y).toFixed(2)}`).join(' L ')} Z`
+  const path = outline && `M ${outline.points.map(([x, y]) => `${xOf(x).toFixed(2)} ${yOf(y).toFixed(2)}`).join(' L ')} Z`
   // The horizontal line's plane seen edge-on, across the frame.
   const halfSpan = (SECTION_WIDTH / 2 - 4) / scale
   const horizontal =
@@ -152,7 +156,19 @@ function TransverseSection({
             </text>
           </g>
         )}
-        <path d={path} fill="#dbe4f0" stroke="#6366f1" strokeWidth={1.5} strokeLinejoin="round" />
+        {path && <path d={path} fill="#dbe4f0" stroke="#6366f1" strokeWidth={1.5} strokeLinejoin="round" />}
+        {!outline && (
+          <text
+            x={SECTION_WIDTH / 2}
+            y={SECTION_HEIGHT / 2}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={10}
+            fill="#9ca3af"
+          >
+            はさみで切断すると表示されます
+          </text>
+        )}
         {horizontal && (
           <g>
             <line
@@ -202,7 +218,8 @@ function TransverseSection({
           </g>
         )}
       </svg>
-      <p className="text-center text-[0.625rem] text-gray-500">
+      {/* Always one line tall, with or without the area, so nothing below moves. */}
+      <p className="h-4 text-center text-[0.625rem] text-gray-500">
         {area != null && <span className="block font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</span>}
       </p>
     </div>
@@ -374,7 +391,8 @@ function MeasuredShape({
           </g>
         )}
       </svg>
-      <div className={`relative w-full px-1 text-[0.6875rem] font-medium text-gray-500 ${crowded ? 'h-8' : 'h-4'}`}>
+      {/* Two lines tall whether or not 最小 has to drop below 切断面, so the block never changes height. */}
+      <div className="relative h-8 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
         <span className="absolute left-1 top-0">① 近位側</span>
         <span
           className={`absolute -translate-x-1/2 whitespace-nowrap ${crowded ? 'top-4' : 'top-0'}`}
@@ -392,16 +410,50 @@ function MeasuredShape({
           </span>
         )}
       </div>
-      {crossSection && (
-        <div className="w-full">
-          <TransverseSection
-            outline={crossSection}
-            area={crossSectionArea}
-            depth={depth}
-            connectorLeft={xCut != null ? (xCut / WIDTH) * 100 : null}
+      <div className="w-full">
+        <TransverseSection
+          outline={crossSection ?? null}
+          area={crossSectionArea}
+          depth={depth}
+          connectorLeft={crossSection && xCut != null ? (xCut / WIDTH) * 100 : null}
+        />
+      </div>
+    </div>
+  )
+}
+
+// The block before there is anything to draw in it (no lesion selected yet, or it
+// is being measured): the same pictures at the same sizes as when it is filled, with
+// ① and ② at the ends and the reason it is empty written across the middle. The
+// right-hand column therefore keeps its height when the measurement arrives.
+export function VesselShapePlaceholder({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative w-full">
+        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full">
+          <line
+            x1={X_MARGIN}
+            y1={CENTER_Y}
+            x2={WIDTH - X_MARGIN}
+            y2={CENTER_Y}
+            stroke="#4f7fee"
+            strokeWidth={1}
+            strokeDasharray="2 3"
           />
-        </div>
-      )}
+          <EndMarker x={X_MARGIN} color={PROXIMAL_COLOR} label="①" />
+          <EndMarker x={WIDTH - X_MARGIN} color={DISTAL_COLOR} label="②" />
+        </svg>
+        <p className="absolute inset-x-10 top-1/2 -translate-y-1/2 rounded bg-white/80 px-2 py-1 text-center text-xs text-gray-400">
+          {message}
+        </p>
+      </div>
+      <div className="relative h-8 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
+        <span className="absolute left-1 top-0">① 近位側</span>
+        <span className="absolute right-1 top-0">② 遠位側</span>
+      </div>
+      <div className="w-full">
+        <TransverseSection outline={null} connectorLeft={null} />
+      </div>
     </div>
   )
 }
@@ -498,11 +550,9 @@ export function VesselShapeDiagram({
   return (
     <div className="flex flex-col items-center">
       <GeneratedShape {...numbers} />
-      {crossSection && (
-        <div className="w-full">
-          <TransverseSection outline={crossSection} area={crossSectionArea} depth={depth} connectorLeft={null} />
-        </div>
-      )}
+      <div className="w-full">
+        <TransverseSection outline={crossSection ?? null} area={crossSectionArea} depth={depth} connectorLeft={null} />
+      </div>
     </div>
   )
 }

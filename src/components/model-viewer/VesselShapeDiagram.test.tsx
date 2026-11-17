@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
+import { VesselShapeDiagram, VesselShapePlaceholder } from '@/components/model-viewer/VesselShapeDiagram'
 import type { PlaneOutline } from '@/lib/slicePlane'
 import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
 
@@ -118,5 +118,34 @@ describe('cross-section preview', () => {
     const cut = [[{ arc: 0, top: 0.4, bottom: 0.4 }, { arc: 10, top: 0.4, bottom: 0.4 }]]
     expect(render(2.5, cut)).not.toContain('縦断面（表面から奥へ')
     expect(render(2.5, null)).not.toContain('中心線に沿って')
+  })
+})
+
+describe('a block that keeps its size', () => {
+  // The pictures' sizes and the label row heights: what the block's height is made of.
+  const frame = (markup: string) => ({
+    viewBoxes: [...markup.matchAll(/viewBox="([^"]+)"/g)].map((match) => match[1]),
+    labelRows: markup.match(/relative h-8 w-full/g)?.length ?? 0,
+    crossSection: markup.includes('切断面の横断面'),
+    areaLine: markup.includes('h-4 text-center'),
+  })
+
+  it('shows the cross-section frame before anything is measured, the same as when it is filled', () => {
+    const empty = frame(renderToStaticMarkup(<VesselShapePlaceholder message="2点をクリックして選択してください" />))
+    const measured = frame(render(null))
+    const noCut = frame(
+      renderToStaticMarkup(
+        <VesselShapeDiagram proximalDiameter={2} minDiameter={1} distalDiameter={2} shape={shape} />,
+      ),
+    )
+    expect(empty.crossSection).toBe(true)
+    expect(empty).toEqual(measured)
+    expect(noCut).toEqual(measured)
+  })
+
+  it('says why the cross-section is empty', () => {
+    const markup = renderToStaticMarkup(<VesselShapePlaceholder message="計測中..." />)
+    expect(markup).toContain('計測中...')
+    expect(markup).toContain('はさみで切断すると表示されます')
   })
 })

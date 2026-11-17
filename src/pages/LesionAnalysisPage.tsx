@@ -32,7 +32,7 @@ import {
   type SelectedLesionFormData,
 } from '@/components/model-viewer/SelectedLesionModal'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
-import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
+import { VesselShapeDiagram, VesselShapePlaceholder } from '@/components/model-viewer/VesselShapeDiagram'
 import { fade, reveal } from '@/lib/motion'
 import { fetchFolderModelFile } from '@/lib/fetchFolderModel'
 import { MIN_MODEL_SIZE_UNITS } from '@/lib/modelUnits'
@@ -314,18 +314,13 @@ function LesionSnapshotPanel({
   return (
     <div className="flex-1">
       <p className="text-sm font-semibold text-gray-900">3D狭窄形状プレビュー</p>
-      {/* Each state fades into the next (the old one out first, so they never
-          stack up); a new shape draws in from ① to ②. The diagram itself
-          redraws immediately as values change. */}
-      <AnimatePresence mode="wait" initial={false}>
+      {/* Every state is the same size (the empty one is the same pictures, blank), so
+          nothing around it moves when the measurement arrives; a new shape draws in
+          from ① to ②. The diagram itself redraws immediately as values change. */}
       {isMeasuring ? (
-        <motion.div
-          key="measuring"
-          {...fade}
-          className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 text-xs text-gray-400"
-        >
-          計測中...
-        </motion.div>
+        <div className="mt-3">
+          <VesselShapePlaceholder message="計測中..." />
+        </div>
       ) : hasShape ? (
         <motion.div key="shape" {...reveal} className="mt-3">
           <VesselShapeDiagram
@@ -342,17 +337,16 @@ function LesionSnapshotPanel({
           />
         </motion.div>
       ) : (
-        <motion.div
-          key="empty"
-          {...fade}
-          className="mt-3 flex h-24 items-center justify-center rounded-lg bg-gray-50 p-2 text-center text-xs text-gray-400"
-        >
-          {awaitingConfirm
-            ? '点をドラッグして位置を調整し、「測定範囲を更新」をクリックしてください'
-            : '2点をクリックして選択してください'}
-        </motion.div>
+        <div className="mt-3">
+          <VesselShapePlaceholder
+            message={
+              awaitingConfirm
+                ? '点をドラッグして位置を調整し、「測定範囲を更新」をクリックしてください'
+                : '2点をクリックして選択してください'
+            }
+          />
+        </div>
       )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -1786,7 +1780,11 @@ function LesionAnalysisPageContent() {
                 : { backgroundColor: SPACE_COLOR }
             }
             className={`relative overflow-hidden ${
-              isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[640px]'
+              // On a wide screen the viewer fills its block, which is as tall as the
+              // right-hand one (640 px at least), so there is no empty band under it.
+              isFullscreen
+                ? 'h-screen w-screen'
+                : 'h-[360px] sm:h-[420px] lg:h-auto lg:min-h-[640px] lg:flex-1'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
           >
             {viewFrame ? (

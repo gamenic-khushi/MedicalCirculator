@@ -632,6 +632,37 @@ test.describe('scissors and the depth slider', () => {
   })
 })
 
+test.describe('a fixed layout', () => {
+  test('the blocks keep their size from the start, when the lesion is measured and when the cross-section opens', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '固定レイアウトの学習')
+    // The cross-section area is on screen before anything is measured.
+    await expect(page.getByText('切断面の横断面')).toBeVisible()
+
+    // The block that holds the values and both previews, and the whole page.
+    const block = page.locator('xpath=//*[normalize-space(text())="選択病変 形状"]/ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const sizes = async () => {
+      // Let every fade finish first.
+      await page.waitForTimeout(900)
+      return {
+        block: (await block.boundingBox())!.height,
+        page: await page.evaluate(() => document.documentElement.scrollHeight),
+        viewer: (await page.locator('canvas').first().boundingBox())!.height,
+      }
+    }
+    const before = await sizes()
+
+    await measureLesion(page)
+    const measured = await sizes()
+    await page.getByTitle('断面を表示').click()
+    await expect(page.getByText('断面積').first()).toBeVisible({ timeout: 20_000 })
+    const sliced = await sizes()
+
+    expect(measured).toEqual(before)
+    expect(sliced).toEqual(before)
+  })
+})
+
 test.describe('the FFR notice for a short narrowing', () => {
   test('a 狭窄長 under 1 mm is used as 1 mm, with a hint and a message', async ({ page }) => {
     await useFakeAppwrite(page)
