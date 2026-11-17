@@ -10,16 +10,26 @@ function field(page: Page, label: string) {
   )
 }
 
-async function uploadModel(page: Page, studyName: string, unit = 1) {
+async function uploadModel(page: Page, studyName: string, unit = 1, spread = 3) {
   await page.goto('/data/3d-analysis')
   await page.getByLabel('学習名').fill(studyName)
   await page.locator('input[type=file]').setInputFiles({
     name: 'vessel.stl',
     mimeType: 'application/octet-stream',
-    buffer: makeStenosisStl(unit),
+    buffer: makeStenosisStl(unit, spread),
   })
   await page.waitForURL('**/data/lesion-measurement/analysis')
   await expect(page.getByText('3D狭窄形状プレビュー')).toBeVisible()
+}
+
+// Selects ① and ② on the test vessel and waits for the measurement.
+async function measureLesion(page: Page) {
+  await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+  const box = (await page.locator('canvas').first().boundingBox())!
+  await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+  await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+  await page.getByRole('button', { name: '測定範囲を更新' }).click()
+  await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
 }
 
 test.describe('folder list (3D解析)', () => {
@@ -454,6 +464,96 @@ test.describe('a model exported in metres', () => {
     expect(Number(await field(page, '狭窄長').inputValue())).toBeGreaterThan(0.5)
     // No "this model looks like metres" error any more.
     await expect(page.getByText('メートル（m）単位の可能性')).toHaveCount(0)
+  })
+})
+
+test.describe('the global menu', () => {
+  test('on the left: an admin sees 3D解析 and 情報, and the user menu', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await page.goto('/documents')
+    const sidebar = page.locator('aside')
+    await expect(sidebar.getByRole('link', { name: '3D解析' })).toBeVisible()
+    await sidebar.getByRole('button', { name: '情報', exact: true }).click()
+    await expect(sidebar.getByRole('link', { name: '学会' })).toBeVisible()
+    await sidebar.getByRole('link', { name: '学会' }).click()
+    await expect(page).toHaveURL(/\/conference$/)
+
+    await page.getByRole('button', { name: 'E2E Admin' }).click()
+    for (const name of ['ヘルプ', 'ユーザー管理', 'ログアウト']) {
+      await expect(page.getByText(name, { exact: true })).toBeVisible()
+    }
+    await expect(page.getByRole('radio')).toHaveCount(3)
+  })
+
+  test('a general user has no 3D解析, 情報 or ユーザー管理', async ({ page }) => {
+    await useFakeAppwrite(page, { category: 'learning_user' })
+    await page.goto('/help')
+    const sidebar = page.locator('aside')
+    await expect(sidebar.getByRole('button', { name: 'E2E Admin' })).toBeVisible()
+    await expect(sidebar.getByRole('link', { name: '3D解析' })).toHaveCount(0)
+    await expect(sidebar.getByRole('button', { name: '情報', exact: true })).toHaveCount(0)
+    await sidebar.getByRole('button', { name: 'E2E Admin' }).click()
+    await expect(page.getByRole('link', { name: 'ヘルプ' })).toBeVisible()
+    await expect(page.getByText('ユーザー管理')).toHaveCount(0)
+    await expect(page.getByRole('radio')).toHaveCount(3)
+  })
+
+  test('on a narrow window the top bar and its menu button are used', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await useFakeAppwrite(page)
+    await page.goto('/documents')
+    await expect(page.locator('aside')).toBeHidden()
+    await expect(page.locator('header')).toBeVisible()
+    await page.getByTitle('メニュー').click()
+    for (const name of ['3D解析', '学会', '資料', 'ヘルプ', 'ログアウト']) {
+      await expect(page.locator('header').getByText(name, { exact: true })).toBeVisible()
+    }
+    await expect(page.locator('header').getByRole('radio')).toHaveCount(3)
+  })
+})
+
+test.describe('scissors and the depth slider', () => {
+  test('the cross-section opens, and the depth slider moves and resets', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '断面の学習')
+    await measureLesion(page)
+    await page.getByTitle('断面を表示').click()
+
+    // The cross-section area is shown and the picture of the cut appears.
+    await expect(page.getByText('断面積').first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('切断面の横断面')).toBeVisible({ timeout: 20_000 })
+    const slider = page.getByLabel('奥行き')
+    await expect(slider).toBeVisible()
+    await expect(slider).toHaveValue('0')
+    // 手前 at the bottom, 奥 at the top: moving it up goes away from the viewer.
+    await slider.fill('60')
+    await expect(slider).toHaveValue('60')
+    // A double click puts the model back where it was.
+    await slider.dblclick()
+    await expect(slider).toHaveValue('0')
+    // The area shown is the same wherever the slider is (the cut does not change).
+    await expect(page.getByText('断面積').first()).toBeVisible()
+  })
+})
+
+test.describe('the FFR notice for a short narrowing', () => {
+  test('a 狭窄長 under 1 mm is used as 1 mm, with a hint and a message', async ({ page }) => {
+    await useFakeAppwrite(page)
+    // A narrowing under 1 mm long, with the ends of the vessel in range.
+    await uploadModel(page, '短い狭窄の学習', 1, 1.4)
+    await measureLesion(page)
+    const length = Number(await field(page, '狭窄長').inputValue())
+    expect(length).toBeLessThan(1)
+
+    // The amber hint under the field says which value is used for the calculation.
+    await expect(page.getByText('FFRの計算には 1 mm を使用')).toBeVisible()
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    // The FFR is calculated, and a message says the 1 mm was used.
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/1 mm を使用しています/)).toBeVisible()
+    // The value shown in the field does not change.
+    expect(Number(await field(page, '狭窄長').inputValue())).toBe(length)
   })
 })
 
