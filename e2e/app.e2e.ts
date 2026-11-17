@@ -197,6 +197,8 @@ test.describe('help page', () => {
     expect(text).toContain('格子')
     expect(text).toContain('画面の左側')
     expect(text).not.toContain('形状ブロック')
+    expect(text).toContain('自動で1000倍に拡大')
+    expect(text).not.toContain('学習範囲を外れてしまいます')
     // Texts that were removed from the app must not come back.
     expect(text).not.toContain('宇宙')
     expect(text).not.toContain('生成される3D狭窄形状')
