@@ -56,6 +56,7 @@ import {
 } from '@/lib/ffrCubicModel'
 import { captureViewAsShown } from '@/lib/captureViewAsShown'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
+import { defaultCaptureName } from '@/lib/defaultCaptureName'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
 import {
@@ -1643,6 +1644,8 @@ function LesionAnalysisPageContent() {
       const payload = {
         ...(dataRecordId ? { dataRecordId } : {}),
         image,
+        // The name starts as when it was saved; it can be changed in the folder's list.
+        fileName: defaultCaptureName(new Date()),
         upstreamSize: `${selectedLesion.lesionProximalDiameter} mm`,
         downstreamSize: `${selectedLesion.lesionDistalDiameter} mm`,
         pa: `${pa} mmHg`,
@@ -1674,10 +1677,20 @@ function LesionAnalysisPageContent() {
         // without, so 保存 still works; 編集 then opens it as a saved capture.
         if ((error as { code?: number }).code !== 400) throw error
         console.error(error)
-        row = await databaseService.create<LearningContentFrameRow>(
-          'learning_content_frames',
-          payload,
-        )
+        try {
+          row = await databaseService.create<LearningContentFrameRow>(
+            'learning_content_frames',
+            payload,
+          )
+        } catch (secondError) {
+          // Nor a fileName column: the list then shows the time it was saved as the name.
+          if ((secondError as { code?: number }).code !== 400) throw secondError
+          console.error(secondError)
+          row = await databaseService.create<LearningContentFrameRow>(
+            'learning_content_frames',
+            Object.fromEntries(Object.entries(payload).filter(([key]) => key !== 'fileName')) as typeof payload,
+          )
+        }
       }
       setSavedSnapshots((prev) => [...prev, toSavedSnapshot(row)])
       return true

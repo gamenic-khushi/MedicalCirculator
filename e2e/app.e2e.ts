@@ -137,6 +137,65 @@ test.describe('folder list (3D解析)', () => {
     await expect(page.locator('tbody tr')).toHaveCount(0)
   })
 
+  test("a saved capture's file name starts as a timestamp and can be changed", async ({ page }) => {
+    const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+    const savedAt = '2026-11-10T09:15:30.000+00:00'
+    const frame = (id: string, extra: Record<string, unknown>) => ({
+      $id: id,
+      $createdAt: savedAt,
+      dataRecordId: 'record-a',
+      image,
+      upstreamSize: '11 mm',
+      downstreamSize: '4 mm',
+      pa: '100 mmHg',
+      pd: '80 mmHg',
+      parameter: '20 mmHg',
+      ...extra,
+    })
+    const fake = await useFakeAppwrite(page, {
+      tables: {
+        learning_content_frames: [
+          frame('named', { fileName: '術前の撮影' }),
+          frame('unnamed', {}),
+        ],
+      },
+    })
+    await page.goto('/help')
+    await page.getByText('ヘルプ').first().waitFor()
+    await page.evaluate(() => {
+      window.history.pushState(
+        { usr: { dataRecordId: 'record-a' }, key: 'folder-a', idx: (window.history.state?.idx ?? 0) + 1 },
+        '',
+        '/data/learning-content',
+      )
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    })
+    await expect(page.locator('tbody tr')).toHaveCount(2)
+
+    // The same moment as the row's saving time, in this computer's time zone.
+    const expected = await page.evaluate((iso) => {
+      const d = new Date(iso)
+      const p = (n: number) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+    }, savedAt)
+    const names = page.locator('tbody tr td:first-child input')
+    const values = await names.evaluateAll((inputs) => (inputs as HTMLInputElement[]).map((input) => input.value))
+    expect([...values].sort()).toEqual(['術前の撮影', expected].sort())
+
+    // A name that was given stays; any of them can be changed, and is kept.
+    const unnamed = names.nth(values.indexOf(expected))
+    await unnamed.fill('術後の撮影')
+    await unnamed.blur()
+    await expect.poll(() => fake.rows('learning_content_frames').map((row) => row.fileName).sort()).toEqual(
+      ['術前の撮影', '術後の撮影'].sort(),
+    )
+
+    // Emptying a name brings the timestamp back.
+    await unnamed.fill('')
+    await unnamed.blur()
+    await expect(unnamed).toHaveValue(expected)
+  })
+
   test('a signed-out visitor is sent to the login page', async ({ page }) => {
     await useFakeAppwrite(page, { signedIn: false })
     await page.goto('/data')
@@ -374,6 +433,8 @@ test.describe('the saved list (保存一覧)', () => {
     expect(saved).toHaveLength(1)
     expect(saved[0].dataRecordId).toBeTruthy()
     expect(saved[0].lesionPosition).toMatch(/^(近位|中間|遠位)$/)
+    // The row's file name starts as the time it was saved.
+    expect(saved[0].fileName).toMatch(/^[0-9]{8}_[0-9]{6}$/)
     await expect(page.getByRole('button', { name: '解析履歴に保存' })).toHaveCount(0)
     await expect(page.locator('tbody').getByTitle('保存済みキャプチャを開く')).toBeEnabled()
     // A wide list scrolls sideways.

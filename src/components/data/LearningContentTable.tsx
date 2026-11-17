@@ -3,6 +3,7 @@ import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { captureNameOf } from '@/lib/defaultCaptureName'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 
 import { LearningContentPreviewModal } from './LearningContentPreviewModal'
@@ -24,8 +25,9 @@ export function LearningContentTable({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [fileNameDrafts, setFileNameDrafts] = useState<Record<string, string>>({})
 
+  // The name it was given, or when it was saved: the field starts as a timestamp.
   function getFileNameValue(frame: LearningContentFrame) {
-    return fileNameDrafts[frame.id] ?? frame.fileName ?? ''
+    return fileNameDrafts[frame.id] ?? captureNameOf(frame)
   }
 
   function handleFileNameChange(frameId: string, value: string) {
@@ -34,9 +36,15 @@ export function LearningContentTable({
 
   function handleFileNameCommit(frame: LearningContentFrame) {
     const value = fileNameDrafts[frame.id]
-    if (value === undefined || value === (frame.fileName ?? '')) return
+    if (value === undefined) return
+    // Emptied: the field goes back to the timestamp, rather than a row with no name.
+    const emptied = value.trim() === ''
+    if (emptied) {
+      setFileNameDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => id !== frame.id)))
+    }
+    if (emptied ? !frame.fileName : value === captureNameOf(frame)) return
     const { id, image, ...rest } = frame
-    onEdit(id, { ...rest, fileName: value })
+    onEdit(id, { ...rest, fileName: emptied ? '' : value })
   }
 
   if (frames.length === 0) {
