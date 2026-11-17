@@ -18,4 +18,7 @@ export interface LearningContentFrame {
   bifurcationAngle?: string
   segmentLength?: string
   lesionPosition?: string
+  // JSON of what the view looked like when 保存 was clicked (① ② with their 3D
+  // anchors, the camera, the blood pressure), so 編集 can continue from there.
+  viewState?: string
 }

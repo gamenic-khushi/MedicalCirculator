@@ -120,6 +120,8 @@ const TABLES = [
       s('bifurcationAngle', 64),
       s('segmentLength', 64),
       s('lesionPosition', 64),
+      // JSON: what the view looked like at 保存 (① ②, camera, blood pressure), for 編集.
+      s('viewState', 4096),
     ],
     indexes: [{ key: 'idx_dataRecordId', columns: ['dataRecordId'] }],
   },

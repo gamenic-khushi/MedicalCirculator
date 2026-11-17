@@ -226,6 +226,43 @@ test.describe('the saved list (保存一覧)', () => {
     expect(await scroller.evaluate((el) => getComputedStyle(el).overflowX)).toBe('auto')
   })
 
+  test('編集 brings back the lesion selection as it was when 保存 was clicked', async ({
+    page,
+  }) => {
+    const fake = await useFakeAppwrite(page)
+    await uploadModel(page, '編集で戻す学習')
+    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
+    const measured = await field(page, '病変近位径').inputValue()
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 20_000 })
+
+    // 保存 kept the view with the row: ① ②, the camera and the blood pressure.
+    const row = fake.rows('learning_content_frames')[0]
+    const kept = JSON.parse(String(row.viewState))
+    expect(kept.annotations).toHaveLength(2)
+    expect(kept.annotations[0].worldPoint).toHaveLength(3)
+    expect(kept.cameraState.position).toHaveLength(3)
+    expect(kept.bloodPressure).toBe('100')
+
+    // Start over, then 編集: the selection, the values and the FFR come back, and the
+    // page is the live analysis (not a 保存済みキャプチャ), so it can be edited on.
+    await page.getByTitle('リセットして選択をやり直す').click()
+    await expect(field(page, '病変近位径')).toHaveValue('')
+    await page.locator('tbody').getByTitle('保存済みキャプチャを開く').click()
+    await expect(field(page, '病変近位径')).toHaveValue(measured, { timeout: 40_000 })
+    await expect(page.getByText('保存済みキャプチャ')).toHaveCount(0)
+    await expect(page.locator('input[type=number]').first()).toHaveValue('100')
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: '測定範囲を更新' })).toBeVisible()
+  })
+
   test('a folder shows every row saved in it, not only the first 25', async ({ page }) => {
     const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
     const frames = Array.from({ length: 30 }, (_, i) => ({
@@ -272,8 +309,16 @@ test.describe('the saved list (保存一覧)', () => {
       )
       window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
     }, image)
-    await expect(page.locator('tbody tr')).toHaveCount(30)
-    await expect(page.locator('tbody').getByText('99 mm')).toHaveCount(0)
+    // Waits for the final list: all 30 of this folder's rows and none of the other's.
+    await expect
+      .poll(
+        async () => {
+          const rows = await page.locator('tbody tr').allInnerTexts()
+          return { count: rows.length, other: rows.some((row) => row.includes('99 mm')) }
+        },
+        { timeout: 20_000 },
+      )
+      .toEqual({ count: 30, other: false })
   })
 
   test('編集 opens a saved row', async ({ page }) => {

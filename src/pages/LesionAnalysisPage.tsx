@@ -34,6 +34,7 @@ import {
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { fade, reveal } from '@/lib/motion'
+import { fetchFolderModelFile } from '@/lib/fetchFolderModel'
 import { MIN_MODEL_SIZE_UNITS } from '@/lib/modelUnits'
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
@@ -75,6 +76,8 @@ import {
 } from '@/lib/twoPointLesionMeasurement'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
+import type { DataRecord } from '@/types/dataRecord'
+import { createModel3DFile } from '@/types/model'
 import type { Annotation, CameraState, FfrResult, SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
@@ -90,6 +93,37 @@ const PROXIMITY_TIEBREAK_MIN_CONFIDENCE = 0.5
 // whichever order they're currently arranged in.
 function pointPairKey(id1: string, id2: string): string {
   return [id1, id2].sort().join('|')
+}
+
+// What the view looked like when 保存 was clicked, kept with the saved row so 編集
+// can continue from there: ① ② (with their anchors on the 3D model), the camera and
+// the blood pressure.
+interface SavedViewState {
+  annotations: Annotation[]
+  cameraState: CameraState | null
+  bloodPressure: string
+}
+
+function parseViewState(raw: string | undefined): SavedViewState | null {
+  if (!raw) return null
+  try {
+    const value = JSON.parse(raw) as Partial<SavedViewState>
+    const annotations = value.annotations
+    if (
+      Array.isArray(annotations) &&
+      annotations.length === 2 &&
+      annotations.every((annotation) => Array.isArray(annotation.worldPoint))
+    ) {
+      return {
+        annotations,
+        cameraState: value.cameraState ?? null,
+        bloodPressure: String(value.bloodPressure ?? ''),
+      }
+    }
+  } catch {
+    // Not readable: the row is opened as a saved capture instead.
+  }
+  return null
 }
 
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
@@ -187,7 +221,7 @@ function buildSelectedLesionFromFrame(frame: LearningContentFrame): SelectedLesi
 
 type ParamKey = keyof Omit<
   LearningContentFrame,
-  'id' | 'dataRecordId' | 'image' | 'fileName' | 'createdAt'
+  'id' | 'dataRecordId' | 'image' | 'fileName' | 'createdAt' | 'viewState'
 >
 
 const EMPTY_PARAMS: Record<ParamKey, string> = {
@@ -348,6 +382,9 @@ function LesionAnalysisPageContent() {
     cameraState?: CameraState | null
     dataRecordId?: string
     viewFrame?: LearningContentFrame
+    // Set when a saved row is reopened with 編集: FFR is calculated again once the
+    // lesion has been measured, so the view is as it was when 保存 was clicked.
+    restoreFfr?: boolean
   } | null
   const dataRecordId = navigationState?.dataRecordId
   const viewFrame = navigationState?.viewFrame ?? null
@@ -435,6 +472,9 @@ function LesionAnalysisPageContent() {
   // the stenosis diagram; null when it could not be taken from the 3D model.
   const [lesionShape, setLesionShape] = useState<LesionShape | null>(null)
   const [isCalculatingFfr, setIsCalculatingFfr] = useState(false)
+  // A saved row is being reopened with 編集 (its model may have to be fetched).
+  const [isOpeningSaved, setIsOpeningSaved] = useState(false)
+  const [pendingFfrRestore, setPendingFfrRestore] = useState(Boolean(navigationState?.restoreFfr))
   const [isEditingLesion, setIsEditingLesion] = useState(false)
   const { toast, showToast, dismissToast } = useToast()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -552,6 +592,15 @@ function LesionAnalysisPageContent() {
     return () => clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // After 編集, once the lesion is measured again, the FFR is calculated as it was.
+  useEffect(() => {
+    if (!pendingFfrRestore || isMeasuring || measurement) return
+    if (selectedLesion.stenosisRate === '' || bloodPressure.trim() === '') return
+    setPendingFfrRestore(false)
+    handleCalculateFfr()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFfrRestore, isMeasuring, measurement, selectedLesion.stenosisRate])
 
   // Re-projects any annotation that has a 3D anchor point back onto the
   // screen from the camera's current position — called both continuously
@@ -894,14 +943,48 @@ function LesionAnalysisPageContent() {
     setSavedSnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id))
   }
 
-  // 編集 on a row of the list: opens that saved capture (保存済みキャプチャ), like the
-  // pencil on the learning-content list.
+  // 編集 on a row of the list: the 3D model comes back as it was when 保存 was
+  // clicked (① ②, camera, blood pressure) to continue from there. A row saved
+  // without that state is opened as a saved capture (保存済みキャプチャ) instead.
   async function handleOpenSnapshot(snapshot: SavedSnapshot) {
+    setIsOpeningSaved(true)
     try {
       const row = await databaseService.get<LearningContentFrameRow>(
         'learning_content_frames',
         snapshot.id,
       )
+      const saved = parseViewState(row.viewState)
+      if (saved && dataRecordId) {
+        // The model already on this page is the folder's; from a saved capture the
+        // folder's stored file is loaded again.
+        let ready = Boolean(validModel)
+        if (!ready) {
+          const record = await databaseService.get<Models.Row & Omit<DataRecord, 'id'>>(
+            'data_records',
+            dataRecordId,
+          )
+          if (record.modelFileId) {
+            const file = await fetchFolderModelFile({
+              file: record.file,
+              modelFileId: record.modelFileId,
+            })
+            setModel(createModel3DFile(file, { folder: '２D心弁解析', studyName: record.category }))
+            ready = true
+          }
+        }
+        if (ready) {
+          navigate(location.pathname, {
+            state: {
+              dataRecordId,
+              bloodPressure: saved.bloodPressure,
+              annotations: saved.annotations,
+              cameraState: saved.cameraState,
+              restoreFfr: true,
+            },
+          })
+          return
+        }
+      }
       const { $id, $createdAt, ...rest } = row
       navigate(location.pathname, {
         state: { dataRecordId, viewFrame: { id: $id, createdAt: $createdAt, ...rest } },
@@ -909,6 +992,8 @@ function LesionAnalysisPageContent() {
     } catch (error) {
       console.error(error)
       showToast(LOAD_FAILED, 'error')
+    } finally {
+      setIsOpeningSaved(false)
     }
   }
 
@@ -1559,7 +1644,7 @@ function LesionAnalysisPageContent() {
             return plain()
           })
         : plain()
-      const row = await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
+      const payload = {
         ...(dataRecordId ? { dataRecordId } : {}),
         image,
         upstreamSize: `${selectedLesion.lesionProximalDiameter} mm`,
@@ -1576,7 +1661,28 @@ function LesionAnalysisPageContent() {
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
         segmentLength: `${selectedLesion.stenosisLength} mm`,
         lesionPosition: selectedLesion.lesionPosition || '—',
-      })
+      }
+      const viewState: SavedViewState = {
+        annotations: annotations.map(({ id, x, y, worldPoint }) => ({ id, x, y, worldPoint })),
+        cameraState: cameraState ?? canvasRef.current?.getCameraState() ?? null,
+        bloodPressure: pa,
+      }
+      let row: LearningContentFrameRow
+      try {
+        row = await databaseService.create<LearningContentFrameRow>('learning_content_frames', {
+          ...payload,
+          viewState: JSON.stringify(viewState),
+        })
+      } catch (error) {
+        // A database without the viewState column refuses the row (400): save it
+        // without, so 保存 still works; 編集 then opens it as a saved capture.
+        if ((error as { code?: number }).code !== 400) throw error
+        console.error(error)
+        row = await databaseService.create<LearningContentFrameRow>(
+          'learning_content_frames',
+          payload,
+        )
+      }
       setSavedSnapshots((prev) => [...prev, toSavedSnapshot(row)])
       return true
     } catch (error) {
@@ -2132,6 +2238,10 @@ function LesionAnalysisPageContent() {
           </div>,
           document.body,
         )}
+
+      <AnimatePresence>
+        {isOpeningSaved && <LoadingOverlay message="保存した状態を読み込んでいます..." />}
+      </AnimatePresence>
 
       <AnimatePresence>{isMeasuring && <LoadingOverlay message="病変を計測しています..." />}</AnimatePresence>
 
