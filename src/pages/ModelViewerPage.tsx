@@ -659,7 +659,7 @@ export function ModelViewerPage() {
               title="この画面上に一時的に保存します（ページを離れると失われます。永続的に保存するには「学習データに保存」を使用してください）"
               className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
             >
-              仮保存
+              保存
             </button>
           </div>
         </div>

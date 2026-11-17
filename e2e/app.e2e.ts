@@ -81,7 +81,7 @@ test.describe('lesion analysis page', () => {
     await expect(page.locator('header')).toBeHidden()
 
     // The four blocks are named by labels written vertically at their left edge.
-    for (const name of ['3Dビュアー', '選択病変 形状', '測定', '仮保存一覧']) {
+    for (const name of ['3Dビュアー', '選択病変 形状', '測定', '保存一覧']) {
       const label = page.getByText(name, { exact: true })
       await expect(label).toBeVisible()
       expect(await label.evaluate((el) => getComputedStyle(el.parentElement!).writingMode)).toBe(
@@ -89,6 +89,16 @@ test.describe('lesion analysis page', () => {
       )
     }
     await expect(page.getByText('3Dブロック')).toHaveCount(0)
+
+    // The 3D viewer block takes 2/3 of the width, the 選択病変 形状 block 1/3.
+    const widthOf = async (name: string) =>
+      (await page
+        .getByText(name, { exact: true })
+        .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+        .boundingBox())!.width
+    const viewerWidth = await widthOf('3Dビュアー')
+    const valuesWidth = await widthOf('選択病変 形状')
+    expect(viewerWidth / (viewerWidth + valuesWidth)).toBeCloseTo(2 / 3, 1)
 
     // The name 血圧 and its value are side by side.
     const name = (await page.getByText('血圧', { exact: true }).boundingBox())!
@@ -161,6 +171,115 @@ test.describe('documents page (資料)', () => {
     await expect(page.getByText('空のフォルダ')).toBeVisible()
     await expect(page.getByText('ファイルがありません')).toBeVisible()
     await expect(page.getByText('資料A')).toBeVisible()
+  })
+})
+
+test.describe('the saved list (保存一覧)', () => {
+  test('a saved row shows the columns in the agreed order', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '保存一覧の学習')
+    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+
+    // The button and the list are called 保存 / 保存一覧 (no longer 仮保存).
+    await expect(page.getByText('仮保存')).toHaveCount(0)
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 20_000 })
+
+    const headers = await page.locator('thead th').allInnerTexts()
+    expect(headers).toEqual([
+      '画像',
+      '病変近位径',
+      '病変遠位径',
+      'Pd',
+      'Pa',
+      'FFR',
+      '狭窄率',
+      '最小血管径',
+      '最小断面積',
+      '狭窄長',
+      '病変位置',
+      '編集',
+      '削除',
+    ])
+    const cells = await page.locator('tbody tr td').allInnerTexts()
+    expect(cells[3]).toMatch(/mmHg$/) // Pd
+    expect(cells[5]).toMatch(/^0[.][0-9]{2}$/) // FFR = Pd / Pa
+    expect(cells[6]).toMatch(/%$/) // 狭窄率
+    expect(cells[10]).toMatch(/^(近位|中間|遠位)$/) // 病変位置
+    // A row saved only on this screen cannot be opened yet.
+    await expect(page.locator('tbody').getByTitle(/解析履歴に保存/)).toBeDisabled()
+    // A wide list scrolls sideways.
+    const scroller = page.locator('.pill-scrollbar').last()
+    expect(await scroller.evaluate((el) => getComputedStyle(el).overflowX)).toBe('auto')
+  })
+
+  test('編集 opens a row that was saved to the history', async ({ page }) => {
+    await useFakeAppwrite(page, {
+      tables: {
+        learning_content_frames: [
+          {
+            $id: 'frame-1',
+            dataRecordId: 'record-a',
+            image: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+            upstreamSize: '4.92 mm',
+            downstreamSize: '4.97 mm',
+            pa: '100 mmHg',
+            pd: '78.4 mmHg',
+            parameter: '21.6 mmHg',
+            mld: '1.59 mm',
+            mla: '1.99 mm²',
+            stenosisRate: '68 %',
+            avgDiameter: '4.9 mm',
+            segmentLength: '1.98 mm',
+            lesionPosition: '中間',
+          },
+        ],
+      },
+    })
+    await page.goto('/help')
+    await page.getByText('ヘルプ').first().waitFor()
+    // Opens the saved-capture page the way the learning-content list does.
+    await page.evaluate(() => {
+      window.history.pushState(
+        {
+          usr: {
+            dataRecordId: 'record-a',
+            viewFrame: {
+              id: 'frame-1',
+              dataRecordId: 'record-a',
+              image: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+              upstreamSize: '1 mm',
+              downstreamSize: '1 mm',
+              pa: '1 mmHg',
+              pd: '1 mmHg',
+              parameter: '0 mmHg',
+            },
+          },
+          key: 'a',
+          idx: 5,
+        },
+        '',
+        '/data/lesion-measurement/analysis',
+      )
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    })
+    await expect(page.getByText('保存済みキャプチャ')).toBeVisible()
+    const row = page.locator('tbody tr').filter({ hasText: '4.92 mm' })
+    await expect(row).toBeVisible()
+    // FFR is Pd / Pa: 78.4 / 100.
+    await expect(row.locator('td').nth(5)).toHaveText('0.78')
+    await expect(row.locator('td').nth(7)).toHaveText('1.59 mm')
+    // The pencil opens that saved row: its values are now the ones shown.
+    await row.getByTitle('保存済みキャプチャを開く').click()
+    await expect(field(page, '病変近位径')).toHaveValue('4.92')
+    await expect(field(page, '病変位置')).toHaveValue('中間')
   })
 })
 

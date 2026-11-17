@@ -60,6 +60,7 @@ import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
 import {
   DELETE_FAILED,
+  LOAD_FAILED,
   MODEL_LOOKS_LIKE_METRES,
   SAVE_FAILED,
   VESSEL_WIDTH_MEASURE_FAILED,
@@ -106,6 +107,9 @@ function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
     mla: row.mla ?? '—',
     lumenVolume: row.lumenVolume ?? '—',
     bifurcationAngle: row.bifurcationAngle ?? '—',
+    mld: row.mld ?? '—',
+    segmentLength: row.segmentLength ?? '—',
+    lesionPosition: row.lesionPosition ?? '—',
   }
 }
 
@@ -328,7 +332,14 @@ function GlowingInput({
   return <input ref={ref} {...props} />
 }
 
+// Opening a saved capture from the list is a navigation to this same route, so the
+// page starts afresh for each navigation (its state is read from the location once).
 export function LesionAnalysisPage() {
+  const { key } = useLocation()
+  return <LesionAnalysisPageContent key={key} />
+}
+
+function LesionAnalysisPageContent() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = isAdminCategory(user?.category)
@@ -883,6 +894,24 @@ export function LesionAnalysisPage() {
     setSavedSnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id))
   }
 
+  // 編集 on a row of the list: opens that saved capture (保存済みキャプチャ), like the
+  // pencil on the learning-content list.
+  async function handleOpenSnapshot(snapshot: SavedSnapshot) {
+    try {
+      const row = await databaseService.get<LearningContentFrameRow>(
+        'learning_content_frames',
+        snapshot.id,
+      )
+      const { $id, $createdAt, ...rest } = row
+      navigate(location.pathname, {
+        state: { dataRecordId, viewFrame: { id: $id, createdAt: $createdAt, ...rest } },
+      })
+    } catch (error) {
+      console.error(error)
+      showToast(LOAD_FAILED, 'error')
+    }
+  }
+
   function handleResetAnnotations() {
     setIsAnnotating(false)
     setAnnotations([])
@@ -1302,7 +1331,7 @@ export function LesionAnalysisPage() {
     setParams((prev) => ({
       ...prev,
       stenosisRate: String(Math.round(stenosisRate)),
-      // The temporary list (仮保存) reads these, so an edited diameter must
+      // The temporary list (保存) reads these, so an edited diameter must
       // reach them too, not only the lesion panel and the FFR result.
       upstreamSize: data.lesionProximalDiameter || prev.upstreamSize,
       downstreamSize: data.lesionDistalDiameter || prev.downstreamSize,
@@ -1414,6 +1443,9 @@ export function LesionAnalysisPage() {
         mla: params.mla ? `${params.mla} mm²` : '—',
         lumenVolume: params.lumenVolume ? `${params.lumenVolume} mm³` : '—',
         bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
+        mld: selectedLesion.minVesselDiameter ? `${selectedLesion.minVesselDiameter} mm` : '—',
+        segmentLength: selectedLesion.stenosisLength ? `${selectedLesion.stenosisLength} mm` : '—',
+        lesionPosition: selectedLesion.lesionPosition || '—',
         isDraft: true,
       },
     ])
@@ -1545,7 +1577,7 @@ export function LesionAnalysisPage() {
 
     setIsSavingHistory(true)
     try {
-      // The view as shown, ① ② and the lines included, as 仮保存 takes it (the
+      // The view as shown, ① ② and the lines included, as 保存 takes it (the
       // client wants the saved data to look like the measurement). The plain
       // close-up if that can't be drawn, rather than no image.
       const plain = () => snapshotImage ?? canvasRef.current?.capture() ?? ''
@@ -1659,9 +1691,10 @@ export function LesionAnalysisPage() {
           )}
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* The 3D viewer takes 2/3 of the width and the values 1/3 (Aki, 2026/11/17). */}
+      <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* 3Dビュアー */}
-        <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm lg:col-span-2">
           <SideLabel>3Dビュアー</SideLabel>
           <div className="flex min-w-0 flex-1 flex-col">
           <div
@@ -1679,7 +1712,7 @@ export function LesionAnalysisPage() {
                 : { backgroundColor: SPACE_COLOR }
             }
             className={`relative overflow-hidden ${
-              isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[480px]'
+              isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[600px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
           >
             {viewFrame ? (
@@ -1954,8 +1987,8 @@ export function LesionAnalysisPage() {
         {/* 選択病変 形状 */}
         <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
           <SideLabel>選択病変 形状</SideLabel>
-          <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row">
-          <div className="flex-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row lg:flex-col">
+          <div className="flex-1 lg:flex-none">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">計測値</p>
               <p className="text-[0.6875rem] text-gray-400">自動計測値</p>
@@ -2079,7 +2112,7 @@ export function LesionAnalysisPage() {
             title="この画面上に一時的に保存します（ページを離れると失われます。永続的に保存するには「解析履歴に保存」を使用してください）"
             className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            仮保存
+            保存
           </button>
         </div>
       )}
@@ -2088,6 +2121,7 @@ export function LesionAnalysisPage() {
         <SavedSnapshotsPanel
           savedSnapshots={savedSnapshots}
           onDelete={handleDeleteSnapshot}
+          onEdit={handleOpenSnapshot}
           onDownloadPdf={handleDownloadPdf}
           onSaveToHistory={isAdmin && !viewFrame ? handleSaveToLearningData : undefined}
           canSaveToHistory={canSaveToHistory}

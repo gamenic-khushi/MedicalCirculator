@@ -31,7 +31,11 @@ export interface SavedSnapshot {
   mla: string
   lumenVolume: string
   bifurcationAngle: string
-  // A provisional (仮保存) capture that was never sent to the backend —
+  // Shown in the saved list; a snapshot from the older viewer has none of them.
+  mld?: string
+  segmentLength?: string
+  lesionPosition?: string
+  // A provisional (保存) capture that was never sent to the backend —
   // deleting it should not attempt to remove a row that doesn't exist.
   isDraft?: boolean
 }
