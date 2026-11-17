@@ -9,3 +9,11 @@ export const MIN_MODEL_SIZE_UNITS = 1
 export function gridTileSize(maxDimension: number): number {
   return maxDimension < MIN_MODEL_SIZE_UNITS ? 0.01 : 10
 }
+
+// A model that looks like metres is shown 1000 times larger, so that everything
+// else (measurements, the 6 mm depth range, the grid, FFR) works in millimetres.
+export const METRES_TO_MM = 1000
+
+export function looksLikeMetres(maxDimension: number): boolean {
+  return maxDimension > 0 && maxDimension < MIN_MODEL_SIZE_UNITS
+}

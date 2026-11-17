@@ -22,12 +22,14 @@ function facet(a: Vec, b: Vec, c: Vec): string {
   return `facet normal ${(n[0] / length).toFixed(5)} ${(n[1] / length).toFixed(5)} ${(n[2] / length).toFixed(5)}\nouter loop\n${f(a)}\n${f(b)}\n${f(c)}\nendloop\nendfacet\n`
 }
 
-export function makeStenosisStl(): Buffer {
+// `unit` is the size of one model unit in mm: 1 for a model written in mm (the usual),
+// 1000 for one written in metres.
+export function makeStenosisStl(unit = 1): Buffer {
   const point = (ring: number, segment: number): Vec => {
     const y = (ring / RINGS) * LENGTH
     const angle = (segment / SEGMENTS) * Math.PI * 2
     const r = radiusAt(y)
-    return [r * Math.cos(angle), y, r * Math.sin(angle)]
+    return [(r * Math.cos(angle)) / unit, y / unit, (r * Math.sin(angle)) / unit]
   }
   let out = 'solid vessel\n'
   for (let ring = 0; ring < RINGS; ring++) {
@@ -42,7 +44,7 @@ export function makeStenosisStl(): Buffer {
   }
   // End caps, so the model is closed.
   const bottom: Vec = [0, 0, 0]
-  const top: Vec = [0, LENGTH, 0]
+  const top: Vec = [0, LENGTH / unit, 0]
   for (let segment = 0; segment < SEGMENTS; segment++) {
     const next = (segment + 1) % SEGMENTS
     out += facet(bottom, point(0, next), point(0, segment))

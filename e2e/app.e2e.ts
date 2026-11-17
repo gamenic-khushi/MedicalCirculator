@@ -10,13 +10,13 @@ function field(page: Page, label: string) {
   )
 }
 
-async function uploadModel(page: Page, studyName: string) {
+async function uploadModel(page: Page, studyName: string, unit = 1) {
   await page.goto('/data/3d-analysis')
   await page.getByLabel('学習名').fill(studyName)
   await page.locator('input[type=file]').setInputFiles({
     name: 'vessel.stl',
     mimeType: 'application/octet-stream',
-    buffer: makeStenosisStl(),
+    buffer: makeStenosisStl(unit),
   })
   await page.waitForURL('**/data/lesion-measurement/analysis')
   await expect(page.getByText('3D狭窄形状プレビュー')).toBeVisible()
@@ -68,7 +68,9 @@ test.describe('lesion analysis page', () => {
     await expect(field(page, '病変遠位径')).toHaveJSProperty('readOnly', false)
   })
 
-  test('the layout: menu on the left, vertical block labels, 血圧 on one line', async ({ page }) => {
+  test('the layout: menu on the left, vertical block labels, 血圧 on one line', async ({
+    page,
+  }) => {
     await useFakeAppwrite(page)
     await uploadModel(page, 'E2Eの学習')
 
@@ -159,6 +161,30 @@ test.describe('documents page (資料)', () => {
     await expect(page.getByText('空のフォルダ')).toBeVisible()
     await expect(page.getByText('ファイルがありません')).toBeVisible()
     await expect(page.getByText('資料A')).toBeVisible()
+  })
+})
+
+test.describe('a model exported in metres', () => {
+  test('is shown and measured in mm, like one exported in mm', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, 'メートルの学習', 1000)
+
+    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
+
+    // The test vessel is 5 mm wide, so the diameters are about 5, not 0.005.
+    for (const label of ['病変近位径', '病変遠位径']) {
+      const value = Number(await field(page, label).inputValue())
+      expect(value).toBeGreaterThan(3)
+      expect(value).toBeLessThan(6)
+    }
+    expect(Number(await field(page, '狭窄長').inputValue())).toBeGreaterThan(0.5)
+    // No "this model looks like metres" error any more.
+    await expect(page.getByText('メートル（m）単位の可能性')).toHaveCount(0)
   })
 })
 

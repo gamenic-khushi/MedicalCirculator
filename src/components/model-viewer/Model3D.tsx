@@ -4,6 +4,8 @@ import * as THREE from 'three'
 import { DRACOLoader, FBXLoader, GLTFLoader, OBJLoader, STLLoader } from 'three-stdlib'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 
+import { looksLikeMetres, METRES_TO_MM } from '@/lib/modelUnits'
+
 // ModelCanvas's lesion-analysis walks (heart-proximity ordering, reference
 // width, bifurcation angle, ...) raycast against these meshes dozens of
 // times per placement, now at full precision (computeVesselWidth) rather
@@ -129,6 +131,13 @@ function StlModel({
   const clippingPlanes = useClippingPlanes(clippingPlane)
 
   const centered = useMemo(() => {
+    // A model exported in metres is made 1000 times larger (in place; the loaded
+    // geometry is cached, and after this it no longer looks like metres).
+    geometry.computeBoundingBox()
+    const size = geometry.boundingBox?.getSize(new THREE.Vector3())
+    if (size && looksLikeMetres(Math.max(size.x, size.y, size.z))) {
+      geometry.scale(METRES_TO_MM, METRES_TO_MM, METRES_TO_MM)
+    }
     geometry.center()
     ensureVertexColorAttribute(geometry)
     buildBoundsTree(geometry)
@@ -184,7 +193,7 @@ function ObjModel({
     loadedAssets.set(url, object)
   }, [object, color, url])
   useEffect(() => applyClippingPlanes(object, clippingPlanes), [object, clippingPlanes])
-  return <primitive object={object} />
+  return <primitive object={object} scale={useUnitScale(object)} />
 }
 
 function FbxModel({
@@ -204,7 +213,7 @@ function FbxModel({
     loadedAssets.set(url, object)
   }, [object, color, url])
   useEffect(() => applyClippingPlanes(object, clippingPlanes), [object, clippingPlanes])
-  return <primitive object={object} />
+  return <primitive object={object} scale={useUnitScale(object)} />
 }
 
 const dracoLoader = new DRACOLoader()
@@ -238,6 +247,22 @@ function GltfModel({
   }, [gltf, color, url])
   useEffect(() => applyClippingPlanes(gltf.scene, clippingPlanes), [gltf, clippingPlanes])
   return <primitive object={gltf.scene} scale={GLTF_UNIT_SCALE} />
+}
+
+// OBJ and FBX models keep their loaded size and are scaled on display instead (as
+// glTF is, below). The answer is remembered per loaded object: the loader's cache
+// hands the same object to a later mount, whose size then already includes the scale.
+const unitScales = new WeakMap<THREE.Object3D, number>()
+
+function useUnitScale(object: THREE.Object3D): number {
+  return useMemo(() => {
+    const known = unitScales.get(object)
+    if (known !== undefined) return known
+    const size = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3())
+    const scale = looksLikeMetres(Math.max(size.x, size.y, size.z)) ? METRES_TO_MM : 1
+    unitScales.set(object, scale)
+    return scale
+  }, [object])
 }
 
 function disableAnimations(object: THREE.Object3D) {
