@@ -48,6 +48,17 @@ function halfHeightFor(diameter: number, maxDiameter: number) {
   return Math.max(MIN_HALF_HEIGHT, ratio * MAX_HALF_HEIGHT)
 }
 
+// Room above the lengthwise drawing for the 切断面 label, which stands over the cutting
+// line (the drawing's own coordinates are unchanged: the view just starts higher).
+const LABEL_ROOM = 14
+const LENGTHWISE_VIEW_BOX = `0 ${-LABEL_ROOM} ${WIDTH} ${HEIGHT + LABEL_ROOM}`
+const CUT_LABEL_COLOR = '#4f46e5'
+
+// The name of the lengthwise drawing, one line tall in every state of the block.
+function LengthwiseHeading() {
+  return <p className="h-4 w-full text-[0.6875rem] font-semibold text-indigo-600">縦断面</p>
+}
+
 const SECTION_WIDTH = 300
 const SECTION_HEIGHT = 150
 // Share of the picture's height (or width, for a cut wider than tall) the cut fills.
@@ -63,7 +74,8 @@ const DEPTH_RANGE_COLOR = '#6366f1'
 // picture, with the sizes across it underneath. The SLICE_DEPTH_LIMIT mm behind
 // the surface the horizontal line lies on (the range the cut and the depth slider
 // reach) is drawn to the same scale; a small cut leaves the far end of it past
-// the right edge, which then says so with an arrow, and so does the 縦断面 line.
+// the right edge, which then says so with an arrow, and so does the 奥行き line (the
+// lengthwise section's place along the depth, which the depth slider moves).
 function TransverseSection({
   outline,
   area,
@@ -117,7 +129,13 @@ function TransverseSection({
           aria-hidden
         />
       )}
-      <p className="text-[0.6875rem] font-semibold text-indigo-600">切断面の横断面</p>
+      {/* The name, with the area of the cut beside it (one line tall with or without it). */}
+      <div className="flex h-4 w-full items-baseline gap-3 px-1">
+        <p className="text-[0.6875rem] font-semibold text-indigo-600">横断面</p>
+        {area != null && (
+          <p className="text-[0.6875rem] font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</p>
+        )}
+      </div>
       <svg viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="w-full">
         <rect
           x={1}
@@ -188,7 +206,7 @@ function TransverseSection({
               fontWeight={600}
               fill={SECTION_LINE_COLOR}
             >
-              横線
+              水平線
             </text>
           </g>
         )}
@@ -213,15 +231,11 @@ function TransverseSection({
               fontWeight={600}
               fill={SECTION_LINE_COLOR}
             >
-              縦断面{depthPastEdge && ' →'}
+              奥行き（スライダーで調整）{depthPastEdge && ' →'}
             </text>
           </g>
         )}
       </svg>
-      {/* Always one line tall, with or without the area, so nothing below moves. */}
-      <p className="h-4 text-center text-[0.625rem] text-gray-500">
-        {area != null && <span className="block font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</span>}
-      </p>
     </div>
   )
 }
@@ -308,13 +322,11 @@ function MeasuredShape({
         )
       : null
   const xCut = cutFraction != null ? x0 + Math.min(Math.max(cutFraction, 0), 1) * (x1 - x0) : null
-  // The cut is put at the smallest cross-section, so usually right by the
-  // narrowest point: its label would then sit on 最小, which goes a line lower.
-  const crowded = xCut != null && Math.abs(xCut - xNarrowest) < WIDTH * 0.12
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full">
+      <LengthwiseHeading />
+      <svg viewBox={LENGTHWISE_VIEW_BOX} className="w-full">
         {depthCut ? (
           <>
             {/* The centre-line outline stays as a faint guide behind the cut. */}
@@ -371,7 +383,7 @@ function MeasuredShape({
             />
             {/* Ends short of the ② circle, which sits on the line's right end. */}
             <text x={x1 - MARKER_RADIUS - 3} y={yHorizontal - 3} textAnchor="end" fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
-              横線
+              水平線
             </text>
           </g>
         )}
@@ -379,6 +391,17 @@ function MeasuredShape({
         <EndMarker x={x1} color={DISTAL_COLOR} label="②" />
         {xCut != null && (
           <g>
+            {/* The cutting line's name stands over its top. */}
+            <text
+              x={Math.min(Math.max(xCut, 20), WIDTH - 20)}
+              y={-3}
+              textAnchor="middle"
+              fontSize={10}
+              fontWeight={600}
+              fill={CUT_LABEL_COLOR}
+            >
+              切断面
+            </text>
             <line
               x1={xCut}
               y1={CENTER_Y - MAX_HALF_HEIGHT - 8}
@@ -391,24 +414,15 @@ function MeasuredShape({
           </g>
         )}
       </svg>
-      {/* Two lines tall whether or not 最小 has to drop below 切断面, so the block never changes height. */}
-      <div className="relative h-8 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
+      <div className="relative h-4 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
         <span className="absolute left-1 top-0">① 近位側</span>
         <span
-          className={`absolute -translate-x-1/2 whitespace-nowrap ${crowded ? 'top-4' : 'top-0'}`}
+          className="absolute -translate-x-1/2 whitespace-nowrap"
           style={{ left: `${(xNarrowest / WIDTH) * 100}%` }}
         >
           最小
         </span>
         <span className="absolute right-1 top-0">② 遠位側</span>
-        {xCut != null && (
-          <span
-            className="absolute top-0 -translate-x-1/2 whitespace-nowrap font-semibold text-indigo-600"
-            style={{ left: `${(xCut / WIDTH) * 100}%` }}
-          >
-            切断面
-          </span>
-        )}
       </div>
       <div className="w-full">
         <TransverseSection
@@ -429,8 +443,9 @@ function MeasuredShape({
 export function VesselShapePlaceholder({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center gap-2">
+      <LengthwiseHeading />
       <div className="relative w-full">
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full">
+        <svg viewBox={LENGTHWISE_VIEW_BOX} className="w-full">
           <line
             x1={X_MARGIN}
             y1={CENTER_Y}
@@ -443,11 +458,11 @@ export function VesselShapePlaceholder({ message }: { message: string }) {
           <EndMarker x={X_MARGIN} color={PROXIMAL_COLOR} label="①" />
           <EndMarker x={WIDTH - X_MARGIN} color={DISTAL_COLOR} label="②" />
         </svg>
-        <p className="absolute inset-x-10 top-1/2 -translate-y-1/2 rounded bg-white/80 px-2 py-1 text-center text-xs text-gray-400">
+        <p className="absolute inset-x-10 top-[55%] -translate-y-1/2 rounded bg-white/80 px-2 py-1 text-center text-xs text-gray-400">
           {message}
         </p>
       </div>
-      <div className="relative h-8 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
+      <div className="relative h-4 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
         <span className="absolute left-1 top-0">① 近位側</span>
         <span className="absolute right-1 top-0">② 遠位側</span>
       </div>
@@ -501,7 +516,8 @@ function GeneratedShape({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full">
+      <LengthwiseHeading />
+      <svg viewBox={LENGTHWISE_VIEW_BOX} className="w-full">
         <path d={outline} fill="#dbe4f0" stroke="#c3d0e3" strokeWidth={1} />
         <line
           x1={x0}

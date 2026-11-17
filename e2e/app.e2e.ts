@@ -825,7 +825,7 @@ test.describe('scissors and the depth slider', () => {
 
     // The cross-section area is shown and the picture of the cut appears.
     await expect(page.getByText('断面積').first()).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByText('切断面の横断面')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('横断面', { exact: true })).toBeVisible({ timeout: 20_000 })
     const slider = page.getByLabel('奥行き')
     await expect(slider).toBeVisible()
     await expect(slider).toHaveValue('0')
@@ -845,7 +845,7 @@ test.describe('a fixed layout', () => {
     await useFakeAppwrite(page)
     await uploadModel(page, '固定レイアウトの学習')
     // The cross-section area is on screen before anything is measured.
-    await expect(page.getByText('切断面の横断面')).toBeVisible()
+    await expect(page.getByText('横断面', { exact: true })).toBeVisible()
 
     // The block that holds the values and both previews, and the whole page.
     const block = page.locator('xpath=//*[normalize-space(text())="選択病変 形状"]/ancestor::div[contains(@class,"rounded-2xl")][1]')

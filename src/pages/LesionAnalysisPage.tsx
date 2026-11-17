@@ -2004,7 +2004,7 @@ function LesionAnalysisPageContent() {
                     <div
                       className="pointer-events-auto absolute left-0 right-0 h-3 -translate-y-1/2 cursor-ns-resize touch-none"
                       style={{ top: `${rowY}%` }}
-                      title="横線の位置（上下にドラッグ）"
+                      title="水平線の位置（上下にドラッグ）"
                       onPointerDown={handleRowLinePointerDown}
                       onPointerMove={handleRowLinePointerMove}
                       onPointerUp={handleRowLinePointerUp}
@@ -2110,10 +2110,7 @@ function LesionAnalysisPageContent() {
           <SideLabel>選択病変 形状</SideLabel>
           <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row lg:flex-col">
           <div className="flex-1 lg:flex-none">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900">計測値</p>
-              <p className="text-[0.6875rem] text-gray-400">自動計測値</p>
-            </div>
+            <p className="text-sm font-semibold text-gray-900">計測値</p>
             <div className="mt-3 grid grid-cols-1 gap-x-2 gap-y-2.5 xl:grid-cols-2 xl:gap-x-3">
               {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }, index) => {
                 const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
