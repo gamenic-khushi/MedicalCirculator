@@ -58,6 +58,7 @@ import { captureViewAsShown } from '@/lib/captureViewAsShown'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { captureNameOf, defaultCaptureName } from '@/lib/defaultCaptureName'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
+import { loadWithoutPictures } from '@/lib/frameImages'
 import { generateId } from '@/lib/id'
 import {
   DELETE_FAILED,
@@ -130,7 +131,8 @@ function parseViewState(raw: string | undefined): SavedViewState | null {
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
   return {
     id: row.$id,
-    image: row.image,
+    // A list brings the rows without their pictures; each is fetched as it comes into view.
+    image: row.image ?? '',
     date: formatSnapshotDate(row.$createdAt ? new Date(row.$createdAt) : new Date()),
     upstreamSize: row.upstreamSize,
     downstreamSize: row.downstreamSize,
@@ -386,6 +388,8 @@ function LesionAnalysisPageContent() {
     capturedName?: string
   } | null
   const dataRecordId = navigationState?.dataRecordId
+  // The folder's saved rows are on their way (shown as such, not as an empty list).
+  const [isLoadingSaved, setIsLoadingSaved] = useState(Boolean(dataRecordId))
   const viewFrame = navigationState?.viewFrame ?? null
   // A saved frame (保存済みキャプチャ) is shown on its own, the same whether or
   // not a model from an earlier analysis is still in memory: not renamable, and
@@ -520,16 +524,20 @@ function LesionAnalysisPageContent() {
 
   useEffect(() => {
     if (!dataRecordId) return
-    // Every row saved in this folder (not just the first page of 25).
-    databaseService
-      .listAll<LearningContentFrameRow>('learning_content_frames', [
+    // Every row saved in this folder (not just the first page of 25), without the
+    // pictures, which are what makes a row heavy.
+    loadWithoutPictures((columns) =>
+      databaseService.listAll<LearningContentFrameRow>('learning_content_frames', [
         Query.equal('dataRecordId', dataRecordId),
-      ])
+        ...columns,
+      ]),
+    )
       .then(({ rows }) => setSavedSnapshots(rows.map(toSavedSnapshot)))
       .catch((error) => {
         console.error(error)
         showToast(LOAD_FAILED, 'error')
       })
+      .finally(() => setIsLoadingSaved(false))
   }, [dataRecordId])
 
   useEffect(() => {
@@ -2239,6 +2247,7 @@ function LesionAnalysisPageContent() {
       <div className="mt-4">
         <SavedSnapshotsPanel
           savedSnapshots={savedSnapshots}
+          isLoading={isLoadingSaved}
           onDelete={handleDeleteSnapshot}
           onEdit={handleOpenSnapshot}
           onDownloadPdf={handleDownloadPdf}

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Toast } from '@/components/common/Toast'
+import { LoadingState } from '@/components/common/LoadingState'
 import { DataRecordTable } from '@/components/data/DataRecordTable'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
@@ -29,6 +30,8 @@ export function DataManagementPage() {
   const [records, setRecords] = useState<DataRecord[]>([])
   const [query, setQuery] = useState('')
   const [loadError, setLoadError] = useState(false)
+  // The list is on its way: shown as loading, not as an empty list.
+  const [isLoading, setIsLoading] = useState(true)
   const { toast, showToast } = useToast()
 
   useEffect(() => {
@@ -43,6 +46,7 @@ export function DataManagementPage() {
         console.error(error)
         setLoadError(true)
       })
+      .finally(() => setIsLoading(false))
   }, [])
 
   const filteredRecords = useMemo(() => {
@@ -140,6 +144,10 @@ export function DataManagementPage() {
 
       {loadError ? (
         <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : isLoading ? (
+        <div className="mt-6">
+          <LoadingState />
+        </div>
       ) : (
         <div className="mt-6">
           <DataRecordTable

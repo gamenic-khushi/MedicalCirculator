@@ -232,6 +232,8 @@ test.describe('folder list (3D解析)', () => {
     })
     await page.locator('tbody').getByTitle('編集').click()
     await expect(page.getByRole('heading', { name: '術前の撮影' })).toBeVisible()
+    // The list came without the picture; opening the capture fetched it.
+    await expect(page.getByAltText('保存されたキャプチャ')).toHaveAttribute('src', /^data:image/)
     await expect(page.getByText('保存済みキャプチャ', { exact: true })).toHaveCount(0)
   })
 
@@ -269,6 +271,71 @@ test.describe('folder list (3D解析)', () => {
     // The picture of the view is in the report, and it was sent to print.
     await expect(report.locator('#image-slot img')).toHaveCount(1)
     await expect.poll(() => report.evaluate(() => (window as unknown as { printed?: boolean }).printed)).toBe(true)
+  })
+
+  test('a list says it is loading, then shows its rows', async ({ page }) => {
+    await useFakeAppwrite(page, { slowReads: { data_records: 1500 } })
+    await page.goto('/data')
+    // While the data is on its way: a loading indicator, not "no data found".
+    const loading = page.getByRole('status').filter({ hasText: 'データを読み込んでいます' })
+    await expect(loading).toBeVisible()
+    await expect(page.getByText('該当するデータが見つかりません')).toHaveCount(0)
+    await expect(page.getByText('テスト用の学習 A')).toBeVisible({ timeout: 10_000 })
+    await expect(loading).toHaveCount(0)
+  })
+
+  test("a folder's ✏️ list loads without the pictures, which follow as the rows come into view", async ({
+    page,
+  }) => {
+    const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+    const frames = Array.from({ length: 30 }, (_, index) => ({
+      $id: `f${index + 1}`,
+      dataRecordId: 'record-a',
+      image,
+      upstreamSize: `${index + 1} mm`,
+      downstreamSize: '4 mm',
+      pa: '100 mmHg',
+      pd: '80 mmHg',
+      parameter: '20 mmHg',
+    }))
+    const fake = await useFakeAppwrite(page, {
+      tables: { learning_content_frames: frames },
+      slowReads: { learning_content_frames: 800 },
+    })
+    await page.goto('/help')
+    await page.getByText('ヘルプ').first().waitFor()
+    const listResponse = page.waitForResponse((response) =>
+      /tables\/learning_content_frames\/rows\?/.test(response.url()),
+    )
+    await page.evaluate(() => {
+      window.history.pushState(
+        { usr: { dataRecordId: 'record-a' }, key: 'folder-a', idx: (window.history.state?.idx ?? 0) + 1 },
+        '',
+        '/data/learning-content',
+      )
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    })
+
+    // The list is on its way: a loading indicator rather than "no data".
+    await expect(page.getByRole('status').filter({ hasText: 'データを読み込んでいます' })).toBeVisible()
+    // The rows come without their pictures.
+    const body = (await (await listResponse).json()) as { rows: Record<string, unknown>[] }
+    expect(body.rows).toHaveLength(30)
+    expect(body.rows.every((row) => row.image === undefined)).toBe(true)
+    expect(body.rows[0].upstreamSize).toBeTruthy()
+    await expect(page.locator('tbody tr')).toHaveCount(30)
+
+    // The pictures of the rows on screen arrive; not every row's.
+    await expect(page.locator('tbody tr').first().locator('img')).toHaveAttribute('src', /^data:image/, {
+      timeout: 15_000,
+    })
+    const pictureReads = () => fake.requests.filter((request) => /\/rows\/f[0-9]+$/.test(request)).length
+    expect(pictureReads()).toBeLessThan(30)
+    // Scrolling down brings the last row's picture.
+    await page.locator('tbody tr').last().scrollIntoViewIfNeeded()
+    await expect(page.locator('tbody tr').last().locator('img')).toHaveAttribute('src', /^data:image/, {
+      timeout: 15_000,
+    })
   })
 
   test('a signed-out visitor is sent to the login page', async ({ page }) => {
@@ -510,6 +577,9 @@ test.describe('the saved list (保存一覧)', () => {
     expect(saved[0].lesionPosition).toMatch(/^(近位|中間|遠位)$/)
     // The row's file name starts as the time it was saved.
     expect(saved[0].fileName).toMatch(/^[0-9]{8}_[0-9]{6}$/)
+    // The picture is a JPEG: several times smaller than the PNG it used to be, and it is
+    // carried in every row that every list loads.
+    expect(String(saved[0].image)).toMatch(/^data:image\/jpeg;base64,/)
     await expect(page.getByRole('button', { name: '解析履歴に保存' })).toHaveCount(0)
     await expect(page.locator('tbody').getByTitle('保存済みキャプチャを開く')).toBeEnabled()
     // A wide list scrolls sideways.

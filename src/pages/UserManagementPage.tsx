@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { Toast } from '@/components/common/Toast'
 import { UserFormModal } from '@/components/users/UserFormModal'
+import { LoadingState } from '@/components/common/LoadingState'
 import { UserTable } from '@/components/users/UserTable'
 import { useToast } from '@/hooks/useToast'
 import { DELETE_FAILED, LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
@@ -33,6 +34,8 @@ export function UserManagementPage() {
   const [query, setQuery] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [loadError, setLoadError] = useState(false)
+  // The list is on its way: shown as loading, not as an empty list.
+  const [isLoading, setIsLoading] = useState(true)
   const { toast, showToast } = useToast()
 
   useEffect(() => {
@@ -45,6 +48,7 @@ export function UserManagementPage() {
         console.error(error)
         setLoadError(true)
       })
+      .finally(() => setIsLoading(false))
   }, [])
 
   const filteredUsers = useMemo(() => {
@@ -148,6 +152,10 @@ export function UserManagementPage() {
 
       {loadError ? (
         <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : isLoading ? (
+        <div className="mt-6">
+          <LoadingState />
+        </div>
       ) : (
         <div className="mt-6">
           <UserTable

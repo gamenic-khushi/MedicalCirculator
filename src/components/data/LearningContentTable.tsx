@@ -3,6 +3,8 @@ import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { FrameImage } from '@/components/common/FrameImage'
+import { LoadingState } from '@/components/common/LoadingState'
 import { captureNameOf } from '@/lib/defaultCaptureName'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 
@@ -10,6 +12,8 @@ import { LearningContentPreviewModal } from './LearningContentPreviewModal'
 
 interface LearningContentTableProps {
   frames: LearningContentFrame[]
+  // The list is still on its way: say so instead of "no data".
+  isLoading?: boolean
   onEdit: (id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) => void
   onOpenAnalysis: (frame: LearningContentFrame) => void
   onDelete: (id: string) => void
@@ -17,6 +21,7 @@ interface LearningContentTableProps {
 
 export function LearningContentTable({
   frames,
+  isLoading = false,
   onEdit,
   onOpenAnalysis,
   onDelete,
@@ -46,6 +51,8 @@ export function LearningContentTable({
     const { id, image, ...rest } = frame
     onEdit(id, { ...rest, fileName: emptied ? '' : value })
   }
+
+  if (isLoading && frames.length === 0) return <LoadingState />
 
   if (frames.length === 0) {
     return (
@@ -85,9 +92,13 @@ export function LearningContentTable({
                   />
                 </td>
                 <td className="px-3 py-6">
-                  <div className="h-36 w-52 overflow-hidden rounded-lg bg-black">
-                    <img src={frame.image} alt="学習内容" className="h-full w-full object-cover" />
-                  </div>
+                  <FrameImage
+                    frameId={frame.id}
+                    image={frame.image}
+                    alt="学習内容"
+                    className="h-36 w-52 rounded-lg bg-black"
+                    imageClassName="h-full w-full object-cover"
+                  />
                 </td>
                 <td className="px-3 py-6 text-center text-gray-900">{frame.upstreamSize}</td>
                 <td className="px-3 py-6 text-center text-gray-900">{frame.downstreamSize}</td>

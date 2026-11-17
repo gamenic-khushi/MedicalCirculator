@@ -30,8 +30,13 @@ export const databaseService = {
     return { rows, total: rows.length }
   },
 
-  async get<T extends Models.Row = Models.DefaultRow>(tableId: string, rowId: string) {
-    return tablesDB.getRow<T>({ databaseId: appwriteConfig.databaseId, tableId, rowId })
+  // queries: e.g. Query.select([...]) to take only some of the row's columns.
+  async get<T extends Models.Row = Models.DefaultRow>(
+    tableId: string,
+    rowId: string,
+    queries?: string[],
+  ) {
+    return tablesDB.getRow<T>({ databaseId: appwriteConfig.databaseId, tableId, rowId, queries })
   },
 
   async create<T extends Models.Row = Models.DefaultRow>(

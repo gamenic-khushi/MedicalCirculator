@@ -2,6 +2,7 @@ import type { Models } from 'appwrite'
 import { useEffect, useState } from 'react'
 
 import { NotificationCard } from '@/components/notifications/NotificationCard'
+import { LoadingState } from '@/components/common/LoadingState'
 import { HARD_REFRESH_NOTICE, LOAD_FAILED } from '@/lib/messages'
 import { databaseService } from '@/services/appwrite/database'
 import type { Notification } from '@/types/notification'
@@ -11,6 +12,8 @@ type NotificationRow = Models.Row & Omit<Notification, 'id'>
 export function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loadError, setLoadError] = useState(false)
+  // The list is on its way: shown as loading, not as an empty list.
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     databaseService
@@ -22,6 +25,7 @@ export function NotificationsPage() {
         console.error(error)
         setLoadError(true)
       })
+      .finally(() => setIsLoading(false))
   }, [])
 
   return (
@@ -41,6 +45,10 @@ export function NotificationsPage() {
 
       {loadError ? (
         <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : isLoading ? (
+        <div className="mt-6">
+          <LoadingState />
+        </div>
       ) : (
         <div className="mt-6 flex flex-col gap-4">
           {notifications.map((notification) => (

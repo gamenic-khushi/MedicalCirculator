@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { FrameImage } from '@/components/common/FrameImage'
+import { LoadingState } from '@/components/common/LoadingState'
 import { SideLabel } from '@/components/common/SideLabel'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { EASE_OUT } from '@/lib/motion'
@@ -10,6 +12,8 @@ import type { SavedSnapshot } from '@/types/viewerState'
 
 interface SavedSnapshotsPanelProps {
   savedSnapshots: SavedSnapshot[]
+  // The list is still on its way: say so instead of "no data".
+  isLoading?: boolean
   onDelete: (id: string) => void
   // Opens a saved row in the 保存済みキャプチャ view. Without it the 編集 column is left out.
   onEdit?: (snapshot: SavedSnapshot) => void
@@ -39,6 +43,7 @@ const COLUMNS: { label: string; value: (snapshot: SavedSnapshot) => string }[] =
 
 export function SavedSnapshotsPanel({
   savedSnapshots,
+  isLoading = false,
   onDelete,
   onEdit,
   onDownloadPdf,
@@ -63,6 +68,18 @@ export function SavedSnapshotsPanel({
   const actionsRow = onDownloadPdf && (
     <div className="flex justify-end border-b border-gray-100 p-4">{headerActions}</div>
   )
+
+  if (savedSnapshots.length === 0 && isLoading) {
+    return (
+      <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <SideLabel>保存一覧</SideLabel>
+        <div className="min-w-0 flex-1">
+          {actionsRow}
+          <LoadingState />
+        </div>
+      </div>
+    )
+  }
 
   if (savedSnapshots.length === 0) {
     return (
@@ -115,16 +132,13 @@ export function SavedSnapshotsPanel({
                     <td className="px-2 py-3">
                       <p className="mb-1.5 text-gray-500">{snapshot.date}</p>
                       {/* The whole image, as the viewer showed it; the box matches its edges. */}
-                      <div
-                        className="h-16 w-28 overflow-hidden rounded-lg"
+                      <FrameImage
+                        frameId={snapshot.id}
+                        image={snapshot.image}
+                        alt="保存されたモデル画像"
+                        className="h-16 w-28 rounded-lg"
                         style={{ backgroundColor: SPACE_COLOR }}
-                      >
-                        <img
-                          src={snapshot.image}
-                          alt="保存されたモデル画像"
-                          className="h-full w-full object-contain"
-                        />
-                      </div>
+                      />
                     </td>
                     {COLUMNS.map((column) => (
                       <td key={column.label} className="px-2 py-3 text-center text-gray-900">

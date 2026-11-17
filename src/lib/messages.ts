@@ -9,3 +9,5 @@ export const MODEL_LOOKS_LIKE_METRES =
   'このモデルはメートル（m）単位の可能性があります。測定値が1000分の1になってしまうため、ミリメートル（mm）単位で書き出したモデルを使用してください'
 export const HARD_REFRESH_NOTICE =
   '最新バージョンをご利用いただくために、ハードリフレッシュ（Ctrl+Shift+R）から操作をしてください'
+export const LOADING_DATA = 'データを読み込んでいます...'
+export const LOADING_MODEL = '3Dモデルを読み込んでいます...'

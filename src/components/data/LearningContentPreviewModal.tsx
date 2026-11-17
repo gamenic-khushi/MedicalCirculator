@@ -1,3 +1,4 @@
+import { FrameImage } from '@/components/common/FrameImage'
 import { Modal } from '@/components/common/Modal'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
 
@@ -29,11 +30,14 @@ export function LearningContentPreviewModal({
   return (
     <Modal title="データ" onClose={onClose} panelStyle={{ maxWidth: 420 }}>
       <div className="mt-2 flex flex-col gap-4">
-        <img
-          src={frame.image}
+        <FrameImage
+          frameId={frame.id}
+          image={frame.image}
           alt="学習内容"
+          eager
           style={{ background: IMAGE_BACKGROUND }}
-          className="h-44 w-full rounded-lg object-cover"
+          className="h-44 w-full rounded-lg"
+          imageClassName="h-full w-full object-cover"
         />
 
         <dl className="flex flex-col">

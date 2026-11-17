@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { Toast } from '@/components/common/Toast'
 import { AddPaperModal } from '@/components/conference/AddPaperModal'
+import { LoadingState } from '@/components/common/LoadingState'
 import { ConferencePaperTable } from '@/components/conference/ConferencePaperTable'
 import { useToast } from '@/hooks/useToast'
 import { DELETE_FAILED, LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
@@ -18,6 +19,8 @@ export function ConferencePage() {
   const [query, setQuery] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [loadError, setLoadError] = useState(false)
+  // The list is on its way: shown as loading, not as an empty list.
+  const [isLoading, setIsLoading] = useState(true)
   const { toast, showToast } = useToast()
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export function ConferencePage() {
         console.error(error)
         setLoadError(true)
       })
+      .finally(() => setIsLoading(false))
   }, [])
 
   const filteredPapers = useMemo(() => {
@@ -92,6 +96,10 @@ export function ConferencePage() {
 
       {loadError ? (
         <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : isLoading ? (
+        <div className="mt-6">
+          <LoadingState />
+        </div>
       ) : (
         <div className="mt-6">
           <ConferencePaperTable papers={filteredPapers} onDelete={handleDelete} />

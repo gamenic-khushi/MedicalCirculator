@@ -21,6 +21,8 @@ export interface FakeAppwriteOptions {
   category?: 'system_admin' | 'hospital_admin' | 'hospital_user' | 'learning_admin' | 'learning_user'
   /** Rows to start with, by table. */
   tables?: Record<string, Row[]>
+  /** Milliseconds a table's reads are held back, by table: to see a page while it loads. */
+  slowReads?: Record<string, number>
 }
 
 const ACCOUNT = {
@@ -56,6 +58,14 @@ function parseQueries(url: URL): { method: string; attribute?: string; values?: 
     }
   }
   return queries
+}
+
+// Query.select(): only the named columns (and Appwrite's own $-fields, which always come).
+function project(row: Row, queries: { method: string; values?: unknown[] }[]): Row {
+  const select = queries.find((query) => query.method === 'select')
+  if (!select) return row
+  const wanted = new Set((select.values ?? []).map(String))
+  return Object.fromEntries(Object.entries(row).filter(([key]) => key.startsWith('$') || wanted.has(key)))
 }
 
 export async function useFakeAppwrite(
@@ -160,6 +170,11 @@ export async function useFakeAppwrite(
       const rows = tables.get(tableId) ?? []
       tables.set(tableId, rows)
       const meta = { $databaseId: 'e2e-database', $tableId: tableId }
+      const delay = method === 'GET' ? (options.slowReads?.[tableId] ?? 0) : 0
+      const answer = (status: number, body?: unknown) =>
+        delay > 0
+          ? new Promise<void>((resolve) => setTimeout(resolve, delay)).then(() => send(status, body))
+          : send(status, body)
 
       if (method === 'GET' && !rowId) {
         let found = rows.slice()
@@ -172,11 +187,17 @@ export async function useFakeAppwrite(
           } else if (query.method === 'limit') limit = Number(values[0])
           else if (query.method === 'offset') offset = Number(values[0])
         }
-        return send(200, { total: found.length, rows: found.slice(offset, offset + limit).map((r) => ({ ...r, ...meta })) })
+        const queries = parseQueries(url)
+        return answer(200, {
+          total: found.length,
+          rows: found.slice(offset, offset + limit).map((r) => ({ ...project(r, queries), ...meta })),
+        })
       }
       if (method === 'GET' && rowId) {
         const row = rows.find((r) => r.$id === rowId)
-        return row ? send(200, { ...row, ...meta }) : send(404, { message: 'Row not found', code: 404 })
+        return row
+          ? answer(200, { ...project(row, parseQueries(url)), ...meta })
+          : answer(404, { message: 'Row not found', code: 404 })
       }
       if (method === 'POST') {
         const body = JSON.parse(request.postData() ?? '{}') as { rowId?: string; data?: Record<string, unknown> }

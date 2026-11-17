@@ -6,11 +6,13 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { Toast } from '@/components/common/Toast'
+import { LoadingOverlay } from '@/components/common/LoadingOverlay'
 import { LearningContentTable } from '@/components/data/LearningContentTable'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
-import { LOAD_FAILED, SAVE_FAILED } from '@/lib/messages'
+import { getFramePicture, loadWithoutPictures } from '@/lib/frameImages'
+import { LOAD_FAILED, LOADING_DATA, LOADING_MODEL, SAVE_FAILED } from '@/lib/messages'
 import { fetchFolderModelFile } from '@/lib/fetchFolderModel'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
@@ -30,23 +32,33 @@ const DEFAULT_STUDY_NAME = '２D心弁解析'
 // folder showed the same shared list, which was fine short-term per Aki-san, but a new
 // folder then listed everyone's captures). Without a folder (opened directly) it shows
 // them all, as before.
+// The rows come without their pictures (the table fetches each as it comes into view),
+// so the list itself is quick however many captures there are.
 async function fetchFrames(dataRecordId?: string): Promise<LearningContentFrame[]> {
-  const rows: LearningContentFrameRow[] = []
-  let offset = 0
+  const rows = await loadWithoutPictures(async (columns) => {
+    const all: LearningContentFrameRow[] = []
+    let offset = 0
+    while (true) {
+      const page = await databaseService.list<LearningContentFrameRow>('learning_content_frames', [
+        ...(dataRecordId ? [Query.equal('dataRecordId', dataRecordId)] : []),
+        ...columns,
+        Query.orderDesc('$createdAt'),
+        Query.limit(PAGE_SIZE),
+        Query.offset(offset),
+      ])
+      all.push(...page.rows)
+      if (page.rows.length < PAGE_SIZE) break
+      offset += PAGE_SIZE
+    }
+    return all
+  })
 
-  while (true) {
-    const page = await databaseService.list<LearningContentFrameRow>('learning_content_frames', [
-      ...(dataRecordId ? [Query.equal('dataRecordId', dataRecordId)] : []),
-      Query.orderDesc('$createdAt'),
-      Query.limit(PAGE_SIZE),
-      Query.offset(offset),
-    ])
-    rows.push(...page.rows)
-    if (page.rows.length < PAGE_SIZE) break
-    offset += PAGE_SIZE
-  }
-
-  return rows.map(({ $id, $createdAt, ...rest }) => ({ id: $id, createdAt: $createdAt, ...rest }))
+  return rows.map(({ $id, $createdAt, image, ...rest }) => ({
+    id: $id,
+    createdAt: $createdAt,
+    image: image ?? '',
+    ...rest,
+  }))
 }
 
 export function LearningContentPage() {
@@ -57,6 +69,11 @@ export function LearningContentPage() {
   const [frames, setFrames] = useState<LearningContentFrame[]>([])
   const [record, setRecord] = useState<DataRecord | null>(null)
   const [isLoadingRecord, setIsLoadingRecord] = useState(Boolean(dataRecordId))
+  // Which folder's list has arrived; the list is loading until it is the one asked for.
+  const [framesArrivedFor, setFramesArrivedFor] = useState<string | null>(null)
+  const isLoadingFrames = framesArrivedFor !== (dataRecordId ?? '')
+  // Something the user waits on (the folder's 3D model coming in, a picture opening).
+  const [busyMessage, setBusyMessage] = useState<string | null>(null)
   const { toast, showToast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
   const { isDismissed: isReuseHintDismissed, dismiss: dismissReuseHint } = useGuidanceDismissed(
@@ -64,9 +81,18 @@ export function LearningContentPage() {
   )
 
   useEffect(() => {
+    let current = true
     fetchFrames(dataRecordId)
-      .then(setFrames)
+      .then((loaded) => {
+        if (current) setFrames(loaded)
+      })
       .catch((error) => console.error(error))
+      .finally(() => {
+        if (current) setFramesArrivedFor(dataRecordId ?? '')
+      })
+    return () => {
+      current = false
+    }
   }, [dataRecordId])
 
   useEffect(() => {
@@ -99,6 +125,7 @@ export function LearningContentPage() {
   // a file this one time and register it as the folder's model — every "+"
   // after that reuses it like normal, same as a folder created going forward.
   async function registerAndLoadFile(file: File) {
+    setBusyMessage(LOADING_MODEL)
     try {
       if (dataRecordId) {
         const uploadedFile = await storageService.upload(appwriteConfig.bucketId, file)
@@ -111,6 +138,8 @@ export function LearningContentPage() {
     } catch (error) {
       console.error(error)
       showToast(SAVE_FAILED, 'error')
+    } finally {
+      setBusyMessage(null)
     }
   }
 
@@ -123,6 +152,7 @@ export function LearningContentPage() {
 
     if (!isReuseHintDismissed) dismissReuseHint()
 
+    setBusyMessage(LOADING_MODEL)
     try {
       const file = await fetchFolderModelFile({
         file: record.file,
@@ -132,6 +162,8 @@ export function LearningContentPage() {
     } catch (error) {
       console.error(error)
       showToast(LOAD_FAILED, 'error')
+    } finally {
+      setBusyMessage(null)
     }
   }
 
@@ -150,8 +182,22 @@ export function LearningContentPage() {
     setFrames((prev) => prev.filter((frame) => frame.id !== id))
   }
 
-  function handleOpenAnalysis(frame: LearningContentFrame) {
-    navigate('/data/lesion-measurement/analysis', { state: { dataRecordId, viewFrame: frame } })
+  // The saved capture opens with its picture; the list may not have brought it yet.
+  async function handleOpenAnalysis(frame: LearningContentFrame) {
+    let viewFrame = frame
+    if (!frame.image) {
+      setBusyMessage(LOADING_DATA)
+      try {
+        viewFrame = { ...frame, image: await getFramePicture(frame.id) }
+      } catch (error) {
+        console.error(error)
+        showToast(LOAD_FAILED, 'error')
+        return
+      } finally {
+        setBusyMessage(null)
+      }
+    }
+    navigate('/data/lesion-measurement/analysis', { state: { dataRecordId, viewFrame } })
   }
 
   return (
@@ -202,11 +248,14 @@ export function LearningContentPage() {
       <div className="mt-4">
         <LearningContentTable
           frames={frames}
+          isLoading={isLoadingFrames}
           onEdit={handleEdit}
           onOpenAnalysis={handleOpenAnalysis}
           onDelete={handleDelete}
         />
       </div>
+
+      <AnimatePresence>{busyMessage && <LoadingOverlay message={busyMessage} />}</AnimatePresence>
 
       <AnimatePresence>
         {toast && <Toast message={toast.message} variant={toast.variant} />}

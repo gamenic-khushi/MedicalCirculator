@@ -4,6 +4,7 @@ import { Plus, Search, Upload } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { Toast } from '@/components/common/Toast'
+import { LoadingState } from '@/components/common/LoadingState'
 import { DocumentFileTable } from '@/components/documents/DocumentFileTable'
 import { DocumentNameModal } from '@/components/documents/DocumentNameModal'
 import { DocumentUploadModal } from '@/components/documents/DocumentUploadModal'
@@ -32,6 +33,8 @@ export function DocumentsPage() {
   const [isUploading, setIsUploading] = useState(false)
   const { toast, showToast } = useToast()
   const [loadError, setLoadError] = useState(false)
+  // The list is on its way: shown as loading, not as an empty list.
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -49,6 +52,8 @@ export function DocumentsPage() {
       } catch (error) {
         console.error(error)
         setLoadError(true)
+      } finally {
+        setIsLoading(false)
       }
     }
     void load()
@@ -193,6 +198,10 @@ export function DocumentsPage() {
 
       {loadError ? (
         <p className="mt-6 text-sm text-red-600">{LOAD_FAILED}</p>
+      ) : isLoading ? (
+        <div className="mt-6">
+          <LoadingState />
+        </div>
       ) : (
         <div className="mt-6">
           <DocumentFileTable
