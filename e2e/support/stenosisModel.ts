@@ -6,9 +6,9 @@ const LENGTH = 30
 const RINGS = 60
 const SEGMENTS = 24
 
-function radiusAt(y: number): number {
+function radiusAt(y: number, spread: number): number {
   // 2.5 mm, narrowing to 0.8 mm in the middle.
-  return 2.5 - 1.7 * Math.exp(-(((y - LENGTH / 2) / 3) ** 2))
+  return 2.5 - 1.7 * Math.exp(-(((y - LENGTH / 2) / spread) ** 2))
 }
 
 type Vec = [number, number, number]
@@ -24,11 +24,13 @@ function facet(a: Vec, b: Vec, c: Vec): string {
 
 // `unit` is the size of one model unit in mm: 1 for a model written in mm (the usual),
 // 1000 for one written in metres.
-export function makeStenosisStl(unit = 1): Buffer {
+// `spread` is how far the narrowing reaches (mm): 3 gives a stenosis length of about
+// 2 mm, 14 one of about 9 mm and 1.4 one of under 1 mm.
+export function makeStenosisStl(unit = 1, spread = 3): Buffer {
   const point = (ring: number, segment: number): Vec => {
     const y = (ring / RINGS) * LENGTH
     const angle = (segment / SEGMENTS) * Math.PI * 2
-    const r = radiusAt(y)
+    const r = radiusAt(y, spread)
     return [(r * Math.cos(angle)) / unit, y / unit, (r * Math.sin(angle)) / unit]
   }
   let out = 'solid vessel\n'

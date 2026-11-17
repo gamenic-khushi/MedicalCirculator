@@ -46,8 +46,8 @@ const ENDPOINT = (process.env.APPWRITE_ENDPOINT ?? 'https://cloud.appwrite.io/v1
 const PROJECT_ID = process.env.APPWRITE_PROJECT_ID
 const API_KEY = process.env.APPWRITE_API_KEY
 const DATABASE_ID = argValue('--database', process.env.APPWRITE_DATABASE_ID ?? 'medical_circulator')
-const MODELS_BUCKET_ID = process.env.APPWRITE_BUCKET_ID ?? 'models'
-const DOCUMENTS_BUCKET_ID = process.env.APPWRITE_DOCUMENTS_BUCKET_ID ?? 'documents'
+const MODELS_BUCKET_ID = process.env.APPWRITE_BUCKET_ID ?? 'model_files'
+const DOCUMENTS_BUCKET_ID = process.env.APPWRITE_DOCUMENTS_BUCKET_ID ?? 'document_files'
 
 // Everyone who is logged in may read and write, as the app expects (the admin-only
 // parts are decided in the app by the user's category, not by Appwrite).
@@ -149,6 +149,19 @@ const TABLES = [
     id: 'document_folders',
     name: 'Document folders',
     columns: [s('name', SHORT, true)],
+    indexes: [],
+  },
+  {
+    // The start page (通知): system updates and the activity log.
+    id: 'notifications',
+    name: 'Notifications',
+    columns: [
+      s('title', LONG, true),
+      s('description', 8192, true),
+      s('date', 32, true),
+      s('time', 32, true),
+      { kind: 'enum', key: 'priority', elements: ['high', 'normal', 'low'], required: true },
+    ],
     indexes: [],
   },
   {
@@ -340,9 +353,11 @@ async function main() {
   console.log('\nStorage buckets')
   for (const bucket of BUCKETS) {
     await ensure(`bucket ${bucket.id} (${bucket.allowedFileExtensions.join(', ')})`, async () => {
-      // Appwrite Cloud's free plan caps a file at 50 MB; retry with that if the
-      // server refuses the larger size.
-      for (const maximumFileSize of [bucket.maximumFileSize, 50 * 1024 * 1024]) {
+      // A server caps the file size (Appwrite Cloud's free plan at 50 MB, a default
+      // self-hosted one at 30 MB). If it refuses the size, retry with the maximum
+      // its error message names.
+      let maximumFileSize = bucket.maximumFileSize
+      for (let attempt = 0; attempt < 3; attempt++) {
         try {
           return await api('POST', '/storage/buckets', {
             bucketId: bucket.id,
@@ -354,9 +369,22 @@ async function main() {
             allowedFileExtensions: bucket.allowedFileExtensions,
           })
         } catch (error) {
-          const tooBig = error instanceof ApiError && error.status === 400
-          if (!tooBig || maximumFileSize <= 50 * 1024 * 1024) throw error
-          console.log(`  (server refused ${maximumFileSize / 1024 / 1024} MB, trying 50 MB)`)
+          const limit = Number(
+            String(error.body?.message ?? '')
+              .match(/between 1 and ([0-9,]+)/)?.[1]
+              ?.replace(/,/g, ''),
+          )
+          if (
+            !(error instanceof ApiError) ||
+            error.status !== 400 ||
+            !limit ||
+            limit >= maximumFileSize
+          )
+            throw error
+          console.log(
+            `  (server allows at most ${Math.round(limit / 1024 / 1024)} MB per file, using that)`,
+          )
+          maximumFileSize = limit
         }
       }
     })
