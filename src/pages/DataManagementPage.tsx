@@ -35,7 +35,8 @@ export function DataManagementPage() {
     databaseService
       .listAll<DataRecordRow>('data_records')
       .then(({ rows }) => {
-        const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest }))
+        // listAll returns the oldest first; the newest folder goes at the top.
+        const loaded = rows.map(({ $id, ...rest }) => ({ id: $id, ...rest })).reverse()
         setRecords(loaded)
       })
       .catch((error) => {
@@ -102,12 +103,8 @@ export function DataManagementPage() {
         owner: record.owner,
       })
       const { $id, ...rest } = row
-      setRecords((prev) => {
-        const index = prev.findIndex((item) => item.id === record.id)
-        const next = [...prev]
-        next.splice(index + 1, 0, { id: $id, ...rest })
-        return next
-      })
+      // The copy is a new folder, so it goes at the top like any other.
+      setRecords((prev) => [{ id: $id, ...rest }, ...prev])
     } catch (error) {
       console.error(error)
       showToast(SAVE_FAILED, 'error')

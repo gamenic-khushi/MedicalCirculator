@@ -41,6 +41,42 @@ test.describe('folder list (3D解析)', () => {
     await expect(page.getByText('テスト用の学習 B')).toBeVisible()
   })
 
+  test('the newest folder is at the top of the list', async ({ page }) => {
+    const row = (id: string, name: string, createdAt: string) => ({
+      $id: id,
+      $createdAt: createdAt,
+      date: '2026/11/01',
+      category: name,
+      file: `${id}.stl`,
+      owner: 'E2E Admin',
+    })
+    await useFakeAppwrite(page, {
+      tables: {
+        data_records: [
+          row('old', '一番古いフォルダ', '2026-11-01T09:00:00.000+00:00'),
+          row('middle', '真ん中のフォルダ', '2026-11-05T09:00:00.000+00:00'),
+          row('new', '一番新しいフォルダ', '2026-11-10T09:00:00.000+00:00'),
+        ],
+      },
+    })
+    await page.goto('/data')
+    await expect(page.locator('tbody tr')).toHaveCount(3)
+    const known = ['一番新しいフォルダ', '真ん中のフォルダ', '一番古いフォルダ']
+    const names = (await page.locator('tbody tr').allInnerTexts()).map((text) =>
+      known.find((name) => text.includes(name)),
+    )
+    expect(names).toEqual(known)
+  })
+
+  test('a folder created now appears above the older ones', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '作ったばかりのフォルダ')
+    await page.goto('/data')
+    // The two folders the fake starts with are older than the one just made.
+    await expect(page.locator('tbody tr')).toHaveCount(3)
+    await expect(page.locator('tbody tr').first()).toContainText('作ったばかりのフォルダ')
+  })
+
   test('a signed-out visitor is sent to the login page', async ({ page }) => {
     await useFakeAppwrite(page, { signedIn: false })
     await page.goto('/data')
