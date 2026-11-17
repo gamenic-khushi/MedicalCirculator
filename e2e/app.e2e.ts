@@ -77,6 +77,66 @@ test.describe('folder list (3D解析)', () => {
     await expect(page.locator('tbody tr').first()).toContainText('作ったばかりのフォルダ')
   })
 
+  test("a folder's ✏️ list shows only the captures saved in that folder", async ({ page }) => {
+    const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+    const frame = (id: string, folder: string, upstream: string) => ({
+      $id: id,
+      dataRecordId: folder,
+      image,
+      upstreamSize: upstream,
+      downstreamSize: '4 mm',
+      pa: '100 mmHg',
+      pd: '80 mmHg',
+      parameter: '20 mmHg',
+    })
+    const fake = await useFakeAppwrite(page, {
+      tables: {
+        learning_content_frames: [
+          frame('a1', 'record-a', '11 mm'),
+          frame('a2', 'record-a', '12 mm'),
+          frame('a3', 'record-a', '13 mm'),
+          frame('b1', 'record-b', '21 mm'),
+          frame('b2', 'record-b', '22 mm'),
+          // Saved before captures were linked to a folder: in no folder's list.
+          { ...frame('old', 'x', '31 mm'), dataRecordId: undefined },
+        ],
+      },
+    })
+    const openFolderList = async (folderId: string) => {
+      await page.evaluate((id) => {
+        window.history.pushState(
+          {
+            usr: { dataRecordId: id },
+            key: 'folder-' + id,
+            idx: (window.history.state?.idx ?? 0) + 1,
+          },
+          '',
+          '/data/learning-content',
+        )
+        window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+      }, folderId)
+    }
+    await page.goto('/help')
+    await page.getByText('ヘルプ').first().waitFor()
+
+    // A folder with captures lists its own and nobody else's.
+    await openFolderList('record-a')
+    await expect(page.locator('tbody tr')).toHaveCount(3)
+    await expect(page.locator('tbody')).toContainText('11 mm')
+    await expect(page.locator('tbody')).not.toContainText('21 mm')
+    await expect(page.locator('tbody')).not.toContainText('31 mm')
+
+    // A folder created now, with nothing saved in it, lists nothing.
+    await uploadModel(page, '作ったばかりの空のフォルダ')
+    await expect.poll(() => fake.rows('data_records').length).toBeGreaterThan(2)
+    const created = fake
+      .rows('data_records')
+      .find((row) => row.category === '作ったばかりの空のフォルダ')!
+    await openFolderList(created.$id)
+    await expect(page.getByText('該当するデータが見つかりません')).toBeVisible()
+    await expect(page.locator('tbody tr')).toHaveCount(0)
+  })
+
   test('a signed-out visitor is sent to the login page', async ({ page }) => {
     await useFakeAppwrite(page, { signedIn: false })
     await page.goto('/data')

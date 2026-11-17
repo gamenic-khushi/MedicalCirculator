@@ -26,15 +26,17 @@ const PAGE_SIZE = 100
 const DEFAULT_FOLDER = '２D心弁解析'
 const DEFAULT_STUDY_NAME = '２D心弁解析'
 
-// Every folder's ✏️ shows the same shared list of captures for now, rather
-// than each folder's own separate data — per Aki-san's note that this is
-// fine short-term, so this intentionally does not filter by dataRecordId.
-async function fetchFrames(): Promise<LearningContentFrame[]> {
+// A folder's ✏️ shows the captures saved in that folder only (until 2026/11/17 every
+// folder showed the same shared list, which was fine short-term per Aki-san, but a new
+// folder then listed everyone's captures). Without a folder (opened directly) it shows
+// them all, as before.
+async function fetchFrames(dataRecordId?: string): Promise<LearningContentFrame[]> {
   const rows: LearningContentFrameRow[] = []
   let offset = 0
 
   while (true) {
     const page = await databaseService.list<LearningContentFrameRow>('learning_content_frames', [
+      ...(dataRecordId ? [Query.equal('dataRecordId', dataRecordId)] : []),
       Query.orderDesc('$createdAt'),
       Query.limit(PAGE_SIZE),
       Query.offset(offset),
@@ -57,14 +59,15 @@ export function LearningContentPage() {
   const [isLoadingRecord, setIsLoadingRecord] = useState(Boolean(dataRecordId))
   const { toast, showToast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
-  const { isDismissed: isReuseHintDismissed, dismiss: dismissReuseHint } =
-    useGuidanceDismissed('learning-content-reuse-hint')
+  const { isDismissed: isReuseHintDismissed, dismiss: dismissReuseHint } = useGuidanceDismissed(
+    'learning-content-reuse-hint',
+  )
 
   useEffect(() => {
-    fetchFrames()
+    fetchFrames(dataRecordId)
       .then(setFrames)
       .catch((error) => console.error(error))
-  }, [])
+  }, [dataRecordId])
 
   useEffect(() => {
     if (!dataRecordId) {
@@ -82,7 +85,12 @@ export function LearningContentPage() {
 
   function loadFile(file: File) {
     // The record's own name (it may have been renamed on the lesion page).
-    setModel(createModel3DFile(file, { folder: DEFAULT_FOLDER, studyName: record?.category || DEFAULT_STUDY_NAME }))
+    setModel(
+      createModel3DFile(file, {
+        folder: DEFAULT_FOLDER,
+        studyName: record?.category || DEFAULT_STUDY_NAME,
+      }),
+    )
     navigate('/data/lesion-measurement/analysis', { state: { dataRecordId } })
   }
 
@@ -116,7 +124,10 @@ export function LearningContentPage() {
     if (!isReuseHintDismissed) dismissReuseHint()
 
     try {
-      const file = await fetchFolderModelFile({ file: record.file, modelFileId: record.modelFileId })
+      const file = await fetchFolderModelFile({
+        file: record.file,
+        modelFileId: record.modelFileId,
+      })
       loadFile(file)
     } catch (error) {
       console.error(error)
@@ -146,7 +157,9 @@ export function LearningContentPage() {
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
       <div className="mt-3 flex items-center gap-2">
-        <span className="text-2xl font-bold text-gray-900">{record?.category ?? DEFAULT_STUDY_NAME}</span>
+        <span className="text-2xl font-bold text-gray-900">
+          {record?.category ?? DEFAULT_STUDY_NAME}
+        </span>
         <div className="relative inline-block">
           <button
             type="button"
@@ -195,7 +208,9 @@ export function LearningContentPage() {
         />
       </div>
 
-      <AnimatePresence>{toast && <Toast message={toast.message} variant={toast.variant} />}</AnimatePresence>
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} variant={toast.variant} />}
+      </AnimatePresence>
     </div>
   )
 }
