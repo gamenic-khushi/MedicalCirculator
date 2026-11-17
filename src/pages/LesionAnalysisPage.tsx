@@ -34,6 +34,7 @@ import {
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import { VesselShapeDiagram } from '@/components/model-viewer/VesselShapeDiagram'
 import { fade, reveal } from '@/lib/motion'
+import { MIN_MODEL_SIZE_UNITS } from '@/lib/modelUnits'
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
@@ -123,9 +124,6 @@ function stripUnit(value: string | undefined): string {
 // Number(value) === 0 further downstream (e.g. the reference-diameter check
 // before highlighting the measured segment), silently skipping real
 // behavior. Scale the decimal count to the value's own magnitude instead.
-// A model whose largest dimension is below this (in model units) is treated
-// as metre-scale rather than millimetre-scale.
-const MIN_MODEL_SIZE_UNITS = 1
 
 // The lesion's reference vessel must cover at least this many screen pixels
 // for the view to count as zoomed in enough.

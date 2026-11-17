@@ -42,6 +42,23 @@ describe('floorPlacement', () => {
     expect(floorPlacement(segment, up).radius).toBeGreaterThanOrEqual(30)
   })
 
+  it('makes a 1 cm grid square of 10 units for a model in mm', () => {
+    expect(floorPlacement(vessel, new THREE.Vector3(0, 1, 0)).tileSize).toBe(10)
+  })
+
+  it('keeps the grid dense for a model exported in metres', () => {
+    // The same 100 mm heart, written as 0.1 (metres).
+    const heart = new THREE.Box3(
+      new THREE.Vector3(-0.05, -0.04, -0.04),
+      new THREE.Vector3(0.05, 0.04, 0.04),
+    )
+    const floor = floorPlacement(heart, new THREE.Vector3(0, 1, 0))
+    expect(floor.tileSize).toBe(0.01)
+    // Still reaches well past the model, and not 30 units (30 m) wide.
+    expect(floor.radius).toBeGreaterThan(0.1)
+    expect(floor.radius).toBeLessThan(1)
+  })
+
   it('gives the shadow enough reach to take in the whole model', () => {
     const floor = floorPlacement(vessel, new THREE.Vector3(0, 1, 0))
     // From the floor up to the vessel's top (y = 2).

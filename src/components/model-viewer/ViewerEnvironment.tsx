@@ -7,13 +7,11 @@ import { floorPlacement } from '@/lib/floorPlacement'
 
 // The space colour, also used by the pages behind the canvas until it draws.
 export const SPACE_COLOR = '#070b18'
-// 1 cm (models are in mm), so the grid also gives a sense of size.
-const TILE_SIZE = 10
-
 // A grid of thin lines on a dark floor that fades out towards the edge, into
 // space. Far squares look smaller, which is what shows depth; where they get too
 // small to draw cleanly, the lines blend away instead of shimmering.
-function createFloorMaterial(radius: number) {
+// One square is 1 cm (models are in mm), so the grid also gives a sense of size.
+function createFloorMaterial(radius: number, tileSize: number) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -21,7 +19,7 @@ function createFloorMaterial(radius: number) {
     side: THREE.FrontSide,
     uniforms: {
       radius: { value: radius },
-      tileSize: { value: TILE_SIZE },
+      tileSize: { value: tileSize },
       floorColor: { value: new THREE.Color('#0d1426') },
       grout: { value: new THREE.Color('#52627f') },
     },
@@ -65,9 +63,9 @@ export function ViewerEnvironment({
   modelGroupRef: MutableRefObject<THREE.Group | null>
   floorRef: MutableRefObject<THREE.Group | null>
 }) {
-  const [extent, setExtent] = useState<{ radius: number; height: number } | null>(null)
+  const [extent, setExtent] = useState<{ radius: number; height: number; tileSize: number } | null>(null)
   // Made again only when the model's size changes: once per model.
-  const material = useMemo(() => (extent ? createFloorMaterial(extent.radius) : null), [extent])
+  const material = useMemo(() => (extent ? createFloorMaterial(extent.radius, extent.tileSize) : null), [extent])
   useEffect(() => () => material?.dispose(), [material])
 
   // Clicks and measurements aim rays into the scene: they must only ever find
@@ -87,8 +85,12 @@ export function ViewerEnvironment({
     const placement = floorPlacement(box, camera.up.clone().normalize())
     floor.position.copy(placement.position)
     floor.quaternion.copy(placement.quaternion)
-    if (extent?.radius !== placement.radius || extent.height !== placement.height) {
-      setExtent({ radius: placement.radius, height: placement.height })
+    if (
+      extent?.radius !== placement.radius ||
+      extent.height !== placement.height ||
+      extent.tileSize !== placement.tileSize
+    ) {
+      setExtent({ radius: placement.radius, height: placement.height, tileSize: placement.tileSize })
     }
   })
 
