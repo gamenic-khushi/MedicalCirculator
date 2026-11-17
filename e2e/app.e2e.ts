@@ -196,6 +196,81 @@ test.describe('folder list (3D解析)', () => {
     await expect(unnamed).toHaveValue(expected)
   })
 
+  test("編集 in the folder's list opens the capture with its file name at the top left", async ({ page }) => {
+    const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+    await useFakeAppwrite(page, {
+      tables: {
+        learning_content_frames: [
+          {
+            $id: 'f1',
+            dataRecordId: 'record-a',
+            fileName: '術前の撮影',
+            image,
+            upstreamSize: '4.71 mm',
+            downstreamSize: '4.47 mm',
+            pa: '80 mmHg',
+            pd: '64.9 mmHg',
+            parameter: '15.1 mmHg',
+            mld: '1.56 mm',
+            mla: '1.92 mm²',
+            stenosisRate: '66 %',
+            segmentLength: '2.09 mm',
+            lesionPosition: '中間',
+          },
+        ],
+      },
+    })
+    await page.goto('/help')
+    await page.getByText('ヘルプ').first().waitFor()
+    await page.evaluate(() => {
+      window.history.pushState(
+        { usr: { dataRecordId: 'record-a' }, key: 'folder-a', idx: (window.history.state?.idx ?? 0) + 1 },
+        '',
+        '/data/learning-content',
+      )
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    })
+    await page.locator('tbody').getByTitle('編集').click()
+    await expect(page.getByRole('heading', { name: '術前の撮影' })).toBeVisible()
+    await expect(page.getByText('保存済みキャプチャ', { exact: true })).toHaveCount(0)
+  })
+
+  test('PDFダウンロード makes a report with the values on screen', async ({ page }) => {
+    await useFakeAppwrite(page)
+    // No print dialog in the test; the report is read instead.
+    await page.context().addInitScript(() => {
+      window.print = () => {
+        ;(window as unknown as { printed: boolean }).printed = true
+      }
+    })
+    await uploadModel(page, 'PDFの学習')
+    await measureLesion(page)
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
+
+    const [report] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.getByRole('button', { name: 'PDFダウンロード' }).click(),
+    ])
+    await expect(report.locator('#data-table tr')).not.toHaveCount(0, { timeout: 20_000 })
+    const rows = await report.locator('#data-table tr').evaluateAll((trs) =>
+      Object.fromEntries(trs.map((tr) => [tr.children[0].textContent, tr.children[1].textContent])),
+    )
+    expect(rows['ファイル名']).toBe('vessel.stl')
+    expect(rows['Pa']).toBe('100 mmHg')
+    expect(rows['Pd']).toMatch(/^[0-9.]+ mmHg$/)
+    expect(rows['FFR']).toMatch(/^0\.[0-9]{2}$/)
+    expect(rows['病変近位径']).toMatch(/^[0-9.]+ mm$/)
+    expect(rows['病変遠位径']).toMatch(/^[0-9.]+ mm$/)
+    expect(rows['狭窄率']).toMatch(/^[0-9.]+ %$/)
+    expect(rows['最小断面積']).toMatch(/mm²$/)
+    expect(rows['病変位置']).toMatch(/^(近位|中間|遠位)$/)
+    // The picture of the view is in the report, and it was sent to print.
+    await expect(report.locator('#image-slot img')).toHaveCount(1)
+    await expect.poll(() => report.evaluate(() => (window as unknown as { printed?: boolean }).printed)).toBe(true)
+  })
+
   test('a signed-out visitor is sent to the login page', async ({ page }) => {
     await useFakeAppwrite(page, { signedIn: false })
     await page.goto('/data')
@@ -474,6 +549,8 @@ test.describe('the saved list (保存一覧)', () => {
     await page.locator('tbody').getByTitle('保存済みキャプチャを開く').click()
     await expect(field(page, '病変近位径')).toHaveValue(measured, { timeout: 40_000 })
     await expect(page.getByText('保存済みキャプチャ')).toHaveCount(0)
+    // The name of the row that was opened is shown at the top left.
+    await expect(page.getByTitle('編集中の保存データのファイル名')).toHaveText(String(row.fileName))
     await expect(page.locator('input[type=number]').first()).toHaveValue('100')
     await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
     await expect(page.getByRole('button', { name: '測定範囲を更新' })).toBeVisible()

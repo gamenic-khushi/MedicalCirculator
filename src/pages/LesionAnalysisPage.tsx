@@ -56,7 +56,7 @@ import {
 } from '@/lib/ffrCubicModel'
 import { captureViewAsShown } from '@/lib/captureViewAsShown'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
-import { defaultCaptureName } from '@/lib/defaultCaptureName'
+import { captureNameOf, defaultCaptureName } from '@/lib/defaultCaptureName'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { generateId } from '@/lib/id'
 import {
@@ -382,6 +382,8 @@ function LesionAnalysisPageContent() {
     // Set when a saved row is reopened with 編集: FFR is calculated again once the
     // lesion has been measured, so the view is as it was when 保存 was clicked.
     restoreFfr?: boolean
+    // The name of the saved row that 編集 opened, shown at the top left.
+    capturedName?: string
   } | null
   const dataRecordId = navigationState?.dataRecordId
   const viewFrame = navigationState?.viewFrame ?? null
@@ -977,6 +979,7 @@ function LesionAnalysisPageContent() {
               annotations: saved.annotations,
               cameraState: saved.cameraState,
               restoreFfr: true,
+              capturedName: captureNameOf({ fileName: row.fileName, createdAt: row.$createdAt }),
             },
           })
           return
@@ -1526,36 +1529,47 @@ function LesionAnalysisPageContent() {
     }
   }
 
-  function handleDownloadPdf() {
+  // The report of what is on screen: the lesion's values, Pa, Pd and FFR as the fields
+  // show them now (or as the saved capture had them), with the view as 保存 takes it.
+  async function handleDownloadPdf() {
     if (!validModel && !viewFrame) return
-    const image = snapshotImage ?? canvasRef.current?.capture() ?? null
+    // Opened first, while the click still counts, or the browser blocks the window.
     const reportWindow = window.open('', '_blank')
     if (!reportWindow) return
 
-    const pdfFfrInputs: FfrCubicInputs = {
-      dp: Number(selectedLesion.lesionProximalDiameter),
-      dd: Number(selectedLesion.lesionDistalDiameter),
-      a: Number(selectedLesion.minCrossSectionArea),
-      l: Number(selectedLesion.stenosisLength),
-      p: Number(params.pa),
-    }
+    const plain = () => snapshotImage ?? canvasRef.current?.capture() ?? null
+    const image =
+      viewFrame || !canvasAreaRef.current
+        ? plain()
+        : await captureViewAsShown(canvasAreaRef.current).catch((error) => {
+            console.error(error)
+            return plain()
+          })
+
+    const withUnit = (value: string, unit: string) =>
+      value && value !== '—' ? `${value} ${unit}` : '—'
+    const reportPd = viewFrame ? params.pd : livePd
     const ffrDisplay = measurement
       ? measurement.ffrValue.toFixed(2)
-      : params.pa && findOutOfRangeFfrInputs(pdfFfrInputs).length === 0
-        ? computeFfrCubic(pdfFfrInputs).toFixed(2)
+      : canCalculate && lesionFfrOutOfRange.length === 0
+        ? computeFfrCubic(lesionFfrInputs).toFixed(2)
         : '—'
 
+    // The same order as the 保存一覧.
     const rows: [string, string][] = [
-      ['ファイル名', validModel ? validModel.file.name : (viewFrame?.fileName ?? '—')],
-      ['Pa', params.pa ? `${params.pa} mmHg` : '—'],
-      ['Pd', params.pd ? `${params.pd} mmHg` : '—'],
-      ['狭窄率', params.stenosisRate ? `${params.stenosisRate} %` : '—'],
+      ['ファイル名', validModel ? validModel.file.name : captureNameOf(viewFrame ?? {}) || '—'],
+      ['病変近位径', withUnit(selectedLesion.lesionProximalDiameter, 'mm')],
+      ['病変遠位径', withUnit(selectedLesion.lesionDistalDiameter, 'mm')],
+      ['Pd', withUnit(reportPd, 'mmHg')],
+      ['Pa', withUnit(livePa, 'mmHg')],
       ['FFR', ffrDisplay],
-      ['上流血管のサイズ', params.upstreamSize ? `${params.upstreamSize} mm` : '—'],
-      ['下流血管のサイズ', params.downstreamSize ? `${params.downstreamSize} mm` : '—'],
-      ['MLA', params.mla ? `${params.mla} mm²` : '—'],
-      ['血管内腔体積', params.lumenVolume ? `${params.lumenVolume} mm³` : '—'],
-      ['分岐角度', params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—'],
+      ['狭窄率', withUnit(selectedLesion.stenosisRate, '%')],
+      ['最小血管径', withUnit(selectedLesion.minVesselDiameter, 'mm')],
+      ['最小断面積', withUnit(selectedLesion.minCrossSectionArea, 'mm²')],
+      ['狭窄長', withUnit(selectedLesion.stenosisLength, 'mm')],
+      ['病変位置', selectedLesion.lesionPosition || '—'],
+      ['血管内腔体積', withUnit(params.lumenVolume, 'mm³')],
+      ['分岐角度', withUnit(params.bifurcationAngle, '°')],
     ]
 
     reportWindow.document.write(`<!DOCTYPE html>
@@ -1580,13 +1594,6 @@ function LesionAnalysisPageContent() {
       </html>`)
     reportWindow.document.close()
 
-    if (image) {
-      const img = reportWindow.document.createElement('img')
-      img.src = image
-      img.alt = 'モデル画像'
-      reportWindow.document.getElementById('image-slot')?.appendChild(img)
-    }
-
     const table = reportWindow.document.getElementById('data-table')
     for (const [label, value] of rows) {
       const row = reportWindow.document.createElement('tr')
@@ -1598,8 +1605,21 @@ function LesionAnalysisPageContent() {
       table?.appendChild(row)
     }
 
-    reportWindow.focus()
-    reportWindow.onload = () => reportWindow.print()
+    // Printed once the picture is in, not before.
+    const print = () => {
+      reportWindow.focus()
+      reportWindow.print()
+    }
+    if (image) {
+      const img = reportWindow.document.createElement('img')
+      img.alt = 'モデル画像'
+      img.onload = print
+      img.onerror = print
+      img.src = image
+      reportWindow.document.getElementById('image-slot')?.appendChild(img)
+    } else {
+      print()
+    }
   }
 
   // Saves what is on screen right now — the lesion fields and the blood
@@ -1756,9 +1776,18 @@ function LesionAnalysisPageContent() {
                   : ''
               }`}
             >
-              {validModel?.studyName ?? '保存済みキャプチャ'}
+              {validModel?.studyName ?? ((viewFrame && captureNameOf(viewFrame)) || '保存済みキャプチャ')}
               {validModel && <Pencil aria-hidden className="h-4 w-4 shrink-0 text-gray-400" />}
             </h1>
+          )}
+          {/* The saved row that 編集 opened. */}
+          {validModel && navigationState?.capturedName && (
+            <span
+              title="編集中の保存データのファイル名"
+              className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700"
+            >
+              {navigationState.capturedName}
+            </span>
           )}
           {validModel && (
             <button
