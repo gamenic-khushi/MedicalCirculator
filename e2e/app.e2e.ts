@@ -110,6 +110,30 @@ test.describe('lesion analysis page', () => {
     const label = (await page.getByText('病変近位径', { exact: true }).boundingBox())!
     const box = (await field(page, '病変近位径').boundingBox())!
     expect(box.x - (label.x + label.width)).toBeLessThan(100)
+
+    // The values are in pairs, in two columns: 近位径 | 遠位径, 最小血管径 | 最小断面積,
+    // 病変位置 on its own, 狭窄率 | 狭窄長.
+    const rowOf = async (label: string) => (await field(page, label).boundingBox())!
+    const [proximal, distal, minDiameter, minArea, position, rate, length] = await Promise.all(
+      ['病変近位径', '病変遠位径', '最小血管径', '最小断面積', '病変位置', '狭窄率', '狭窄長'].map(
+        rowOf,
+      ),
+    )
+    const sameRow = (a: { y: number }, b: { y: number }) => Math.abs(a.y - b.y) < 6
+    expect(sameRow(proximal, distal) && distal.x > proximal.x + proximal.width).toBe(true)
+    expect(sameRow(minDiameter, minArea) && minArea.x > minDiameter.x + minDiameter.width).toBe(
+      true,
+    )
+    expect(sameRow(rate, length) && length.x > rate.x + rate.width).toBe(true)
+    expect(minDiameter.y).toBeGreaterThan(proximal.y + 10)
+    expect(position.y).toBeGreaterThan(minDiameter.y + 10)
+    expect(rate.y).toBeGreaterThan(position.y + 10)
+    // The 更新 button is inside the 3D view, at its bottom right.
+    const view = (await page.locator('canvas').first().boundingBox())!
+    const update = (await page.getByRole('button', { name: '測定範囲を更新' }).boundingBox())!
+    expect(update.x).toBeGreaterThan(view.x + view.width / 2)
+    expect(update.y + update.height).toBeLessThanOrEqual(view.y + view.height)
+    expect(update.y).toBeGreaterThan(view.y + view.height / 2)
   })
 
   test('two points on the vessel are measured', async ({ page }) => {

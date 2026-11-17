@@ -257,13 +257,15 @@ const SELECTED_LESION_FIELDS: {
   unit: string
   readOnly?: boolean
 }[] = [
+  // In pairs, in two columns (from the xl width on): 近位径 | 遠位径, 最小血管径 |
+  // 最小断面積, 病変位置 on its own, 狭窄率 | 狭窄長.
   { key: 'lesionProximalDiameter', label: '病変近位径', unit: 'mm' },
-  { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm', readOnly: true },
   { key: 'lesionDistalDiameter', label: '病変遠位径', unit: 'mm' },
+  { key: 'minVesselDiameter', label: '最小血管径', unit: 'mm', readOnly: true },
   { key: 'minCrossSectionArea', label: '最小断面積', unit: 'mm²', readOnly: true },
+  { key: 'lesionPosition', label: '病変位置', unit: '', readOnly: true },
   { key: 'stenosisRate', label: '狭窄率', unit: '%', readOnly: true },
   { key: 'stenosisLength', label: '狭窄長', unit: 'mm', readOnly: true },
-  { key: 'lesionPosition', label: '病変位置', unit: '', readOnly: true },
 ]
 
 // Rounded inward (min up, max down) so the shortened display never claims a
@@ -1784,7 +1786,7 @@ function LesionAnalysisPageContent() {
                 : { backgroundColor: SPACE_COLOR }
             }
             className={`relative overflow-hidden ${
-              isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[600px]'
+              isFullscreen ? 'h-screen w-screen' : 'h-[360px] sm:h-[420px] lg:h-[640px]'
             } ${isAnnotating ? 'cursor-crosshair' : ''}`}
           >
             {viewFrame ? (
@@ -1932,6 +1934,16 @@ function LesionAnalysisPageContent() {
 
                 {/* Shown with the FFR result, not before: no empty boxes. */}
                 {measurement && <PressurePointsPanel pa={livePa} pd={livePd} />}
+                <div data-ffr-keep-clear className="absolute bottom-4 right-4">
+                  <button
+                    type="button"
+                    onClick={handleUpdateSelectedLesion}
+                    title="選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）"
+                    className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700"
+                  >
+                    測定範囲を更新
+                  </button>
+                </div>
                 <AnatomyGuideThumbnail />
                 <AnimatePresence>
                 {activeTool === 'slice' && (
@@ -2042,18 +2054,6 @@ function LesionAnalysisPageContent() {
             )}
           </div>
 
-          {!viewFrame && (
-            <div className="flex items-center justify-center border-t border-gray-100 p-4">
-              <button
-                type="button"
-                onClick={handleUpdateSelectedLesion}
-                title="選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）"
-                className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-              >
-                測定範囲を更新
-              </button>
-            </div>
-          )}
           </div>
         </div>
 
@@ -2066,7 +2066,7 @@ function LesionAnalysisPageContent() {
               <p className="text-sm font-semibold text-gray-900">計測値</p>
               <p className="text-[0.6875rem] text-gray-400">自動計測値</p>
             </div>
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="mt-3 grid grid-cols-1 gap-x-2 gap-y-2.5 xl:grid-cols-2 xl:gap-x-3">
               {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }, index) => {
                 const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
                 const range = ffrKey ? ffrRangeFor(ffrKey, Number(bloodPressure) || 100) : null
@@ -2082,10 +2082,12 @@ function LesionAnalysisPageContent() {
                   selectedLesion[key] !== '' &&
                   (!Number.isFinite(rangeValue) || rangeValue < range[0] || rangeValue > range[1])
                 return (
-                  <div key={key} data-lesion-field={key} className="flex flex-col text-xs">
+                  <div key={key} data-lesion-field={key}
+                    className={`flex flex-col text-xs ${key === 'lesionPosition' ? 'xl:col-span-2' : ''}`}
+                  >
                     {/* The name and its value side by side with no gap; the hints go on a line below. */}
-                    <div className="flex items-center gap-2">
-                      <span className="w-[4.75rem] shrink-0 text-gray-500">{label}</span>
+                    <div className="flex items-center gap-2 xl:gap-1 2xl:gap-2">
+                      <span className="w-[4.75rem] shrink-0 text-gray-500 xl:w-[3.75rem] 2xl:w-[4.75rem]">{label}</span>
                       <div className="flex items-center gap-1">
                         <GlowingInput
                           // After a measurement, top to bottom, one after another.
@@ -2099,7 +2101,7 @@ function LesionAnalysisPageContent() {
                               ? undefined
                               : (event) => handleSelectedLesionFieldChange(key, event.target.value)
                           }
-                          className={`w-16 rounded border px-1.5 py-1 text-right outline-none ${
+                          className={`w-16 rounded border px-1.5 py-1 text-right outline-none xl:w-11 xl:px-1 2xl:w-16 2xl:px-1.5 ${
                             isOutOfRange
                               ? 'border-red-300 text-red-500'
                               : readOnly
@@ -2109,7 +2111,7 @@ function LesionAnalysisPageContent() {
                                 : 'border-gray-200 text-gray-900 focus:border-indigo-400'
                           }`}
                         />
-                        <span className="w-6 shrink-0 text-gray-400">{unit}</span>
+                        <span className="w-6 shrink-0 text-gray-400 xl:w-4 2xl:w-6">{unit}</span>
                       </div>
                     </div>
                     {(range || (key === 'stenosisLength' && lengthAdjustment)) && (
