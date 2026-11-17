@@ -10,7 +10,8 @@
 // THIS DELETES DATA FOR GOOD. It only lists what it would delete unless --yes is given.
 //
 // By default the oldest folder with that name is kept. To keep another one, give its
-// id: --keep=<folder id>.
+// id: --keep=<folder id>. To keep none of them (delete every folder with that name):
+// --keep=none.
 //
 //   APPWRITE_ENDPOINT=https://app.sys4tr.com/v1 \
 //   APPWRITE_PROJECT_ID=<project id> \
@@ -106,22 +107,29 @@ async function main() {
     console.log(`  ${tag}  ${describe(record)}`)
   }
 
-  const keep = KEEP_ID ? named.find((record) => record.$id === KEEP_ID) : named[0]
-  if (!keep) {
+  const keepNone = KEEP_ID === 'none'
+  const keep = keepNone ? null : KEEP_ID ? named.find((record) => record.$id === KEEP_ID) : named[0]
+  if (!keep && !keepNone) {
     console.error(`\n--keep=${KEEP_ID} is not one of the folders named "${NAME}". Nothing done.`)
     process.exit(1)
   }
-  const victims = named.filter((record) => record.$id !== keep.$id)
-  console.log(
-    `\nKEPT (${KEEP_ID ? 'chosen with --keep' : 'the oldest with that name'}):\n  ${describe(keep)}`,
-  )
-  if (!KEEP_ID && keep.$id !== records[0].$id) {
+  const victims = keep ? named.filter((record) => record.$id !== keep.$id) : named
+  if (keep) {
+    console.log(
+      `\nKEPT (${KEEP_ID ? 'chosen with --keep' : 'the oldest with that name'}):\n  ${describe(keep)}`,
+    )
+  } else {
+    console.log(
+      `\nKEPT: none of the folders named "${NAME}" (--keep=none). Folders with other names are never touched.`,
+    )
+  }
+  if (keep && !KEEP_ID && keep.$id !== records[0].$id) {
     console.log(
       '\nNOTE: the folder at the very top of the whole list has another name. Make sure that "the model at the very top" Aki means is the one kept above (or choose with --keep=<id>).',
     )
   }
   if (victims.length === 0) {
-    console.log('\nNo other folder with that name: nothing to delete.')
+    console.log('\nNo folder to delete: nothing to do.')
     return
   }
 
