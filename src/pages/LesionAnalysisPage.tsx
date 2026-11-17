@@ -1930,7 +1930,8 @@ function LesionAnalysisPageContent() {
                   </AnimatePresence>
                 </div>
 
-                <PressurePointsPanel pa={livePa} pd={livePd} />
+                {/* Shown with the FFR result, not before: no empty boxes. */}
+                {measurement && <PressurePointsPanel pa={livePa} pd={livePd} />}
                 <AnatomyGuideThumbnail />
                 <AnimatePresence>
                 {activeTool === 'slice' && (

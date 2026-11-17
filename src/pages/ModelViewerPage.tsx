@@ -625,7 +625,8 @@ export function ModelViewerPage() {
 
             {ffrResult && <FfrResultOverlay {...ffrResult} {...ffrPlacement} />}
 
-            <PressurePointsPanel pa={ffrResult ? calculatedPa : ''} pd={ffrResult ? pd : ''} />
+            {/* Shown with the FFR result, not before: no empty boxes. */}
+            {ffrResult && <PressurePointsPanel pa={calculatedPa} pd={pd} />}
             <AnatomyGuideThumbnail />
             <ViewerToolbar
               activeTool={activeTool}

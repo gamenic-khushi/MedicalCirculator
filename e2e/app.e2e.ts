@@ -133,6 +133,31 @@ test.describe('lesion analysis page', () => {
   })
 })
 
+test.describe('Pa and Pd boxes', () => {
+  test('appear together with the FFR result, not before', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, 'Pa Pd の学習')
+    const boxes = page.getByText(/^(Pa|Pd)$/)
+    // No empty boxes before the measurement.
+    await expect(boxes).toHaveCount(0)
+
+    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
+    await page.locator('input[type=number]').first().fill('100')
+    // Measured and the blood pressure typed, but FFR not calculated yet: still none.
+    await expect(boxes).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await expect(boxes).toHaveCount(2, { timeout: 20_000 })
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible()
+    await expect(page.getByText('100', { exact: true }).first()).toBeVisible()
+  })
+})
+
 test.describe('font size (文字サイズ)', () => {
   const rootSize = (page: Page) =>
     page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
