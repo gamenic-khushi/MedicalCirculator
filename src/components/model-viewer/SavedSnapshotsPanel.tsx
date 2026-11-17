@@ -14,11 +14,6 @@ interface SavedSnapshotsPanelProps {
   // Opens a saved row in the 保存済みキャプチャ view. Without it the 編集 column is left out.
   onEdit?: (snapshot: SavedSnapshot) => void
   onDownloadPdf?: () => void
-  onSaveToHistory?: () => void
-  canSaveToHistory?: boolean
-  // Shown as the button's hover text while it is disabled, so it's clear why.
-  saveToHistoryHint?: string
-  isSavingToHistory?: boolean
 }
 
 // FFR is Pd divided by Pa, with two decimals (— when either is missing).
@@ -47,10 +42,6 @@ export function SavedSnapshotsPanel({
   onDelete,
   onEdit,
   onDownloadPdf,
-  onSaveToHistory,
-  canSaveToHistory,
-  saveToHistoryHint,
-  isSavingToHistory,
 }: SavedSnapshotsPanelProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
@@ -65,26 +56,11 @@ export function SavedSnapshotsPanel({
           PDFダウンロード
         </button>
       )}
-      {onSaveToHistory && (
-        <button
-          type="button"
-          onClick={onSaveToHistory}
-          disabled={!canSaveToHistory}
-          title={
-            !canSaveToHistory && saveToHistoryHint
-              ? saveToHistoryHint
-              : 'この計測結果を永続的に保存します（一覧の「保存」と異なり、ページを離れても残ります）'
-          }
-          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isSavingToHistory ? '保存中...' : '解析履歴に保存'}
-        </button>
-      )}
     </div>
   )
 
   // The name 保存一覧 is the vertical label at the left; the buttons sit on the right.
-  const actionsRow = (onDownloadPdf || onSaveToHistory) && (
+  const actionsRow = onDownloadPdf && (
     <div className="flex justify-end border-b border-gray-100 p-4">{headerActions}</div>
   )
 
@@ -160,13 +136,8 @@ export function SavedSnapshotsPanel({
                         <button
                           type="button"
                           onClick={() => onEdit(snapshot)}
-                          disabled={snapshot.isDraft}
-                          title={
-                            snapshot.isDraft
-                              ? '「解析履歴に保存」すると、保存済みキャプチャとして開けます'
-                              : '保存済みキャプチャを開く'
-                          }
-                          className="rounded p-1 text-gray-500 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                          title="保存済みキャプチャを開く"
+                          className="rounded p-1 text-gray-500 transition hover:bg-gray-100"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>

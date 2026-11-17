@@ -157,7 +157,7 @@ const TABLES = [
     name: 'Notifications',
     columns: [
       s('title', LONG, true),
-      s('description', 8192, true),
+      s('description', 4096, true),
       s('date', 32, true),
       s('time', 32, true),
       { kind: 'enum', key: 'priority', elements: ['high', 'normal', 'low'], required: true },
@@ -326,8 +326,19 @@ async function main() {
         enabled: true,
       }),
     )
+    // A table close to the row-size limit refuses even a column that already exists
+    // (column_limit_exceeded, not "already exists"), so the existing ones are skipped.
+    const existing = DRY_RUN
+      ? []
+      : (await api('GET', `/tablesdb/${DATABASE_ID}/tables/${table.id}/columns`)).columns.map(
+          (column) => column.key,
+        )
     for (const column of table.columns) {
       const type = column.kind === 'string' ? `string(${column.size})` : column.kind
+      if (existing.includes(column.key)) {
+        console.log(`  exists    column ${table.id}.${column.key} ${type}`)
+        continue
+      }
       await ensure(
         `column ${table.id}.${column.key} ${type}${column.required ? ' required' : ''}`,
         () => createColumn(table.id, column),

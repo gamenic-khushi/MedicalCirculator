@@ -176,7 +176,7 @@ test.describe('documents page (資料)', () => {
 
 test.describe('the saved list (保存一覧)', () => {
   test('a saved row shows the columns in the agreed order', async ({ page }) => {
-    await useFakeAppwrite(page)
+    const fake = await useFakeAppwrite(page)
     await uploadModel(page, '保存一覧の学習')
     await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
     const box = (await page.locator('canvas').first().boundingBox())!
@@ -213,14 +213,70 @@ test.describe('the saved list (保存一覧)', () => {
     expect(cells[5]).toMatch(/^0[.][0-9]{2}$/) // FFR = Pd / Pa
     expect(cells[6]).toMatch(/%$/) // 狭窄率
     expect(cells[10]).toMatch(/^(近位|中間|遠位)$/) // 病変位置
-    // A row saved only on this screen cannot be opened yet.
-    await expect(page.locator('tbody').getByTitle(/解析履歴に保存/)).toBeDisabled()
+    // 保存 stores the row in the folder (the database), linked to it, so it is still
+    // there when the folder is opened again; there is no separate history button.
+    const saved = fake.rows('learning_content_frames')
+    expect(saved).toHaveLength(1)
+    expect(saved[0].dataRecordId).toBeTruthy()
+    expect(saved[0].lesionPosition).toMatch(/^(近位|中間|遠位)$/)
+    await expect(page.getByRole('button', { name: '解析履歴に保存' })).toHaveCount(0)
+    await expect(page.locator('tbody').getByTitle('保存済みキャプチャを開く')).toBeEnabled()
     // A wide list scrolls sideways.
     const scroller = page.locator('.pill-scrollbar').last()
     expect(await scroller.evaluate((el) => getComputedStyle(el).overflowX)).toBe('auto')
   })
 
-  test('編集 opens a row that was saved to the history', async ({ page }) => {
+  test('a folder shows every row saved in it, not only the first 25', async ({ page }) => {
+    const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+    const frames = Array.from({ length: 30 }, (_, i) => ({
+      $id: `frame-${i + 1}`,
+      dataRecordId: 'record-a',
+      image,
+      upstreamSize: `${i + 1} mm`,
+      downstreamSize: '4 mm',
+      pa: '100 mmHg',
+      pd: '80 mmHg',
+      parameter: '20 mmHg',
+    }))
+    // Another folder's row must not show up.
+    frames.push({
+      ...frames[0],
+      $id: 'frame-other',
+      dataRecordId: 'record-b',
+      upstreamSize: '99 mm',
+    })
+    await useFakeAppwrite(page, { tables: { learning_content_frames: frames } })
+    await page.goto('/help')
+    await page.getByText('ヘルプ').first().waitFor()
+    await page.evaluate((image) => {
+      window.history.pushState(
+        {
+          usr: {
+            dataRecordId: 'record-a',
+            viewFrame: {
+              id: 'frame-1',
+              dataRecordId: 'record-a',
+              image,
+              upstreamSize: '1 mm',
+              downstreamSize: '4 mm',
+              pa: '100 mmHg',
+              pd: '80 mmHg',
+              parameter: '20 mmHg',
+            },
+          },
+          key: 'many',
+          idx: 5,
+        },
+        '',
+        '/data/lesion-measurement/analysis',
+      )
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    }, image)
+    await expect(page.locator('tbody tr')).toHaveCount(30)
+    await expect(page.locator('tbody').getByText('99 mm')).toHaveCount(0)
+  })
+
+  test('編集 opens a saved row', async ({ page }) => {
     await useFakeAppwrite(page, {
       tables: {
         learning_content_frames: [

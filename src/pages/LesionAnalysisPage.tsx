@@ -38,7 +38,6 @@ import { MIN_MODEL_SIZE_UNITS } from '@/lib/modelUnits'
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
-import { useAuth } from '@/hooks/useAuth'
 import { useFfrCardPlacement } from '@/hooks/useFfrCardPlacement'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useHighlightOnChange } from '@/hooks/useHighlightOnChange'
@@ -76,7 +75,6 @@ import {
 } from '@/lib/twoPointLesionMeasurement'
 import { databaseService } from '@/services/appwrite/database'
 import type { LearningContentFrame } from '@/types/learningContentFrame'
-import { isAdminCategory } from '@/types/user'
 import type { Annotation, CameraState, FfrResult, SavedSnapshot } from '@/types/viewerState'
 
 type LearningContentFrameRow = Models.Row & Omit<LearningContentFrame, 'id'>
@@ -341,8 +339,6 @@ export function LesionAnalysisPage() {
 
 function LesionAnalysisPageContent() {
   const navigate = useNavigate()
-  const { user } = useAuth()
-  const isAdmin = isAdminCategory(user?.category)
   const { model, setModel } = useModel3D()
   const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshot[]>([])
   const location = useLocation()
@@ -485,12 +481,16 @@ function LesionAnalysisPageContent() {
 
   useEffect(() => {
     if (!dataRecordId) return
+    // Every row saved in this folder (not just the first page of 25).
     databaseService
-      .list<LearningContentFrameRow>('learning_content_frames', [
+      .listAll<LearningContentFrameRow>('learning_content_frames', [
         Query.equal('dataRecordId', dataRecordId),
-        Query.orderDesc('$createdAt'),
       ])
       .then(({ rows }) => setSavedSnapshots(rows.map(toSavedSnapshot)))
+      .catch((error) => {
+        console.error(error)
+        showToast(LOAD_FAILED, 'error')
+      })
   }, [dataRecordId])
 
   useEffect(() => {
@@ -1417,38 +1417,10 @@ function LesionAnalysisPageContent() {
     showToast('選択病変を更新しました')
   }
 
+  // 保存: stores the result in the folder (the database), so the list shows it
+  // again whenever the folder is opened with its "+".
   async function handleSave() {
-    if (!measurement || !canvasAreaRef.current) return
-    const date = formatSnapshotDate(new Date())
-    // The view as it is now, whole and as shown, ① ② and the lines included:
-    // not the close-up taken when FFR was calculated. The 3D view alone if
-    // that can't be drawn, rather than nothing.
-    const image = await captureViewAsShown(canvasAreaRef.current).catch((error) => {
-      console.error(error)
-      return canvasRef.current?.capture({ asShown: true })
-    })
-    if (!image) return
-
-    setSavedSnapshots((prev) => [
-      ...prev,
-      {
-        id: generateId(),
-        image,
-        date,
-        upstreamSize: params.upstreamSize ? `${params.upstreamSize} mm` : '—',
-        downstreamSize: params.downstreamSize ? `${params.downstreamSize} mm` : '—',
-        pd: params.pd ? `${params.pd} mmHg` : '—',
-        pa: params.pa ? `${params.pa} mmHg` : '—',
-        stenosisRate: params.stenosisRate ? `${params.stenosisRate} %` : '—',
-        mla: params.mla ? `${params.mla} mm²` : '—',
-        lumenVolume: params.lumenVolume ? `${params.lumenVolume} mm³` : '—',
-        bifurcationAngle: params.bifurcationAngle ? `${params.bifurcationAngle} °` : '—',
-        mld: selectedLesion.minVesselDiameter ? `${selectedLesion.minVesselDiameter} mm` : '—',
-        segmentLength: selectedLesion.stenosisLength ? `${selectedLesion.stenosisLength} mm` : '—',
-        lesionPosition: selectedLesion.lesionPosition || '—',
-        isDraft: true,
-      },
-    ])
+    if (await saveToFolder()) showToast('保存しました')
   }
 
   function handleStartEditingTitle() {
@@ -1553,9 +1525,9 @@ function LesionAnalysisPageContent() {
   // depending on the FFR result overlay (which disappears whenever the blood
   // pressure is retyped or the view is reset, and used to leave this button
   // greyed out for no visible reason).
-  async function handleSaveToLearningData() {
-    if (isSavingHistory || !hasMeasurement) return
-    if (bloodPressure.trim() === '') return
+  async function saveToFolder(): Promise<boolean> {
+    if (isSavingHistory || !hasMeasurement) return false
+    if (bloodPressure.trim() === '') return false
     const ffrInputs: FfrCubicInputs = {
       dp: Number(selectedLesion.lesionProximalDiameter),
       dd: Number(selectedLesion.lesionDistalDiameter),
@@ -1566,7 +1538,7 @@ function LesionAnalysisPageContent() {
     const outOfRange = findOutOfRangeFfrInputs(ffrInputs)
     if (outOfRange.length > 0) {
       showToast(describeFfrRangeError(outOfRange, ffrInputs), 'error', { persistent: true })
-      return
+      return false
     }
 
     const pa = bloodPressure.trim()
@@ -1605,11 +1577,13 @@ function LesionAnalysisPageContent() {
         segmentLength: `${selectedLesion.stenosisLength} mm`,
         lesionPosition: selectedLesion.lesionPosition || '—',
       })
-      setSavedSnapshots((prev) => [toSavedSnapshot(row), ...prev])
-      navigate('/data/learning-content', { state: { dataRecordId } })
+      setSavedSnapshots((prev) => [...prev, toSavedSnapshot(row)])
+      return true
     } catch (error) {
       console.error(error)
       showToast(SAVE_FAILED, 'error')
+      return false
+    } finally {
       setIsSavingHistory(false)
     }
   }
@@ -1631,14 +1605,6 @@ function LesionAnalysisPageContent() {
     canCalculate && lesionFfrOutOfRange.length === 0
       ? (Number(livePa) * computeFfrCubic(lesionFfrInputs)).toFixed(1)
       : ''
-  const canSaveToHistory = canCalculate && lesionFfrOutOfRange.length === 0 && !isSavingHistory
-  const saveToHistoryHint = !hasMeasurement
-    ? '先に2点を選択してください'
-    : bloodPressure.trim() === ''
-      ? '先に血圧の値を入力してください'
-      : lesionFfrOutOfRange.length > 0
-        ? '学習範囲外の値があるため保存できません（赤い項目を修正してください）'
-        : undefined
   const disabledReason = !hasMeasurement
     ? '先に2点を選択してください'
     : bloodPressure.trim() === ''
@@ -2108,8 +2074,12 @@ function LesionAnalysisPageContent() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!measurement}
-            title="この画面上に一時的に保存します（ページを離れると失われます。永続的に保存するには「解析履歴に保存」を使用してください）"
+            disabled={!measurement || isSavingHistory}
+            title={
+              measurement
+                ? 'この計測結果をこのフォルダに保存します（保存一覧に追加され、フォルダを「+」で開き直しても表示されます）'
+                : '先にFFRを計算してください'
+            }
             className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             保存
@@ -2123,10 +2093,6 @@ function LesionAnalysisPageContent() {
           onDelete={handleDeleteSnapshot}
           onEdit={handleOpenSnapshot}
           onDownloadPdf={handleDownloadPdf}
-          onSaveToHistory={isAdmin && !viewFrame ? handleSaveToLearningData : undefined}
-          canSaveToHistory={canSaveToHistory}
-          saveToHistoryHint={saveToHistoryHint}
-          isSavingToHistory={isSavingHistory}
         />
       </div>
 
