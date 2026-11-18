@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef, useState } from 'react'
+
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import type { LesionProfileSample, LesionShape } from '@/lib/twoPointLesionMeasurement'
 
@@ -50,13 +52,42 @@ function halfHeightFor(diameter: number, maxDiameter: number) {
 
 // Room above the lengthwise drawing for the 切断面 label, which stands over the cutting
 // line (the drawing's own coordinates are unchanged: the view just starts higher).
-const LABEL_ROOM = 14
+const LABEL_ROOM = 18
 const LENGTHWISE_VIEW_BOX = `0 ${-LABEL_ROOM} ${WIDTH} ${HEIGHT + LABEL_ROOM}`
 const CUT_LABEL_COLOR = '#4f46e5'
 
-// The name of the lengthwise drawing, one line tall in every state of the block.
+// The words in the pictures are the size of the values in 計測値 (text-xs, 12 px),
+// whatever the width of the picture they are drawn in: the picture is scaled to its
+// column, so the size in its own units is worked out from the width it is shown at.
+const PICTURE_TEXT_PX = 12
+// Until the width is known (and when there is no layout, as in a static render).
+const FALLBACK_SCALE = 0.9
+// 奥行き（スライダーで調整）: its length in full-width characters.
+const DEPTH_LABEL_CHARS = 13
+
+function usePictureTextSize(viewBoxWidth: number) {
+  const ref = useRef<SVGSVGElement>(null)
+  const [scale, setScale] = useState(FALLBACK_SCALE)
+  useLayoutEffect(() => {
+    const svg = ref.current
+    if (!svg) return
+    const measure = () => {
+      // The laid-out width, which a scale-in animation of a parent does not change.
+      if (svg.clientWidth > 0) setScale(svg.clientWidth / viewBoxWidth)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(svg)
+    return () => observer.disconnect()
+  }, [viewBoxWidth])
+  return { ref, textSize: PICTURE_TEXT_PX / scale }
+}
+
+// The name of the lengthwise drawing, one line tall in every state of the block: a
+// step under the block's own headings (計測値, 3D狭窄形状プレビュー), black.
 function LengthwiseHeading() {
-  return <p className="h-4 w-full text-xs font-semibold text-indigo-600">縦断面</p>
+  return <p className="h-5 w-full text-sm font-semibold text-gray-900">縦断面</p>
 }
 
 const SECTION_WIDTH = 300
@@ -118,6 +149,7 @@ function TransverseSection({
   // width, so a short stem can lead from the line down to this picture.
   connectorLeft: number | null
 }) {
+  const { ref: svgRef, textSize } = usePictureTextSize(SECTION_WIDTH)
   const line = outline?.sectionLine
   // Where the horizontal line meets the vessel's surface: the front of the range.
   const front = line?.x ?? null
@@ -152,13 +184,13 @@ function TransverseSection({
         />
       )}
       {/* The name, with the area of the cut beside it (one line tall with or without it). */}
-      <div className="flex h-4 w-full items-baseline gap-3 px-1">
-        <p className="text-xs font-semibold text-indigo-600">横断面</p>
+      <div className="flex h-5 w-full items-baseline gap-3 px-1">
+        <p className="text-sm font-semibold text-gray-900">横断面</p>
         {area != null && (
-          <p className="text-xs font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</p>
+          <p className="text-xs font-semibold text-gray-900">断面積 {area.toFixed(2)} mm²</p>
         )}
       </div>
-      <svg viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="w-full">
+      <svg ref={svgRef} viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="w-full">
         <rect
           x={1}
           y={1}
@@ -182,14 +214,14 @@ function TransverseSection({
               strokeWidth={1}
               strokeDasharray="2 2"
             />
-            <text x={xOf(front) + 2} y={SECTION_HEIGHT - 7} fontSize={10} fill={DEPTH_RANGE_COLOR}>
+            <text x={xOf(front) + 2} y={SECTION_HEIGHT - 7} fontSize={textSize} fill={DEPTH_RANGE_COLOR}>
               手前
             </text>
             <text
               x={Math.min(rangeEnd, rightEdge) - 2}
               y={SECTION_HEIGHT - 7}
               textAnchor="end"
-              fontSize={10}
+              fontSize={textSize}
               fill={DEPTH_RANGE_COLOR}
             >
               奥 {SLICE_DEPTH_LIMIT} mm{rangeCut && ' →'}
@@ -224,7 +256,7 @@ function TransverseSection({
               x={horizontal[1][0] - 2}
               y={horizontal[1][1] - 3}
               textAnchor="end"
-              fontSize={10}
+              fontSize={textSize}
               fontWeight={600}
               fill={SECTION_LINE_COLOR}
             >
@@ -244,12 +276,14 @@ function TransverseSection({
               strokeWidth={1}
               strokeDasharray="4 2"
             />
-            {/* Past the right edge it waits there, pointing on to where it is. */}
+            {/* Past the right edge it waits there, pointing on to where it is. The name
+                stands to the left of the line instead of to its right when it would not
+                fit in the picture there. */}
             <text
-              x={depthPastEdge ? depthX - 3 : depthX + 3}
-              y={12}
-              textAnchor={depthPastEdge ? 'end' : 'start'}
-              fontSize={10}
+              x={depthPastEdge || depthX + 3 + DEPTH_LABEL_CHARS * textSize > rightEdge ? depthX - 3 : depthX + 3}
+              y={textSize + 2}
+              textAnchor={depthPastEdge || depthX + 3 + DEPTH_LABEL_CHARS * textSize > rightEdge ? 'end' : 'start'}
+              fontSize={textSize}
               fontWeight={600}
               fill={SECTION_LINE_COLOR}
             >
@@ -344,11 +378,12 @@ function MeasuredShape({
         )
       : null
   const xCut = cutFraction != null ? x0 + Math.min(Math.max(cutFraction, 0), 1) * (x1 - x0) : null
+  const { ref: svgRef, textSize } = usePictureTextSize(WIDTH)
 
   return (
     <div className="flex flex-col items-center gap-2">
       <LengthwiseHeading />
-      <svg viewBox={LENGTHWISE_VIEW_BOX} className="w-full">
+      <svg ref={svgRef} viewBox={LENGTHWISE_VIEW_BOX} className="w-full">
         {depthCut ? (
           <>
             {/* The centre-line outline stays as a faint guide behind the cut. */}
@@ -404,7 +439,7 @@ function MeasuredShape({
               strokeDasharray="4 2"
             />
             {/* Ends short of the ② circle, which sits on the line's right end. */}
-            <text x={x1 - MARKER_RADIUS - 3} y={yHorizontal - 3} textAnchor="end" fontSize={10} fontWeight={600} fill={SECTION_LINE_COLOR}>
+            <text x={x1 - MARKER_RADIUS - 3} y={yHorizontal - 3} textAnchor="end" fontSize={textSize} fontWeight={600} fill={SECTION_LINE_COLOR}>
               水平線
             </text>
           </g>
@@ -418,7 +453,7 @@ function MeasuredShape({
               x={Math.min(Math.max(xCut, 20), WIDTH - 20)}
               y={-3}
               textAnchor="middle"
-              fontSize={10}
+              fontSize={textSize}
               fontWeight={600}
               fill={CUT_LABEL_COLOR}
             >
@@ -436,7 +471,7 @@ function MeasuredShape({
           </g>
         )}
       </svg>
-      <div className="relative h-4 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
+      <div className="relative h-4 w-full px-1 text-xs font-medium text-gray-500">
         <span className="absolute left-1 top-0">① 近位側</span>
         <span
           className="absolute -translate-x-1/2 whitespace-nowrap"
@@ -484,7 +519,7 @@ export function VesselShapePlaceholder({ message }: { message: string }) {
           {message}
         </p>
       </div>
-      <div className="relative h-4 w-full px-1 text-[0.6875rem] font-medium text-gray-500">
+      <div className="relative h-4 w-full px-1 text-xs font-medium text-gray-500">
         <span className="absolute left-1 top-0">① 近位側</span>
         <span className="absolute right-1 top-0">② 遠位側</span>
       </div>

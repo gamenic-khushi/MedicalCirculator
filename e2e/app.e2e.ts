@@ -1132,3 +1132,60 @@ test.describe('the depth slider notice', () => {
     await expect(notice).toHaveCount(0)
   })
 })
+
+test.describe('font sizes in 選択病変 形状 (Aki 11/18)', () => {
+  test('two headings, two sub-headings and the words in the pictures at the size of the values', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '文字の大きさの学習')
+    await measureLesion(page)
+    await page.getByTitle('断面を表示').click()
+    await expect(page.getByText('横断面', { exact: true })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('水平線').first()).toBeVisible()
+
+    const sizes = await page.evaluate(() => {
+      const css = (el: Element) => {
+        const style = getComputedStyle(el)
+        return { size: parseFloat(style.fontSize), color: style.color }
+      }
+      const byText = (text: string) =>
+        [...document.querySelectorAll('p, span, label')].find((el) => el.textContent?.trim() === text)!
+      // The size a word in an svg picture really shows at.
+      const svgText = (text: string) => {
+        const el = [...document.querySelectorAll('svg text')].find((t) => t.textContent?.trim().startsWith(text))!
+        const svg = el.closest('svg')!
+        const box = svg.viewBox.baseVal
+        return parseFloat(el.getAttribute('font-size')!) * (svg.clientWidth / box.width)
+      }
+      return {
+        measureHeading: css(byText('計測値')),
+        previewHeading: css(byText('3D狭窄形状プレビュー')),
+        lengthwise: css(byText('縦断面')),
+        transverse: css(byText('横断面')),
+        value: css(document.querySelector('[data-lesion-field] input')!),
+        nearSide: css(byText('① 近位側')),
+        smallest: css(byText('最小')),
+        area: css([...document.querySelectorAll('p')].find((el) => el.textContent?.startsWith('断面積'))!),
+        horizontalLine: svgText('水平線'),
+        cutName: svgText('切断面'),
+        front: svgText('手前'),
+        depthLine: svgText('奥行き'),
+      }
+    })
+
+    // Large: the two headings; a step smaller: 縦断面 and 横断面, in black too.
+    expect(sizes.measureHeading.size).toBe(16)
+    expect(sizes.previewHeading.size).toBe(16)
+    expect(sizes.lengthwise.size).toBe(14)
+    expect(sizes.transverse.size).toBe(14)
+    for (const heading of [sizes.lengthwise, sizes.transverse]) {
+      expect(heading.color).toBe(sizes.measureHeading.color)
+    }
+    // The values and the words in the pictures: one size.
+    expect(sizes.value.size).toBe(12)
+    for (const size of [sizes.nearSide.size, sizes.smallest.size, sizes.area.size]) expect(size).toBe(12)
+    for (const size of [sizes.horizontalLine, sizes.cutName, sizes.front, sizes.depthLine]) {
+      expect(size).toBeGreaterThan(11.5)
+      expect(size).toBeLessThan(12.5)
+    }
+  })
+})

@@ -324,7 +324,7 @@ function LesionSnapshotPanel({
   const hasShape = proximalDiameter > 0 && minDiameter > 0 && distalDiameter > 0
   return (
     <div className="flex-1">
-      <p className="text-sm font-semibold text-gray-900">3D狭窄形状プレビュー</p>
+      <p className="text-base font-semibold text-gray-900">3D狭窄形状プレビュー</p>
       {/* Every state is the same size (the empty one is the same pictures, blank), so
           nothing around it moves when the measurement arrives; a new shape draws in
           from ① to ②. The diagram itself redraws immediately as values change. */}
@@ -2134,7 +2134,7 @@ function LesionAnalysisPageContent() {
           <SideLabel>選択病変 形状</SideLabel>
           <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row lg:flex-col">
           <div className="flex-1 lg:flex-none">
-            <p className="text-sm font-semibold text-gray-900">計測値</p>
+            <p className="text-base font-semibold text-gray-900">計測値</p>
             <div className="mt-3 grid grid-cols-1 gap-x-2 gap-y-2.5 xl:grid-cols-2 xl:gap-x-3">
               {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }, index) => {
                 const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
