@@ -510,9 +510,41 @@ test.describe('lesion analysis page', () => {
     expect(rate.y).toBeGreaterThan(position.y + 10)
   })
 
+  test('the page has narrow, equal margins at its left and right edges', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await useFakeAppwrite(page)
+    await uploadModel(page, '余白の学習')
+
+    const sidebar = (await page.locator('aside').boundingBox())!
+    const blocks = page.locator('[data-testid="lesion-page"] div.rounded-2xl')
+    const count = await blocks.count()
+    let leftEdge = Infinity
+    let rightEdge = 0
+    for (let i = 0; i < count; i++) {
+      const box = await blocks.nth(i).boundingBox()
+      if (!box || box.width < 200) continue
+      leftEdge = Math.min(leftEdge, box.x)
+      rightEdge = Math.max(rightEdge, box.x + box.width)
+    }
+    const viewport = page.viewportSize()!
+    const left = leftEdge - (sidebar.x + sidebar.width)
+    const right = viewport.width - rightEdge
+    // 24 px each side (it was 56 px), and no horizontal scrollbar.
+    expect(left).toBeGreaterThanOrEqual(20)
+    expect(left).toBeLessThanOrEqual(28)
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(20) // the right one may include a scrollbar
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+  })
+
   test('the controls in the 3D view are laid out as in the wireframe', async ({ page }) => {
     await useFakeAppwrite(page)
     await uploadModel(page, '配置の学習')
+    // The canvas starts at its default size and is resized a moment later: wait for that.
+    await expect
+      .poll(async () => (await page.locator('canvas').first().boundingBox())?.width ?? 0)
+      .toBeGreaterThan(500)
     const view = (await page.locator('canvas').first().boundingBox())!
     const at = async (name: string) =>
       (await page.getByRole('button', { name, exact: true }).boundingBox())!

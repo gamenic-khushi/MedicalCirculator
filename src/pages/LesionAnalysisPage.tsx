@@ -1791,7 +1791,7 @@ function LesionAnalysisPageContent() {
       : undefined
 
   return (
-    <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
+    <div className="px-4 py-6 sm:px-6 lg:px-6 lg:py-8" data-testid="lesion-page">
       <div className="flex items-center gap-2">
           {validModel && isEditingTitle ? (
             <input
