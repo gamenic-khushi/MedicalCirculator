@@ -27,10 +27,7 @@ import {
 import { ModelInfoCard } from '@/components/model-viewer/ModelInfoCard'
 import { PressurePointsPanel } from '@/components/model-viewer/PressurePointsPanel'
 import { SavedSnapshotsPanel } from '@/components/model-viewer/SavedSnapshotsPanel'
-import {
-  SelectedLesionModal,
-  type SelectedLesionFormData,
-} from '@/components/model-viewer/SelectedLesionModal'
+import type { SelectedLesionFormData } from '@/components/model-viewer/selectedLesion'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
 import {
   isDepthOutsideSection,
@@ -497,7 +494,6 @@ function LesionAnalysisPageContent() {
   // A saved row is being reopened with 編集 (its model may have to be fetched).
   const [isOpeningSaved, setIsOpeningSaved] = useState(false)
   const [pendingFfrRestore, setPendingFfrRestore] = useState(Boolean(navigationState?.restoreFfr))
-  const [isEditingLesion, setIsEditingLesion] = useState(false)
   const { toast, showToast, dismissToast } = useToast()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
@@ -1481,10 +1477,6 @@ function LesionAnalysisPageContent() {
     }))
   }
 
-  function handleSaveSelectedLesion(data: SelectedLesionFormData) {
-    applySelectedLesion(data)
-  }
-
   // Editing 狭窄率 directly already flows into FFR correctly (handleCalculateFfr
   // reads it fresh). But editing one of the three diameters instead left 狭窄率
   // — and therefore FFR — pinned to whatever the original auto-measurement
@@ -1953,12 +1945,10 @@ function LesionAnalysisPageContent() {
                   locked={activeTool === 'slice' && sliceAligned}
                   isAnnotating={isAnnotating}
                   hasTwoPoints={annotations.length === 2}
-                  isMeasured={Boolean(measurement)}
                   guideStep={guideStep}
                   onToolChange={handleToolChange}
                   onToggleAnnotating={() => setIsAnnotating((value) => !value)}
                   onSwap={handleSwapAnnotations}
-                  onEditLesion={() => setIsEditingLesion(true)}
                   onUpdateRange={() => {
                     if (sliceAligned) setRangeUpdated(true)
                     handleUpdateSelectedLesion()
@@ -2274,16 +2264,6 @@ function LesionAnalysisPageContent() {
           onDownloadPdf={handleDownloadPdf}
         />
       </div>
-
-      <AnimatePresence>
-        {isEditingLesion && measurement && (
-          <SelectedLesionModal
-            initialValues={selectedLesion}
-            onClose={() => setIsEditingLesion(false)}
-            onSave={handleSaveSelectedLesion}
-          />
-        )}
-      </AnimatePresence>
 
       {/* Into <body>, outside the page, like the app's other dialogs. */}
       {isInfoOpen &&

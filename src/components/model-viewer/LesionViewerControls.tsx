@@ -4,7 +4,6 @@ import {
   Maximize,
   MousePointerClick,
   Move,
-  Pencil,
   RefreshCw,
   Rotate3d,
   Scissors,
@@ -34,14 +33,11 @@ interface LesionViewerControlsProps {
   isAnnotating: boolean
   // Both points are chosen: the ① ② swap and the hint for 整列 apply.
   hasTwoPoints: boolean
-  // The lesion is measured: it can be corrected (the pencil).
-  isMeasured: boolean
   // The step the glow is on; null for none (a saved capture, or the work is done).
   guideStep: GuideStep | null
   onToolChange: (tool: ViewerTool) => void
   onToggleAnnotating: () => void
   onSwap: () => void
-  onEditLesion: () => void
   onUpdateRange: () => void
   onReset: () => void
   onZoomIn: () => void
@@ -81,12 +77,10 @@ export function LesionViewerControls({
   locked,
   isAnnotating,
   hasTwoPoints,
-  isMeasured,
   guideStep,
   onToolChange,
   onToggleAnnotating,
   onSwap,
-  onEditLesion,
   onUpdateRange,
   onReset,
   onZoomIn,
@@ -204,20 +198,12 @@ export function LesionViewerControls({
           </button>
         </div>
 
-        {/* Only once there is something to swap or to correct, under the row so the row
-            itself never moves. */}
-        {(hasTwoPoints || isMeasured) && (
+        {/* Only once there is something to swap, under the row so the row itself never moves. */}
+        {hasTwoPoints && (
           <div className="flex flex-col gap-2">
-            {hasTwoPoints && (
-              <button type="button" onClick={onSwap} className={ROUND} title="①と②を入れ替える（心臓に近い側を修正）">
-                <ArrowLeftRight className="h-4 w-4" />
-              </button>
-            )}
-            {isMeasured && (
-              <button type="button" onClick={onEditLesion} className={ROUND} title="選択病変を修正">
-                <Pencil className="h-4 w-4" />
-              </button>
-            )}
+            <button type="button" onClick={onSwap} className={ROUND} title="①と②を入れ替える（心臓に近い側を修正）">
+              <ArrowLeftRight className="h-4 w-4" />
+            </button>
           </div>
         )}
       </div>

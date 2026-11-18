@@ -1189,3 +1189,27 @@ test.describe('font sizes in 選択病変 形状 (Aki 11/18)', () => {
     }
   })
 })
+
+test.describe('correcting the lesion values', () => {
+  test('is done in 計測値 only: no pencil over the 3D view, and the two diameters can be edited there', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '修正の学習')
+    await measureLesion(page)
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
+
+    // The pencil that opened a second form with the same fields is gone.
+    await expect(page.getByTitle('選択病変を修正')).toHaveCount(0)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    // The same two values are editable in 計測値; the others are not.
+    await expect(field(page, '病変近位径')).toBeEditable()
+    await expect(field(page, '病変遠位径')).toBeEditable()
+    await expect(field(page, '最小血管径')).not.toBeEditable()
+    await expect(field(page, '狭窄率')).not.toBeEditable()
+    const rate = await field(page, '狭窄率').inputValue()
+    await field(page, '病変近位径').fill('4')
+    await expect(field(page, '狭窄率')).not.toHaveValue(rate)
+  })
+})
