@@ -578,6 +578,21 @@ test.describe('lesion analysis page', () => {
     expect(column[0].x).toBeGreaterThan(view.x + view.width * 0.9)
     // The old toolbar at the bottom is gone, and the update button is not at the bottom right.
     expect(row[4].y).toBeLessThan(view.y + 80)
+
+    // Once both points are chosen, the ① ② swap joins the right column under 全画面
+    // (Aki's markup), and the depth slider that follows 整列 is under the swap.
+    const swapTitle = '①と②を入れ替える（心臓に近い側を修正）'
+    await expect(page.getByTitle(swapTitle)).toHaveCount(0)
+    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.mouse.click(view.x + view.width * 0.37, view.y + view.height * 0.575)
+    await page.mouse.click(view.x + view.width * 0.63, view.y + view.height * 0.445)
+    const swap = await atTitle(swapTitle)
+    const fullscreen = await atTitle('全画面')
+    expect(Math.abs(swap.x - fullscreen.x)).toBeLessThan(6)
+    expect(swap.y).toBeGreaterThan(fullscreen.y + fullscreen.height - 1)
+    await page.getByTitle('整列して断面を表示').click()
+    const slider = (await page.getByLabel('奥行き').boundingBox())!
+    expect(slider.y).toBeGreaterThan(swap.y + swap.height - 1)
   })
 
   test('the next control to touch glows, step by step', async ({ page }) => {

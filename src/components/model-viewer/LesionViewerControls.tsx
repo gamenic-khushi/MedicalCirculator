@@ -197,15 +197,6 @@ export function LesionViewerControls({
             測定範囲を更新
           </button>
         </div>
-
-        {/* Only once there is something to swap, under the row so the row itself never moves. */}
-        {hasTwoPoints && (
-          <div className="flex flex-col gap-2">
-            <button type="button" onClick={onSwap} className={ROUND} title="①と②を入れ替える（心臓に近い側を修正）">
-              <ArrowLeftRight className="h-4 w-4" />
-            </button>
-          </div>
-        )}
       </div>
 
       <div data-ffr-keep-clear className="absolute right-4 top-4 flex flex-col items-center gap-2">
@@ -236,7 +227,14 @@ export function LesionViewerControls({
         <button type="button" onClick={onToggleFullscreen} className={ROUND} title="全画面">
           <Maximize className="h-4 w-4" />
         </button>
-        {/* 4: under the fullscreen button, after 整列. */}
+        {/* Once both points are chosen (Aki's markup, 2026/11/18): the ① ② swap, in this
+            column under the fullscreen button, above the depth slider. */}
+        {hasTwoPoints && (
+          <button type="button" onClick={onSwap} className={ROUND} title="①と②を入れ替える（心臓に近い側を修正）">
+            <ArrowLeftRight className="h-4 w-4" />
+          </button>
+        )}
+        {/* 4: under the swap, after 整列. */}
         {depthControl}
       </div>
     </>
