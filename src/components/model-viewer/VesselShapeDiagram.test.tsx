@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { VesselShapeDiagram, VesselShapePlaceholder } from '@/components/model-viewer/VesselShapeDiagram'
+import {
+  isDepthOutsideSection,
+  VesselShapeDiagram,
+  VesselShapePlaceholder,
+} from '@/components/model-viewer/VesselShapeDiagram'
 import type { PlaneOutline } from '@/lib/slicePlane'
 import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
 
@@ -186,5 +190,28 @@ describe('a block that keeps its size', () => {
     const markup = renderToStaticMarkup(<VesselShapePlaceholder message="計測中..." />)
     expect(markup).toContain('計測中...')
     expect(markup).toContain('病変指定箇所が表示されます')
+  })
+})
+
+describe('depth outside the cross-section', () => {
+  it('is not outside while the 奥行き line is within the cut, and is once it has passed the far side', () => {
+    // The round 2 mm cut: the line starts at its front (x = -1) and the far side is at x = 1.
+    expect(isDepthOutsideSection(crossSection, 0)).toBe(false)
+    expect(isDepthOutsideSection(crossSection, 1)).toBe(false)
+    expect(isDepthOutsideSection(crossSection, 2)).toBe(false)
+    expect(isDepthOutsideSection(crossSection, 2.5)).toBe(true)
+    expect(isDepthOutsideSection(crossSection, 6)).toBe(true)
+  })
+
+  it('is outside when the line is past the right edge of the picture, even in a large cut', () => {
+    // A cut whose front lies so far along the picture that even depth 0 is off its edge.
+    const deep: PlaneOutline = { ...crossSection, width: 2, sectionLine: { x: 4, y: 0, dx: 1, dy: 0 } }
+    expect(isDepthOutsideSection(deep, 0)).toBe(true)
+  })
+
+  it('has nothing to judge without a cut, a section line or the slider in use', () => {
+    expect(isDepthOutsideSection(null, 3)).toBe(false)
+    expect(isDepthOutsideSection({ ...crossSection, sectionLine: null }, 3)).toBe(false)
+    expect(isDepthOutsideSection(crossSection, null)).toBe(false)
   })
 })

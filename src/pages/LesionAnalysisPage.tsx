@@ -32,7 +32,11 @@ import {
   type SelectedLesionFormData,
 } from '@/components/model-viewer/SelectedLesionModal'
 import { TwoPointMarkers } from '@/components/model-viewer/TwoPointMarkers'
-import { VesselShapeDiagram, VesselShapePlaceholder } from '@/components/model-viewer/VesselShapeDiagram'
+import {
+  isDepthOutsideSection,
+  VesselShapeDiagram,
+  VesselShapePlaceholder,
+} from '@/components/model-viewer/VesselShapeDiagram'
 import { fade, reveal } from '@/lib/motion'
 import { fetchFolderModelFile } from '@/lib/fetchFolderModel'
 import { MIN_MODEL_SIZE_UNITS } from '@/lib/modelUnits'
@@ -453,6 +457,9 @@ function LesionAnalysisPageContent() {
   // (4 done), 測定範囲を更新 was clicked once the vessel was aligned (5 done).
   const [viewTouched, setViewTouched] = useState(false)
   const [depthTouched, setDepthTouched] = useState(false)
+  // The depth at which the notice about the depth slider was closed: it comes back when
+  // the slider is moved and the section is still outside the vessel.
+  const [depthNoticeClosedAt, setDepthNoticeClosedAt] = useState<number | null>(null)
   const [rangeUpdated, setRangeUpdated] = useState(false)
   const [isDraggingPoint, setIsDraggingPoint] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
@@ -1768,6 +1775,20 @@ function LesionAnalysisPageContent() {
           : hasMeasurement
             ? null
             : 3
+  // The lengthwise section is outside what the cross-section picture shows: the depth
+  // slider is asked to be adjusted (a notice, and the slider glows). Only while the
+  // preview shows that picture, i.e. once the lesion is measured.
+  const previewShowsSection =
+    !isMeasuring &&
+    Number(selectedLesion.lesionProximalDiameter) > 0 &&
+    Number(selectedLesion.minVesselDiameter) > 0 &&
+    Number(selectedLesion.lesionDistalDiameter) > 0
+  const depthOutside =
+    activeTool === 'slice' &&
+    !viewFrame &&
+    previewShowsSection &&
+    isDepthOutsideSection(sliceOutline, (depth / 100) * SLICE_DEPTH_LIMIT)
+  const depthGlow = guideStep === 4 || depthOutside
   const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
   const lesionFfrInputs: FfrCubicInputs = {
     dp: Number(selectedLesion.lesionProximalDiameter),
@@ -1967,11 +1988,21 @@ function LesionAnalysisPageContent() {
                           key="depth-slider"
                           {...fade}
                           title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
-                          data-guided={guideStep === 4 ? 'true' : undefined}
-                          className={`flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm ${
-                            guideStep === 4 ? 'guide-glow' : ''
+                          data-guided={depthGlow ? 'true' : undefined}
+                          className={`relative flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm ${
+                            depthGlow ? 'guide-glow' : ''
                           }`}
                         >
+                          <AnimatePresence>
+                            {depthOutside && depthNoticeClosedAt !== depth && (
+                              <GuidanceBubble
+                                anchor="right"
+                                className="right-full top-1/2 mr-3 -translate-y-1/2"
+                                message="測定範囲が表示範囲外です。「奥行き」スライダーを調整してください"
+                                onDismiss={() => setDepthNoticeClosedAt(depth)}
+                              />
+                            )}
+                          </AnimatePresence>
                           <span className="text-[0.625rem] font-medium text-gray-500">奥</span>
                           <div className="relative h-24 w-5">
                             <input

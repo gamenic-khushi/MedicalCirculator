@@ -68,6 +68,33 @@ const SECTION_FILL = 0.7
 const SECTION_LINE_COLOR = '#4b5563'
 const DEPTH_RANGE_COLOR = '#6366f1'
 
+// Pixels per mm of the cross-section picture: the cut fills SECTION_FILL of it.
+function sectionScale(outline: PlaneOutline) {
+  return Math.min(
+    (SECTION_WIDTH * SECTION_FILL) / Math.max(outline.width, 1e-9),
+    (SECTION_HEIGHT * SECTION_FILL) / Math.max(outline.height, 1e-9),
+  )
+}
+
+/**
+ * Whether the lengthwise section (the 奥行き line of the cross-section picture, which
+ * the depth slider moves) is somewhere the picture does not show the vessel: past the
+ * right edge of the picture, or beyond the far side of the cut, where the section
+ * misses the vessel. The user is then asked to adjust the slider. False while there is
+ * nothing to judge (no cut, or the slider is not in use).
+ */
+export function isDepthOutsideSection(
+  outline: PlaneOutline | null | undefined,
+  depth: number | null | undefined,
+) {
+  const line = outline?.sectionLine
+  if (!outline || !line || depth == null || !Number.isFinite(depth)) return false
+  const at = line.x + Math.min(Math.max(depth, 0), SLICE_DEPTH_LIMIT)
+  const farSide = Math.max(...outline.points.map(([x]) => x))
+  const pastPicture = SECTION_WIDTH / 2 + at * sectionScale(outline) > SECTION_WIDTH - 4
+  return pastPicture || at > farSide + 1e-6
+}
+
 // The cut at the cutting line seen face-on, in the same indigo as the line, with
 // the depth (away from the viewer) to the right. One scale both ways keeps the
 // outline's true proportions; the cut is drawn large in the middle of the
@@ -95,12 +122,7 @@ function TransverseSection({
   // Where the horizontal line meets the vessel's surface: the front of the range.
   const front = line?.x ?? null
   // The outline is centred on its own middle, so x = y = 0 is the picture's centre.
-  const scale = outline
-    ? Math.min(
-        (SECTION_WIDTH * SECTION_FILL) / Math.max(outline.width, 1e-9),
-        (SECTION_HEIGHT * SECTION_FILL) / Math.max(outline.height, 1e-9),
-      )
-    : 1
+  const scale = outline ? sectionScale(outline) : 1
   const xOf = (x: number) => SECTION_WIDTH / 2 + x * scale
   const yOf = (y: number) => SECTION_HEIGHT / 2 - y * scale
   const path = outline && `M ${outline.points.map(([x, y]) => `${xOf(x).toFixed(2)} ${yOf(y).toFixed(2)}`).join(' L ')} Z`

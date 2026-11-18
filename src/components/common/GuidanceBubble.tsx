@@ -4,7 +4,8 @@ import type { CSSProperties } from 'react'
 
 import { SPRING } from '@/lib/motion'
 
-export type GuidanceAnchor = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+// 'right': the bubble stands to the left of what it points at, nub on its right edge.
+export type GuidanceAnchor = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'right'
 
 interface GuidanceBubbleProps {
   message: string
@@ -21,6 +22,7 @@ const NUB_POSITION: Record<GuidanceAnchor, string> = {
   'top-right': '-bottom-1 right-4 rotate-45',
   'bottom-left': '-top-1 left-4 rotate-45',
   'bottom-right': '-top-1 right-4 rotate-45',
+  right: '-right-1 top-1/2 -mt-1 rotate-45',
 }
 
 // The bubble grows out of its nub's corner, so it reads as coming from what it
@@ -30,6 +32,7 @@ const GROW_FROM: Record<GuidanceAnchor, string> = {
   'top-right': 'bottom right',
   'bottom-left': 'top left',
   'bottom-right': 'top right',
+  right: 'center right',
 }
 
 // A one-off attention-grabbing callout, distinct from the app's usual

@@ -616,7 +616,7 @@ test.describe('lesion analysis page', () => {
     expect(sliderBox.y).toBeGreaterThan(fullscreen.y + fullscreen.height - 1)
 
     // The slider is used: 5, 測定範囲を更新.
-    await slider.fill('30')
+    await slider.fill('10')
     await expect(page.locator('[data-guided="true"]')).toHaveCount(1)
     expect(await glowing()).toEqual(named('選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）'))
 
@@ -1108,5 +1108,27 @@ test.describe('hint texts worded by Aki (11/18)', () => {
     // The old wording is gone.
     await expect(page.getByText('はさみで切断すると表示されます')).toHaveCount(0)
     await expect(page.getByText('血管を輪切りにして断面積を確認できます')).toHaveCount(0)
+  })
+})
+
+test.describe('the depth slider notice', () => {
+  test('asks to adjust the slider, and the slider glows, when the section is outside the vessel', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '奥行きの学習')
+    await measureLesion(page)
+    await page.getByTitle('断面を表示').click()
+    const slider = page.getByLabel('奥行き')
+    await expect(slider).toBeVisible()
+    await expect(page.getByText('横断面', { exact: true })).toBeVisible({ timeout: 20_000 })
+    const notice = page.getByText('測定範囲が表示範囲外です。「奥行き」スライダーを調整してください')
+
+    // Slid all the way back, the section is beyond the far side of the vessel.
+    await slider.fill('100')
+    await expect(notice).toBeVisible()
+    await expect(page.locator('[data-guided="true"]').filter({ has: slider })).toHaveCount(1)
+
+    // Back at the surface the section is in the vessel again: no notice.
+    await slider.fill('0')
+    await expect(notice).toHaveCount(0)
   })
 })
