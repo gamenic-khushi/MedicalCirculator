@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeftRight, Info, MousePointerClick, Pencil, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Info, Pencil, X } from 'lucide-react'
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
@@ -38,7 +38,7 @@ import { fetchFolderModelFile } from '@/lib/fetchFolderModel'
 import { MIN_MODEL_SIZE_UNITS } from '@/lib/modelUnits'
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
-import { ViewerToolbar } from '@/components/model-viewer/ViewerToolbar'
+import { LesionViewerControls, type GuideStep } from '@/components/model-viewer/LesionViewerControls'
 import { useFfrCardPlacement } from '@/hooks/useFfrCardPlacement'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useHighlightOnChange } from '@/hooks/useHighlightOnChange'
@@ -442,6 +442,12 @@ function LesionAnalysisPageContent() {
     navigationState?.cameraState ?? null,
   )
   const [isAnnotating, setIsAnnotating] = useState(false)
+  // How far along the steps of the work the user is, for the control that glows next:
+  // the view has been turned, moved or zoomed (1 done), the depth slider has been used
+  // (4 done), 測定範囲を更新 was clicked once the vessel was aligned (5 done).
+  const [viewTouched, setViewTouched] = useState(false)
+  const [depthTouched, setDepthTouched] = useState(false)
+  const [rangeUpdated, setRangeUpdated] = useState(false)
   const [isDraggingPoint, setIsDraggingPoint] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   // The horizontal line stands where ① and ② are (they are always on it), so it
@@ -893,6 +899,7 @@ function LesionAnalysisPageContent() {
   // the scissors put it.
   function handleDepthChange(value: number) {
     setDepth(value)
+    setDepthTouched(true)
     canvasRef.current?.setDepth(-value / 100)
   }
 
@@ -908,6 +915,8 @@ function LesionAnalysisPageContent() {
         setCutFraction(null)
         setNarrowestWorld(null)
         setSliceAligned(false)
+        setDepthTouched(false)
+        setRangeUpdated(false)
         setLineDiameters({ proximal: null, distal: null })
         lineMeasuredKeyRef.current = ''
         const back: ViewerTool = slicePan ? 'pan' : 'rotate'
@@ -1006,6 +1015,8 @@ function LesionAnalysisPageContent() {
   }
 
   function handleResetAnnotations() {
+    setDepthTouched(false)
+    setRangeUpdated(false)
     setIsAnnotating(false)
     setAnnotations([])
     setMeasurement(null)
@@ -1732,6 +1743,24 @@ function LesionAnalysisPageContent() {
   }
 
   const hasMeasurement = selectedLesion.stenosisRate !== ''
+  // 1 view → 2 病変指定 → 3 整列 → 4 スライダー → 5 測定範囲更新. The step comes from where
+  // the work stands, so a user who skips ahead is not held back, and the glow is off for a
+  // saved capture and once the work is done.
+  const guideStep: GuideStep | null = viewFrame
+    ? null
+    : annotations.length < 2
+      ? !viewTouched && !isAnnotating && annotations.length === 0
+        ? 1
+        : 2
+      : rangeUpdated
+        ? null
+        : sliceAligned
+          ? depthTouched
+            ? 5
+            : 4
+          : hasMeasurement
+            ? null
+            : 3
   const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
   const lesionFfrInputs: FfrCubicInputs = {
     dp: Number(selectedLesion.lesionProximalDiameter),
@@ -1818,6 +1847,7 @@ function LesionAnalysisPageContent() {
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
+            onPointerDownCapture={() => setViewTouched(true)}
             // A saved image keeps the plain light background it was taken on; the
             // canvas draws space, and this only shows until it does.
             style={
@@ -1889,109 +1919,75 @@ function LesionAnalysisPageContent() {
                   onDraggingChange={setIsDraggingPoint}
                 />
 
-                <div data-ffr-keep-clear className="absolute left-4 top-4 flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAnnotating((value) => !value)}
-                    className={`rounded-full border p-2 shadow-sm transition ${
-                      isAnnotating
-                        ? 'border-red-200 bg-red-50 text-red-500'
-                        : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                    title="2点をクリックして選択（①心臓に近い側 → ②遠い側）"
-                  >
-                    <MousePointerClick className="h-4 w-4" />
-                  </button>
-                  {annotations.length === 2 && (
-                    <button
-                      type="button"
-                      onClick={handleSwapAnnotations}
-                      className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                      title="①と②を入れ替える（心臓に近い側を修正）"
-                    >
-                      <ArrowLeftRight className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-
-                <AnimatePresence>
-                  {annotations.length === 0 && !isAnnotating && !isLesionHintDismissed && (
-                    <GuidanceBubble
-                      anchor="top-left"
-                      style={{ left: '3.25rem', top: '1rem' }}
-                      message="ここをクリックして、①②の2点で病変部位を選択してください"
-                      onDismiss={dismissLesionHint}
-                    />
-                  )}
-                </AnimatePresence>
-
-                <div data-ffr-keep-clear className="absolute right-4 top-4 flex flex-col gap-2">
-                  {measurement && (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingLesion(true)}
-                      className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                      title="選択病変を修正"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => canvasRef.current?.zoomIn()}
-                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => canvasRef.current?.zoomOut()}
-                    className="rounded-full border border-gray-100 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50"
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </button>
-                  <AnimatePresence>
-                  {activeTool === 'slice' && (
-                    // Moves the model away from the viewer (up, 6 mm at most) once the
-                    // scissors has locked it in place; the bottom is where it was put.
-                    <motion.div
-                      key="depth-slider"
-                      {...fade}
-                      title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
-                      className="flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm"
-                    >
-                      <span className="text-[0.625rem] font-medium text-gray-500">奥</span>
-                      <div className="relative h-24 w-5">
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={depth}
-                          aria-label="奥行き"
-                          onChange={(event) => handleDepthChange(Number(event.target.value))}
-                          onDoubleClick={() => handleDepthChange(0)}
-                          className="absolute left-1/2 top-1/2 h-5 w-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-pointer accent-indigo-600"
+                <LesionViewerControls
+                  activeTool={activeTool}
+                  isPanning={activeTool === 'pan' || (activeTool === 'slice' && slicePan)}
+                  locked={activeTool === 'slice' && sliceAligned}
+                  isAnnotating={isAnnotating}
+                  hasTwoPoints={annotations.length === 2}
+                  isMeasured={Boolean(measurement)}
+                  guideStep={guideStep}
+                  onToolChange={handleToolChange}
+                  onToggleAnnotating={() => setIsAnnotating((value) => !value)}
+                  onSwap={handleSwapAnnotations}
+                  onEditLesion={() => setIsEditingLesion(true)}
+                  onUpdateRange={() => {
+                    if (sliceAligned) setRangeUpdated(true)
+                    handleUpdateSelectedLesion()
+                  }}
+                  onReset={handleResetAnnotations}
+                  onZoomIn={() => canvasRef.current?.zoomIn()}
+                  onZoomOut={() => canvasRef.current?.zoomOut()}
+                  onToggleFullscreen={toggleFullscreen}
+                  pointerHint={
+                    <AnimatePresence>
+                      {annotations.length === 0 && !isAnnotating && !isLesionHintDismissed && (
+                        <GuidanceBubble
+                          anchor="bottom-left"
+                          className="left-0 top-full mt-2"
+                          message="ここをクリックして、①②の2点で病変部位を選択してください"
+                          onDismiss={dismissLesionHint}
                         />
-                      </div>
-                      <span className="text-[0.625rem] font-medium text-gray-500">手前</span>
-                    </motion.div>
-                  )}
-                  </AnimatePresence>
-                </div>
+                      )}
+                    </AnimatePresence>
+                  }
+                  depthControl={
+                    <AnimatePresence>
+                      {activeTool === 'slice' && (
+                        // Moves the model away from the viewer (up, 6 mm at most) once the
+                        // scissors has locked it in place; the bottom is where it was put.
+                        <motion.div
+                          key="depth-slider"
+                          {...fade}
+                          title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
+                          data-guided={guideStep === 4 ? 'true' : undefined}
+                          className={`flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm ${
+                            guideStep === 4 ? 'guide-glow' : ''
+                          }`}
+                        >
+                          <span className="text-[0.625rem] font-medium text-gray-500">奥</span>
+                          <div className="relative h-24 w-5">
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={depth}
+                              aria-label="奥行き"
+                              onChange={(event) => handleDepthChange(Number(event.target.value))}
+                              onDoubleClick={() => handleDepthChange(0)}
+                              className="absolute left-1/2 top-1/2 h-5 w-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-pointer accent-indigo-600"
+                            />
+                          </div>
+                          <span className="text-[0.625rem] font-medium text-gray-500">手前</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  }
+                />
 
                 {/* Shown with the FFR result, not before: no empty boxes. */}
                 {measurement && <PressurePointsPanel pa={livePa} pd={livePd} />}
-                <div data-ffr-keep-clear className="absolute bottom-4 right-4">
-                  <button
-                    type="button"
-                    onClick={handleUpdateSelectedLesion}
-                    title="選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）"
-                    className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700"
-                  >
-                    測定範囲を更新
-                  </button>
-                </div>
                 <AnatomyGuideThumbnail />
                 <AnimatePresence>
                 {activeTool === 'slice' && (
@@ -2080,7 +2076,7 @@ function LesionAnalysisPageContent() {
                   <motion.div
                     key="slice-area"
                     {...fade}
-                    className="absolute top-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white px-4 py-1.5 shadow-sm"
+                    className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full border border-gray-100 bg-white px-4 py-1.5 shadow-sm"
                   >
                     <span className="text-xs text-gray-500">
                       断面積 <span className="font-semibold text-gray-900">{formatMeasurement(sliceCrossSectionArea)}</span> mm²
@@ -2088,16 +2084,6 @@ function LesionAnalysisPageContent() {
                   </motion.div>
                 )}
                 </AnimatePresence>
-                <ViewerToolbar
-                  activeTool={activeTool}
-                  isPanning={activeTool === 'pan' || (activeTool === 'slice' && slicePan)}
-                  locked={activeTool === 'slice' && sliceAligned}
-                  onToolChange={handleToolChange}
-                  onToggleFullscreen={toggleFullscreen}
-                  onReset={handleResetAnnotations}
-                  showHints={annotations.length === 2}
-                  showSlice
-                />
               </>
             )}
           </div>
@@ -2164,13 +2150,13 @@ function LesionAnalysisPageContent() {
                         {range && (
                           <span
                             title="FFRの推定式の学習範囲です。範囲外の値ではFFRを計算できません"
-                            className={`text-[0.625rem] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
+                            className={`text-[0.6875rem] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
                           >
                             学習範囲 {formatRangeBound(range[0], 'min')}〜{formatRangeBound(range[1], 'max')}
                           </span>
                         )}
                         {key === 'stenosisLength' && lengthAdjustment && (
-                          <span title={lengthAdjustment.message} className="text-[0.625rem] text-amber-600">
+                          <span title={lengthAdjustment.message} className="text-[0.6875rem] text-amber-600">
                             FFRの計算には {lengthAdjustment.used} mm を使用
                           </span>
                         )}

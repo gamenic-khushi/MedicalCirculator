@@ -48,7 +48,7 @@ export function Sidebar() {
     }`
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-28 shrink-0 flex-col bg-gradient-to-b from-blue-600 to-indigo-600 px-2 py-4 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-24 shrink-0 flex-col bg-gradient-to-b from-blue-600 to-indigo-600 px-2 py-4 lg:flex">
       <div className="flex justify-center">
         <Logo />
       </div>

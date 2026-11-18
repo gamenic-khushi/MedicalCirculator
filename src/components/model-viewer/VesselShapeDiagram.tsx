@@ -56,7 +56,7 @@ const CUT_LABEL_COLOR = '#4f46e5'
 
 // The name of the lengthwise drawing, one line tall in every state of the block.
 function LengthwiseHeading() {
-  return <p className="h-4 w-full text-[0.6875rem] font-semibold text-indigo-600">縦断面</p>
+  return <p className="h-4 w-full text-xs font-semibold text-indigo-600">縦断面</p>
 }
 
 const SECTION_WIDTH = 300
@@ -131,9 +131,9 @@ function TransverseSection({
       )}
       {/* The name, with the area of the cut beside it (one line tall with or without it). */}
       <div className="flex h-4 w-full items-baseline gap-3 px-1">
-        <p className="text-[0.6875rem] font-semibold text-indigo-600">横断面</p>
+        <p className="text-xs font-semibold text-indigo-600">横断面</p>
         {area != null && (
-          <p className="text-[0.6875rem] font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</p>
+          <p className="text-xs font-semibold text-gray-700">断面積 {area.toFixed(2)} mm²</p>
         )}
       </div>
       <svg viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="w-full">
@@ -160,14 +160,14 @@ function TransverseSection({
               strokeWidth={1}
               strokeDasharray="2 2"
             />
-            <text x={xOf(front) + 2} y={SECTION_HEIGHT - 7} fontSize={8} fill={DEPTH_RANGE_COLOR}>
+            <text x={xOf(front) + 2} y={SECTION_HEIGHT - 7} fontSize={10} fill={DEPTH_RANGE_COLOR}>
               手前
             </text>
             <text
               x={Math.min(rangeEnd, rightEdge) - 2}
               y={SECTION_HEIGHT - 7}
               textAnchor="end"
-              fontSize={8}
+              fontSize={10}
               fill={DEPTH_RANGE_COLOR}
             >
               奥 {SLICE_DEPTH_LIMIT} mm{rangeCut && ' →'}
@@ -202,7 +202,7 @@ function TransverseSection({
               x={horizontal[1][0] - 2}
               y={horizontal[1][1] - 3}
               textAnchor="end"
-              fontSize={8}
+              fontSize={10}
               fontWeight={600}
               fill={SECTION_LINE_COLOR}
             >
@@ -227,7 +227,7 @@ function TransverseSection({
               x={depthPastEdge ? depthX - 3 : depthX + 3}
               y={12}
               textAnchor={depthPastEdge ? 'end' : 'start'}
-              fontSize={8}
+              fontSize={10}
               fontWeight={600}
               fill={SECTION_LINE_COLOR}
             >
@@ -382,7 +382,7 @@ function MeasuredShape({
               strokeDasharray="4 2"
             />
             {/* Ends short of the ② circle, which sits on the line's right end. */}
-            <text x={x1 - MARKER_RADIUS - 3} y={yHorizontal - 3} textAnchor="end" fontSize={8} fontWeight={600} fill={SECTION_LINE_COLOR}>
+            <text x={x1 - MARKER_RADIUS - 3} y={yHorizontal - 3} textAnchor="end" fontSize={10} fontWeight={600} fill={SECTION_LINE_COLOR}>
               水平線
             </text>
           </g>
@@ -536,7 +536,7 @@ function GeneratedShape({
         <span>狭窄中心</span>
         <span>② 遠位側</span>
       </div>
-      <p className="text-center text-[0.625rem] text-gray-400">入力値に基づき滑らかにつながる形状を生成</p>
+      <p className="text-center text-[0.6875rem] text-gray-400">入力値に基づき滑らかにつながる形状を生成</p>
     </div>
   )
 }

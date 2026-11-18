@@ -79,3 +79,32 @@ input.bp-spinner-input[type='number'] {
   -moz-appearance: auto;
   appearance: auto;
 }
+
+/* The control to touch next, in the step by step guidance over the 3D view: it pulses
+   with a soft ring. For people who set their screen to reduce motion, a steady ring. */
+@keyframes guide-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px #818cf8,
+      0 0 0 4px rgb(129 140 248 / 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px #818cf8,
+      0 0 0 10px rgb(129 140 248 / 0);
+  }
+}
+
+.guide-glow {
+  animation: guide-glow 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-glow {
+    animation: none;
+    box-shadow:
+      0 0 0 2px #818cf8,
+      0 0 0 4px rgb(129 140 248 / 0.45);
+  }
+}

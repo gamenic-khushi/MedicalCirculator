@@ -435,12 +435,89 @@ test.describe('lesion analysis page', () => {
     expect(minDiameter.y).toBeGreaterThan(proximal.y + 10)
     expect(position.y).toBeGreaterThan(minDiameter.y + 10)
     expect(rate.y).toBeGreaterThan(position.y + 10)
-    // The 更新 button is inside the 3D view, at its bottom right.
+  })
+
+  test('the controls in the 3D view are laid out as in the wireframe', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '配置の学習')
     const view = (await page.locator('canvas').first().boundingBox())!
-    const update = (await page.getByRole('button', { name: '測定範囲を更新' }).boundingBox())!
-    expect(update.x).toBeGreaterThan(view.x + view.width / 2)
-    expect(update.y + update.height).toBeLessThanOrEqual(view.y + view.height)
-    expect(update.y).toBeGreaterThan(view.y + view.height / 2)
+    const at = async (name: string) =>
+      (await page.getByRole('button', { name, exact: true }).boundingBox())!
+    const atTitle = async (title: string) => (await page.getByTitle(title, { exact: true }).boundingBox())!
+
+    // Along the top, left to right, in the order of the work: 回転 | 移動 → 病変指定 → 整列
+    // → 測定範囲を更新, all in the 3D view and on one line.
+    const row = [await at('回転'), await at('移動'), await at('病変指定'), await at('整列'), await at('測定範囲を更新')]
+    for (let index = 1; index < row.length; index += 1) {
+      expect(row[index].x).toBeGreaterThan(row[index - 1].x + row[index - 1].width - 1)
+    }
+    for (const box of row) {
+      expect(box.y).toBeGreaterThanOrEqual(view.y)
+      expect(box.y + box.height).toBeLessThan(view.y + 80)
+      expect(box.x + box.width).toBeLessThanOrEqual(view.x + view.width)
+    }
+    // 回転 and 移動 are a pair, side by side with no gap between them.
+    expect(row[1].x - (row[0].x + row[0].width)).toBeLessThan(4)
+
+    // Down the right edge, top to bottom: リセット, ＋, －, 全画面, all in one column.
+    const column = [
+      await atTitle('リセットして選択をやり直す'),
+      await atTitle('拡大'),
+      await atTitle('縮小'),
+      await atTitle('全画面'),
+    ]
+    for (let index = 1; index < column.length; index += 1) {
+      expect(column[index].y).toBeGreaterThan(column[index - 1].y + column[index - 1].height - 1)
+      expect(Math.abs(column[index].x - column[0].x)).toBeLessThan(6)
+    }
+    expect(column[0].x).toBeGreaterThan(view.x + view.width * 0.9)
+    // The old toolbar at the bottom is gone, and the update button is not at the bottom right.
+    expect(row[4].y).toBeLessThan(view.y + 80)
+  })
+
+  test('the next control to touch glows, step by step', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '手順の学習')
+    const glowing = async () =>
+      (
+        await page
+          .locator('[data-guided="true"]')
+          .evaluateAll((elements) => elements.map((element) => element.getAttribute('title') ?? element.textContent ?? ''))
+      ).sort()
+    const named = (...names: string[]) => names.sort()
+
+    // 1: 回転, 移動, ＋, －.
+    expect(await glowing()).toEqual(named('ドラッグでモデルを回転', 'ドラッグでモデルを移動', '拡大', '縮小'))
+
+    // The view is touched: 2, 病変指定.
+    await page.getByRole('button', { name: '拡大', exact: true }).click()
+    expect(await glowing()).toEqual(named('2点をクリックして選択（①心臓に近い側 → ②遠い側）'))
+
+    // Two points chosen: 3, 整列.
+    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    expect(await glowing()).toEqual(named('整列して断面を表示'))
+
+    // 整列 is on: 4, the depth slider, which is under the fullscreen button.
+    await page.getByTitle('整列して断面を表示').click()
+    const slider = page.getByLabel('奥行き')
+    await expect(slider).toBeVisible()
+    await expect(page.locator('[data-guided="true"]')).toHaveCount(1, { timeout: 20_000 })
+    expect(await glowing()).toEqual(named('モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）'))
+    const fullscreen = (await page.getByTitle('全画面', { exact: true }).boundingBox())!
+    const sliderBox = (await slider.boundingBox())!
+    expect(sliderBox.y).toBeGreaterThan(fullscreen.y + fullscreen.height - 1)
+
+    // The slider is used: 5, 測定範囲を更新.
+    await slider.fill('30')
+    await expect(page.locator('[data-guided="true"]')).toHaveCount(1)
+    expect(await glowing()).toEqual(named('選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）'))
+
+    // Clicked: the work is done, nothing glows.
+    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await expect(page.locator('[data-guided="true"]')).toHaveCount(0)
   })
 
   test('two points on the vessel are measured', async ({ page }) => {
