@@ -1090,3 +1090,23 @@ test.describe('help page', () => {
     expect(text).not.toContain('生成される3D狭窄形状')
   })
 })
+
+test.describe('hint texts worded by Aki (11/18)', () => {
+  test('the hints in the lesion screen use the new wording', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '文言の学習')
+    await expect(page.getByText('2点の病変位置をクリックして指定してください')).toBeVisible()
+    await expect(page.getByText('病変指定箇所が表示されます')).toBeVisible()
+
+    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await expect(page.getByText('調整が済んだら、「測定範囲を更新」をクリックしてください')).toBeVisible()
+    await expect(page.getByText('「整列」から病変位置の詳細を調整できます')).toBeVisible()
+
+    // The old wording is gone.
+    await expect(page.getByText('はさみで切断すると表示されます')).toHaveCount(0)
+    await expect(page.getByText('血管を輪切りにして断面積を確認できます')).toHaveCount(0)
+  })
+})

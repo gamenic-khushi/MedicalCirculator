@@ -183,7 +183,7 @@ export function LesionViewerControls({
                 <GuidanceBubble
                   anchor="bottom-left"
                   className="left-1/2 top-full mt-2 -translate-x-1/2"
-                  message="血管を輪切りにして断面積を確認できます"
+                  message="「整列」から病変位置の詳細を調整できます"
                   onDismiss={dismissSliceHint}
                 />
               )}

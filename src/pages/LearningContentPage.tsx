@@ -221,7 +221,7 @@ export function LearningContentPage() {
               <GuidanceBubble
                 anchor="top-left"
                 className="left-10 top-0"
-                message="この「+」はこのフォルダに登録済みの3Dモデルを再利用します"
+                message="「+」でこのフォルダに新しいキャプチャを追加できます"
                 onDismiss={dismissReuseHint}
               />
             )}

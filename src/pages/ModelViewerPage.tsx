@@ -494,11 +494,9 @@ export function ModelViewerPage() {
 
   const canCalculateFfr = annotations.length > 0 && bloodPressure.trim() !== ''
   const disabledFfrReason =
-    annotations.length === 0
-      ? '先に気になる箇所を丸で囲んでください'
-      : bloodPressure.trim() === ''
-        ? '先に血圧の値を入力してください'
-        : undefined
+    annotations.length > 0 && bloodPressure.trim() === ''
+      ? '先に血圧の値を入力してください'
+      : undefined
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">

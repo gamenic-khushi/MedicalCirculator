@@ -185,6 +185,6 @@ describe('a block that keeps its size', () => {
   it('says why the cross-section is empty', () => {
     const markup = renderToStaticMarkup(<VesselShapePlaceholder message="計測中..." />)
     expect(markup).toContain('計測中...')
-    expect(markup).toContain('はさみで切断すると表示されます')
+    expect(markup).toContain('病変指定箇所が表示されます')
   })
 })

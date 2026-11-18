@@ -348,8 +348,8 @@ function LesionSnapshotPanel({
           <VesselShapePlaceholder
             message={
               awaitingConfirm
-                ? '点をドラッグして位置を調整し、「測定範囲を更新」をクリックしてください'
-                : '2点をクリックして選択してください'
+                ? '調整が済んだら、「測定範囲を更新」をクリックしてください'
+                : '2点の病変位置をクリックして指定してください'
             }
           />
         </div>
@@ -2072,7 +2072,7 @@ function LesionAnalysisPageContent() {
                         className="absolute mt-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm"
                         style={{ left: `${lineX}%`, top: `${rowY}%` }}
                       >
-                        十字の中心に血管を合わせてください
+                        測定補助線の位置を調整してください
                       </p>
                     )}
                   </motion.div>

@@ -184,7 +184,7 @@ function TransverseSection({
             fontSize={10}
             fill="#9ca3af"
           >
-            はさみで切断すると表示されます
+            病変指定箇所が表示されます
           </text>
         )}
         {horizontal && (
