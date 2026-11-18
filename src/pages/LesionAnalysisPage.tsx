@@ -58,11 +58,14 @@ import { captureViewAsShown } from '@/lib/captureViewAsShown'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { captureNameOf, defaultCaptureName } from '@/lib/defaultCaptureName'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
-import { loadWithoutPictures } from '@/lib/frameImages'
+import { showReportLoading, writeReport, type ReportCapture } from '@/lib/captureReport'
+import { getFramePicture, loadWithoutPictures } from '@/lib/frameImages'
+import { snapshotRows } from '@/lib/snapshotColumns'
 import { generateId } from '@/lib/id'
 import {
   DELETE_FAILED,
   LOAD_FAILED,
+  LOADING_REPORT,
   MODEL_LOOKS_LIKE_METRES,
   SAVE_FAILED,
   VESSEL_WIDTH_MEASURE_FAILED,
@@ -133,6 +136,7 @@ function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
     id: row.$id,
     // A list brings the rows without their pictures; each is fetched as it comes into view.
     image: row.image ?? '',
+    fileName: captureNameOf({ fileName: row.fileName, createdAt: row.$createdAt }),
     date: formatSnapshotDate(row.$createdAt ? new Date(row.$createdAt) : new Date()),
     upstreamSize: row.upstreamSize,
     downstreamSize: row.downstreamSize,
@@ -390,6 +394,8 @@ function LesionAnalysisPageContent() {
   const dataRecordId = navigationState?.dataRecordId
   // The folder's saved rows are on their way (shown as such, not as an empty list).
   const [isLoadingSaved, setIsLoadingSaved] = useState(Boolean(dataRecordId))
+  // The PDF is being put together (its pictures are being fetched).
+  const [isPreparingReport, setIsPreparingReport] = useState(false)
   const viewFrame = navigationState?.viewFrame ?? null
   // A saved frame (保存済みキャプチャ) is shown on its own, the same whether or
   // not a model from an earlier analysis is still in memory: not renamable, and
@@ -1548,14 +1554,9 @@ function LesionAnalysisPageContent() {
     }
   }
 
-  // The report of what is on screen: the lesion's values, Pa, Pd and FFR as the fields
-  // show them now (or as the saved capture had them), with the view as 保存 takes it.
-  async function handleDownloadPdf() {
-    if (!validModel && !viewFrame) return
-    // Opened first, while the click still counts, or the browser blocks the window.
-    const reportWindow = window.open('', '_blank')
-    if (!reportWindow) return
-
+  // The values and the picture of what is on screen now (or of the saved capture that is
+  // open), the picture as 保存 takes it.
+  async function currentCapture(): Promise<ReportCapture> {
     const plain = () => snapshotImage ?? canvasRef.current?.capture() ?? null
     const image =
       viewFrame || !canvasAreaRef.current
@@ -1564,7 +1565,6 @@ function LesionAnalysisPageContent() {
             console.error(error)
             return plain()
           })
-
     const withUnit = (value: string, unit: string) =>
       value && value !== '—' ? `${value} ${unit}` : '—'
     const reportPd = viewFrame ? params.pd : livePd
@@ -1573,71 +1573,78 @@ function LesionAnalysisPageContent() {
       : canCalculate && lesionFfrOutOfRange.length === 0
         ? computeFfrCubic(lesionFfrInputs).toFixed(2)
         : '—'
-
-    // The same order as the 保存一覧.
-    const rows: [string, string][] = [
-      ['ファイル名', validModel ? validModel.file.name : captureNameOf(viewFrame ?? {}) || '—'],
-      ['病変近位径', withUnit(selectedLesion.lesionProximalDiameter, 'mm')],
-      ['病変遠位径', withUnit(selectedLesion.lesionDistalDiameter, 'mm')],
-      ['Pd', withUnit(reportPd, 'mmHg')],
-      ['Pa', withUnit(livePa, 'mmHg')],
-      ['FFR', ffrDisplay],
-      ['狭窄率', withUnit(selectedLesion.stenosisRate, '%')],
-      ['最小血管径', withUnit(selectedLesion.minVesselDiameter, 'mm')],
-      ['最小断面積', withUnit(selectedLesion.minCrossSectionArea, 'mm²')],
-      ['狭窄長', withUnit(selectedLesion.stenosisLength, 'mm')],
-      ['病変位置', selectedLesion.lesionPosition || '—'],
-      ['血管内腔体積', withUnit(params.lumenVolume, 'mm³')],
-      ['分岐角度', withUnit(params.bifurcationAngle, '°')],
-    ]
-
-    reportWindow.document.write(`<!DOCTYPE html>
-      <html lang="ja">
-        <head>
-          <meta charset="utf-8" />
-          <title>3D医療モデル分析レポート</title>
-          <style>
-            body { font-family: sans-serif; padding: 24px; color: #111; }
-            h1 { font-size: 18px; margin-bottom: 16px; }
-            img { max-width: 100%; border-radius: 8px; margin-bottom: 16px; }
-            table { width: 100%; border-collapse: collapse; font-size: 13px; }
-            td { padding: 6px 8px; border-bottom: 1px solid #e5e5e5; }
-            td:first-child { color: #666; width: 40%; }
-          </style>
-        </head>
-        <body>
-          <h1>3D医療モデル分析レポート</h1>
-          <div id="image-slot"></div>
-          <table id="data-table"></table>
-        </body>
-      </html>`)
-    reportWindow.document.close()
-
-    const table = reportWindow.document.getElementById('data-table')
-    for (const [label, value] of rows) {
-      const row = reportWindow.document.createElement('tr')
-      const labelCell = reportWindow.document.createElement('td')
-      labelCell.textContent = label
-      const valueCell = reportWindow.document.createElement('td')
-      valueCell.textContent = value
-      row.append(labelCell, valueCell)
-      table?.appendChild(row)
+    const fileName = validModel ? validModel.file.name : captureNameOf(viewFrame ?? {}) || '—'
+    return {
+      heading: fileName,
+      image,
+      // The same order as the 保存一覧.
+      rows: [
+        ['ファイル名', fileName],
+        ['病変近位径', withUnit(selectedLesion.lesionProximalDiameter, 'mm')],
+        ['病変遠位径', withUnit(selectedLesion.lesionDistalDiameter, 'mm')],
+        ['Pd', withUnit(reportPd, 'mmHg')],
+        ['Pa', withUnit(livePa, 'mmHg')],
+        ['FFR', ffrDisplay],
+        ['狭窄率', withUnit(selectedLesion.stenosisRate, '%')],
+        ['最小血管径', withUnit(selectedLesion.minVesselDiameter, 'mm')],
+        ['最小断面積', withUnit(selectedLesion.minCrossSectionArea, 'mm²')],
+        ['狭窄長', withUnit(selectedLesion.stenosisLength, 'mm')],
+        ['病変位置', selectedLesion.lesionPosition || '—'],
+        ['血管内腔体積', withUnit(params.lumenVolume, 'mm³')],
+        ['分岐角度', withUnit(params.bifurcationAngle, '°')],
+      ],
     }
+  }
 
-    // Printed once the picture is in, not before.
-    const print = () => {
-      reportWindow.focus()
-      reportWindow.print()
-    }
-    if (image) {
-      const img = reportWindow.document.createElement('img')
-      img.alt = 'モデル画像'
-      img.onload = print
-      img.onerror = print
-      img.src = image
-      reportWindow.document.getElementById('image-slot')?.appendChild(img)
-    } else {
-      print()
+  // PDFダウンロード: every capture saved in the folder, all at once in one report (newest
+  // first, as the 保存一覧 shows them), each with its picture and values. A folder with
+  // nothing saved yet gives the report of what is on screen instead.
+  async function handleDownloadPdf() {
+    if (!validModel && !viewFrame) return
+    // Opened first, while the click still counts, or the browser blocks the window.
+    const reportWindow = window.open('', '_blank')
+    if (!reportWindow) return
+    const title = '3D医療モデル分析レポート'
+    showReportLoading(reportWindow, title, LOADING_REPORT)
+    setIsPreparingReport(true)
+    try {
+      let captures: ReportCapture[]
+      if (savedSnapshots.length > 0) {
+        const newestFirst = [...savedSnapshots].reverse()
+        // The list brings the rows without their pictures: they are fetched here.
+        const pictures = await Promise.all(
+          newestFirst.map((snapshot) =>
+            snapshot.image
+              ? Promise.resolve(snapshot.image)
+              : getFramePicture(snapshot.id).catch((error) => {
+                  console.error(error)
+                  return ''
+                }),
+          ),
+        )
+        captures = newestFirst.map((snapshot, index) => ({
+          heading: snapshot.fileName || snapshot.date,
+          note: snapshot.fileName ? snapshot.date : undefined,
+          image: pictures[index] || null,
+          rows: snapshotRows(snapshot),
+        }))
+      } else {
+        captures = [await currentCapture()]
+      }
+      const folderName = validModel?.studyName
+      writeReport(reportWindow, {
+        title,
+        subtitle: [folderName, `${captures.length}件`, formatSnapshotDate(new Date())]
+          .filter(Boolean)
+          .join('　'),
+        captures,
+      })
+    } catch (error) {
+      console.error(error)
+      reportWindow.close()
+      showToast(LOAD_FAILED, 'error')
+    } finally {
+      setIsPreparingReport(false)
     }
   }
 
@@ -2278,6 +2285,7 @@ function LesionAnalysisPageContent() {
         {isOpeningSaved && <LoadingOverlay message="保存した状態を読み込んでいます..." />}
       </AnimatePresence>
 
+      <AnimatePresence>{isPreparingReport && <LoadingOverlay message={LOADING_REPORT} />}</AnimatePresence>
       <AnimatePresence>{isMeasuring && <LoadingOverlay message="病変を計測しています..." />}</AnimatePresence>
 
       <AnimatePresence>{isCalculatingFfr && <LoadingOverlay message="FFRを計算しています..." />}</AnimatePresence>

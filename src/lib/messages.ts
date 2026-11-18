@@ -11,3 +11,4 @@ export const HARD_REFRESH_NOTICE =
   '最新バージョンをご利用いただくために、ハードリフレッシュ（Ctrl+Shift+R）から操作をしてください'
 export const LOADING_DATA = 'データを読み込んでいます...'
 export const LOADING_MODEL = '3Dモデルを読み込んでいます...'
+export const LOADING_REPORT = 'PDFを作成しています...'

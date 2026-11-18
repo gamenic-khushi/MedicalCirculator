@@ -255,8 +255,10 @@ test.describe('folder list (3D解析)', () => {
       page.waitForEvent('popup'),
       page.getByRole('button', { name: 'PDFダウンロード' }).click(),
     ])
-    await expect(report.locator('#data-table tr')).not.toHaveCount(0, { timeout: 20_000 })
-    const rows = await report.locator('#data-table tr').evaluateAll((trs) =>
+    await expect(report.locator('section tr')).not.toHaveCount(0, { timeout: 20_000 })
+    // Nothing is saved in this folder yet: one section, for what is on screen.
+    await expect(report.locator('section')).toHaveCount(1)
+    const rows = await report.locator('section tr').evaluateAll((trs) =>
       Object.fromEntries(trs.map((tr) => [tr.children[0].textContent, tr.children[1].textContent])),
     )
     expect(rows['ファイル名']).toBe('vessel.stl')
@@ -269,7 +271,7 @@ test.describe('folder list (3D解析)', () => {
     expect(rows['最小断面積']).toMatch(/mm²$/)
     expect(rows['病変位置']).toMatch(/^(近位|中間|遠位)$/)
     // The picture of the view is in the report, and it was sent to print.
-    await expect(report.locator('#image-slot img')).toHaveCount(1)
+    await expect(report.locator('section img')).toHaveCount(1)
     await expect.poll(() => report.evaluate(() => (window as unknown as { printed?: boolean }).printed)).toBe(true)
   })
 
@@ -336,6 +338,77 @@ test.describe('folder list (3D解析)', () => {
     await expect(page.locator('tbody tr').last().locator('img')).toHaveAttribute('src', /^data:image/, {
       timeout: 15_000,
     })
+  })
+
+  test('PDFダウンロード puts every capture saved in the folder in one report', async ({ page }) => {
+    const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+    const frame = (id: string, name: string, created: string, upstream: string) => ({
+      $id: id,
+      $createdAt: created,
+      dataRecordId: 'record-a',
+      fileName: name,
+      image,
+      upstreamSize: upstream,
+      downstreamSize: '4 mm',
+      pa: '100 mmHg',
+      pd: '80 mmHg',
+      parameter: '20 mmHg',
+      mld: '1.5 mm',
+      mla: '1.9 mm²',
+      stenosisRate: '66 %',
+      segmentLength: '2 mm',
+      lesionPosition: '中間',
+    })
+    const fake = await useFakeAppwrite(page, {
+      tables: {
+        learning_content_frames: [
+          frame('c1', '撮影A', '2026-11-10T09:00:00.000+00:00', '11 mm'),
+          frame('c2', '撮影B', '2026-11-10T10:00:00.000+00:00', '12 mm'),
+          frame('c3', '撮影C', '2026-11-10T11:00:00.000+00:00', '13 mm'),
+        ],
+      },
+    })
+    await page.context().addInitScript(() => {
+      window.print = () => {
+        ;(window as unknown as { printed: boolean }).printed = true
+      }
+    })
+    await page.goto('/help')
+    await page.getByText('ヘルプ').first().waitFor()
+    await page.evaluate(() => {
+      window.history.pushState(
+        { usr: { dataRecordId: 'record-a' }, key: 'folder-a', idx: (window.history.state?.idx ?? 0) + 1 },
+        '',
+        '/data/learning-content',
+      )
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    })
+    // Open one of the captures: the report is still of all of them, not of this one.
+    await page.locator('tbody').getByTitle('編集').first().click()
+    await expect(page.getByRole('button', { name: 'PDFダウンロード' })).toBeVisible()
+    await expect(page.locator('tbody tr')).toHaveCount(3, { timeout: 20_000 })
+
+    const [report] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.getByRole('button', { name: 'PDFダウンロード' }).click(),
+    ])
+    await expect(report.locator('section')).toHaveCount(3, { timeout: 20_000 })
+    // Newest first, as the list shows them; each with its picture and its values.
+    const headings = await report.locator('section h2').allInnerTexts()
+    expect(headings).toEqual(['撮影C', '撮影B', '撮影A'])
+    await expect(report.locator('section img')).toHaveCount(3)
+    const first = await report.locator('section').first().locator('tr').evaluateAll((trs) =>
+      Object.fromEntries(trs.map((tr) => [tr.children[0].textContent, tr.children[1].textContent])),
+    )
+    expect(first['病変近位径']).toBe('13 mm')
+    expect(first['Pa']).toBe('100 mmHg')
+    expect(first['FFR']).toBe('0.80')
+    expect(first['病変位置']).toBe('中間')
+    // The pictures were fetched for it, one request each, and it was sent to print.
+    await expect.poll(() => fake.requests.filter((request) => /\/rows\/c[0-9]$/.test(request)).length).toBeGreaterThanOrEqual(3)
+    await expect.poll(() => report.evaluate(() => (window as unknown as { printed?: boolean }).printed)).toBe(true)
+    await expect(report.locator('h1')).toHaveText('3D医療モデル分析レポート')
+    await expect(report.locator('.subtitle')).toContainText('3件')
   })
 
   test('a signed-out visitor is sent to the login page', async ({ page }) => {

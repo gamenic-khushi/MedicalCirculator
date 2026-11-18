@@ -23,6 +23,8 @@ export interface SavedSnapshot {
   id: string
   image: string
   date: string
+  // The name shown in the folder's list (a timestamp unless it was changed).
+  fileName?: string
   upstreamSize: string
   downstreamSize: string
   pd: string

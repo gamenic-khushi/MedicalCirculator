@@ -8,6 +8,7 @@ import { LoadingState } from '@/components/common/LoadingState'
 import { SideLabel } from '@/components/common/SideLabel'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { EASE_OUT } from '@/lib/motion'
+import { SNAPSHOT_COLUMNS } from '@/lib/snapshotColumns'
 import type { SavedSnapshot } from '@/types/viewerState'
 
 interface SavedSnapshotsPanelProps {
@@ -19,27 +20,6 @@ interface SavedSnapshotsPanelProps {
   onEdit?: (snapshot: SavedSnapshot) => void
   onDownloadPdf?: () => void
 }
-
-// FFR is Pd divided by Pa, with two decimals (— when either is missing).
-function ffrOf(snapshot: SavedSnapshot): string {
-  const pd = parseFloat(snapshot.pd)
-  const pa = parseFloat(snapshot.pa)
-  return pd >= 0 && pa > 0 ? (pd / pa).toFixed(2) : '—'
-}
-
-// The columns after the image, in this order (before 編集 and 削除).
-const COLUMNS: { label: string; value: (snapshot: SavedSnapshot) => string }[] = [
-  { label: '病変近位径', value: (s) => s.upstreamSize },
-  { label: '病変遠位径', value: (s) => s.downstreamSize },
-  { label: 'Pd', value: (s) => s.pd },
-  { label: 'Pa', value: (s) => s.pa },
-  { label: 'FFR', value: ffrOf },
-  { label: '狭窄率', value: (s) => s.stenosisRate },
-  { label: '最小血管径', value: (s) => s.mld ?? '—' },
-  { label: '最小断面積', value: (s) => s.mla },
-  { label: '狭窄長', value: (s) => s.segmentLength ?? '—' },
-  { label: '病変位置', value: (s) => s.lesionPosition ?? '—' },
-]
 
 export function SavedSnapshotsPanel({
   savedSnapshots,
@@ -107,7 +87,7 @@ export function SavedSnapshotsPanel({
             <thead>
               <tr className="divide-x divide-gray-200 whitespace-nowrap bg-gray-50 font-medium text-gray-500">
                 <th className="px-2 py-3">画像</th>
-                {COLUMNS.map((column) => (
+                {SNAPSHOT_COLUMNS.map((column) => (
                   <th key={column.label} className="px-2 py-3 text-center">
                     {column.label}
                   </th>
@@ -140,7 +120,7 @@ export function SavedSnapshotsPanel({
                         style={{ backgroundColor: SPACE_COLOR }}
                       />
                     </td>
-                    {COLUMNS.map((column) => (
+                    {SNAPSHOT_COLUMNS.map((column) => (
                       <td key={column.label} className="px-2 py-3 text-center text-gray-900">
                         {column.value(snapshot)}
                       </td>
