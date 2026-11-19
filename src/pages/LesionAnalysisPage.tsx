@@ -457,6 +457,8 @@ function LesionAnalysisPageContent() {
   // The depth at which the notice about the depth slider was closed: it comes back when
   // the slider is moved and the section is still outside the vessel.
   const [depthNoticeClosedAt, setDepthNoticeClosedAt] = useState<number | null>(null)
+  // 測定範囲を更新 was just clicked: the slider glows until it is moved (Aki, 11/19).
+  const [depthPrompted, setDepthPrompted] = useState(false)
   const [rangeUpdated, setRangeUpdated] = useState(false)
   const [isDraggingPoint, setIsDraggingPoint] = useState(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
@@ -909,6 +911,7 @@ function LesionAnalysisPageContent() {
   function handleDepthChange(value: number) {
     setDepth(value)
     setDepthTouched(true)
+    setDepthPrompted(false)
     canvasRef.current?.setDepth(-value / 100)
   }
 
@@ -925,6 +928,7 @@ function LesionAnalysisPageContent() {
         setNarrowestWorld(null)
         setSliceAligned(false)
         setDepthTouched(false)
+        setDepthPrompted(false)
         setRangeUpdated(false)
         setLineDiameters({ proximal: null, distal: null })
         lineMeasuredKeyRef.current = ''
@@ -1780,7 +1784,7 @@ function LesionAnalysisPageContent() {
     !viewFrame &&
     previewShowsSection &&
     isDepthOutsideSection(sliceOutline, (depth / 100) * SLICE_DEPTH_LIMIT)
-  const depthGlow = guideStep === 4 || depthOutside
+  const depthGlow = guideStep === 4 || depthOutside || depthPrompted
   const canCalculate = hasMeasurement && bloodPressure.trim() !== ''
   const lesionFfrInputs: FfrCubicInputs = {
     dp: Number(selectedLesion.lesionProximalDiameter),
@@ -1951,8 +1955,10 @@ function LesionAnalysisPageContent() {
                   onSwap={handleSwapAnnotations}
                   onUpdateRange={() => {
                     if (sliceAligned) setRangeUpdated(true)
-                    // The slider is asked for again after every update (Aki, 11/19), even
-                    // if its notice was closed before.
+                    // Aki, 11/19: the slider glows every time this is clicked; the hint
+                    // only when the 奥行き line is outside (it is shown again even if
+                    // it was closed before).
+                    setDepthPrompted(true)
                     setDepthNoticeClosedAt(null)
                     handleUpdateSelectedLesion()
                   }}
@@ -1991,7 +1997,7 @@ function LesionAnalysisPageContent() {
                               <GuidanceBubble
                                 anchor="right"
                                 className="right-full top-1/2 mr-3 -translate-y-1/2"
-                                message="測定範囲が表示範囲外です。「奥行き」スライダーを調整してください"
+                                message="スライダーで奥行きを調整してください"
                                 onDismiss={() => setDepthNoticeClosedAt(depth)}
                               />
                             )}

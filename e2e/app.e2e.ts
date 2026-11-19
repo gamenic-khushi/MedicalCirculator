@@ -635,8 +635,12 @@ test.describe('lesion analysis page', () => {
     await expect(page.locator('[data-guided="true"]')).toHaveCount(1)
     expect(await glowing()).toEqual(named('選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）'))
 
-    // Clicked: the work is done, nothing glows.
+    // Clicked: the work is done, so the button stops glowing; only the slider glows, as
+    // a reminder to check the depth (Aki 11/19), until it is used.
     await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await expect(page.locator('[data-guided="true"]')).toHaveCount(1)
+    expect(await glowing()).toEqual(named('モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）'))
+    await slider.fill('12')
     await expect(page.locator('[data-guided="true"]')).toHaveCount(0)
   })
 
@@ -1135,7 +1139,7 @@ test.describe('the depth slider notice', () => {
     const slider = page.getByLabel('奥行き')
     await expect(slider).toBeVisible()
     await expect(page.getByText('横断面', { exact: true })).toBeVisible({ timeout: 20_000 })
-    const notice = page.getByText('測定範囲が表示範囲外です。「奥行き」スライダーを調整してください')
+    const notice = page.getByText('スライダーで奥行きを調整してください')
 
     // Slid all the way back, the section is beyond the far side of the vessel.
     await slider.fill('100')
@@ -1147,6 +1151,33 @@ test.describe('the depth slider notice', () => {
     await expect(notice).toHaveCount(0)
   })
 
+  test('the slider glows after every 測定範囲を更新, the hint only when the line is outside (Aki 11/19)', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '奥行きの点灯')
+    await measureLesion(page)
+    await page.getByTitle('断面を表示').click()
+    const slider = page.getByLabel('奥行き')
+    await expect(page.getByText('横断面', { exact: true })).toBeVisible({ timeout: 20_000 })
+    const notice = page.getByText('スライダーで奥行きを調整してください')
+    const glowing = page.locator('[data-guided="true"]').filter({ has: slider })
+
+    // The line is inside the vessel: nothing glows yet.
+    await slider.fill('10')
+    await expect(notice).toHaveCount(0)
+    await expect(glowing).toHaveCount(0)
+
+    // Updating makes the slider glow, but there is no hint while the line is inside.
+    await page.getByRole('button', { name: '測定範囲を更新' }).dispatchEvent('click')
+    await expect(glowing).toHaveCount(1)
+    await expect(notice).toHaveCount(0)
+
+    // Using the slider ends the glow; the next update starts it again.
+    await slider.fill('12')
+    await expect(glowing).toHaveCount(0)
+    await page.getByRole('button', { name: '測定範囲を更新' }).dispatchEvent('click')
+    await expect(glowing).toHaveCount(1)
+  })
+
   test('comes back right after 測定範囲を更新, even if it was closed before (Aki 11/19)', async ({ page }) => {
     await useFakeAppwrite(page)
     await uploadModel(page, '奥行きの再表示')
@@ -1154,7 +1185,7 @@ test.describe('the depth slider notice', () => {
     await page.getByTitle('断面を表示').click()
     const slider = page.getByLabel('奥行き')
     await expect(page.getByText('横断面', { exact: true })).toBeVisible({ timeout: 20_000 })
-    const notice = page.getByText('測定範囲が表示範囲外です。「奥行き」スライダーを調整してください')
+    const notice = page.getByText('スライダーで奥行きを調整してください')
 
     await slider.fill('100')
     await expect(notice).toBeVisible()
