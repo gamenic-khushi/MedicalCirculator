@@ -187,7 +187,7 @@ function TransverseSection({
       <div className="flex h-5 w-full items-baseline gap-3 px-1">
         <p className="text-sm font-semibold text-gray-900">横断面</p>
         {area != null && (
-          <p className="text-xs font-semibold text-gray-900">断面積 {area.toFixed(2)} mm²</p>
+          <p className="text-xs font-normal text-gray-900">断面積 {area.toFixed(2)} mm²</p>
         )}
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${SECTION_WIDTH} ${SECTION_HEIGHT}`} className="w-full">

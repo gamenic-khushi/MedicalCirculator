@@ -1146,6 +1146,27 @@ test.describe('the depth slider notice', () => {
     await slider.fill('0')
     await expect(notice).toHaveCount(0)
   })
+
+  test('comes back right after 測定範囲を更新, even if it was closed before (Aki 11/19)', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '奥行きの再表示')
+    await measureLesion(page)
+    await page.getByTitle('断面を表示').click()
+    const slider = page.getByLabel('奥行き')
+    await expect(page.getByText('横断面', { exact: true })).toBeVisible({ timeout: 20_000 })
+    const notice = page.getByText('測定範囲が表示範囲外です。「奥行き」スライダーを調整してください')
+
+    await slider.fill('100')
+    await expect(notice).toBeVisible()
+    await page.getByRole('status').filter({ has: notice }).getByLabel('ヒントを閉じる').click()
+    await expect(notice).toHaveCount(0)
+
+    // Updating the range asks for the slider again, and it glows.
+    // (dispatchEvent: in a small test window a drag handle of the picture can lie over it.)
+    await page.getByRole('button', { name: '測定範囲を更新' }).dispatchEvent('click')
+    await expect(notice).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator('[data-guided="true"]').filter({ has: slider })).toHaveCount(1)
+  })
 })
 
 test.describe('font sizes in 選択病変 形状 (Aki 11/18)', () => {
@@ -1179,7 +1200,13 @@ test.describe('font sizes in 選択病変 形状 (Aki 11/18)', () => {
         value: css(document.querySelector('[data-lesion-field] input')!),
         nearSide: css(byText('① 近位側')),
         smallest: css(byText('最小')),
-        area: css([...document.querySelectorAll('p')].find((el) => el.textContent?.startsWith('断面積'))!),
+        area: {
+          ...css([...document.querySelectorAll('p')].find((el) => el.textContent?.startsWith('断面積'))!),
+          weight: parseInt(
+            getComputedStyle([...document.querySelectorAll('p')].find((el) => el.textContent?.startsWith('断面積'))!).fontWeight,
+            10,
+          ),
+        },
         horizontalLine: svgText('水平線'),
         cutName: svgText('切断面'),
         front: svgText('手前'),
@@ -1198,6 +1225,8 @@ test.describe('font sizes in 選択病変 形状 (Aki 11/18)', () => {
     // The values and the words in the pictures: one size.
     expect(sizes.value.size).toBe(12)
     for (const size of [sizes.nearSide.size, sizes.smallest.size, sizes.area.size]) expect(size).toBe(12)
+    // 断面積 is regular text, not bold (Aki 11/19).
+    expect(sizes.area.weight).toBe(400)
     for (const size of [sizes.horizontalLine, sizes.cutName, sizes.front, sizes.depthLine]) {
       expect(size).toBeGreaterThan(11.5)
       expect(size).toBeLessThan(12.5)

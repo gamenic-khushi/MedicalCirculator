@@ -1951,6 +1951,9 @@ function LesionAnalysisPageContent() {
                   onSwap={handleSwapAnnotations}
                   onUpdateRange={() => {
                     if (sliceAligned) setRangeUpdated(true)
+                    // The slider is asked for again after every update (Aki, 11/19), even
+                    // if its notice was closed before.
+                    setDepthNoticeClosedAt(null)
                     handleUpdateSelectedLesion()
                   }}
                   onReset={handleResetAnnotations}
