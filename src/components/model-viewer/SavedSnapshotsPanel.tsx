@@ -82,13 +82,13 @@ export function SavedSnapshotsPanel({
       <div className="min-w-0 flex-1">
         {actionsRow}
         <div className="pill-scrollbar overflow-x-auto">
-          {/* Each column is as narrow as its content; a wide list scrolls sideways. */}
-          <table className="w-max min-w-full text-left text-xs">
+          {/* Aki 11/24: the picture column is as wide as the picture; the value columns are all the same width (that of the widest heading), with no spare room at the sides; a wide list scrolls sideways. */}
+          <table className="w-max text-left text-xs">
             <thead>
               <tr className="divide-x divide-gray-200 whitespace-nowrap bg-gray-50 font-medium text-gray-500">
-                <th className="px-2 py-3">画像</th>
+                <th className="w-px px-2 py-3">画像</th>
                 {SNAPSHOT_COLUMNS.map((column) => (
-                  <th key={column.label} className="px-2 py-3 text-center">
+                  <th key={column.label} className="min-w-[5rem] px-1 py-3 text-center">
                     {column.label}
                   </th>
                 ))}
@@ -109,7 +109,7 @@ export function SavedSnapshotsPanel({
                     transition={{ duration: 0.25, ease: EASE_OUT }}
                     className="divide-x divide-gray-100 whitespace-nowrap border-t border-gray-100"
                   >
-                    <td className="px-2 py-3">
+                    <td className="w-px px-2 py-3">
                       <p className="mb-1.5 text-gray-500">{snapshot.date}</p>
                       {/* The whole image, as the viewer showed it; the box matches its edges. */}
                       <FrameImage
@@ -121,7 +121,7 @@ export function SavedSnapshotsPanel({
                       />
                     </td>
                     {SNAPSHOT_COLUMNS.map((column) => (
-                      <td key={column.label} className="px-2 py-3 text-center text-gray-900">
+                      <td key={column.label} className="min-w-[5rem] px-1 py-3 text-center text-gray-900">
                         {column.value(snapshot)}
                       </td>
                     ))}

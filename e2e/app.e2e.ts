@@ -799,6 +799,14 @@ test.describe('the saved list (解析結果一覧)', () => {
     expect(String(saved[0].image)).toMatch(/^data:image\/jpeg;base64,/)
     await expect(page.getByRole('button', { name: '解析履歴に保存' })).toHaveCount(0)
     await expect(page.locator('tbody').getByTitle('保存済みキャプチャを開く')).toBeEnabled()
+    // Table spacing (Aki 11/24): the picture column is as wide as the picture, and the value
+    // columns (病変近位径 ... 病変位置) are all the same width, with no spare room.
+    const widths = await page.locator('thead th').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
+    const image = (await page.locator('tbody img, tbody [role=img]').first().boundingBox()) ?? null
+    if (image) expect(widths[0]).toBeLessThan(image.width + 24)
+    const valueWidths = widths.slice(1, 11)
+    expect(Math.max(...valueWidths) - Math.min(...valueWidths)).toBeLessThan(1.5)
+    expect(valueWidths[0]).toBeLessThan(100)
     // A wide list scrolls sideways.
     const scroller = page.locator('.pill-scrollbar').last()
     expect(await scroller.evaluate((el) => getComputedStyle(el).overflowX)).toBe('auto')
