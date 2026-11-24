@@ -470,6 +470,18 @@ test.describe('lesion analysis page', () => {
     }
     await expect(page.getByText('3Dブロック')).toHaveCount(0)
 
+    // They are index tabs (Aki 11/24): each hangs from the top of its block's left edge and is
+    // only as tall as its name, not a strip down the whole edge.
+    for (const name of ['3Dビュアー', '選択病変 形状']) {
+      const tab = (await page.getByText(name, { exact: true }).locator('xpath=..').boundingBox())!
+      const block = (await page
+        .getByText(name, { exact: true })
+        .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
+        .boundingBox())!
+      expect(tab.y - block.y).toBeLessThan(2)
+      expect(tab.height).toBeLessThan(block.height / 2)
+    }
+
     // The 3D viewer block takes 2/3 of the width, the 選択病変 形状 block 1/3.
     const widthOf = async (name: string) =>
       (await page
