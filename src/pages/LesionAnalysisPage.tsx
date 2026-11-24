@@ -1038,6 +1038,26 @@ function LesionAnalysisPageContent() {
     setLesionShape(null)
     setSnapshotImage(null)
     canvasRef.current?.clearSelection()
+
+    // Everything else back to how the page started (Aki, 11/24): the scissors is left, the
+    // lines (cutting line, horizontal line) and the depth go back to the middle, the
+    // glow starts again from step 1, and the view goes back to where it began (its turn,
+    // position and zoom).
+    setActiveTool('rotate')
+    setSlicePan(false)
+    canvasRef.current?.setTool('rotate')
+    setSliceAligned(false)
+    setDepth(0)
+    setCutX(50)
+    setLineY(50)
+    setCutFraction(null)
+    setNarrowestWorld(null)
+    setLineDiameters({ proximal: null, distal: null })
+    lineMeasuredKeyRef.current = ''
+    setViewTouched(false)
+    setDepthNoticeClosedAt(null)
+    setDepthPrompted(false)
+    canvasRef.current?.resetView()
   }
 
   function handleBloodPressureChange(value: string) {

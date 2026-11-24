@@ -747,6 +747,62 @@ test.describe('documents page (資料)', () => {
   })
 })
 
+test.describe('the reset button (Aki 11/24)', () => {
+  test('restores everything: the view (turn, position, zoom), the scissors, the lines, the depth', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, 'リセットの学習')
+    const canvas = page.locator('canvas').first()
+    // The picture the 3D canvas draws (not the buttons over it), as a small copy, once it
+    // has stopped changing (the model fades in); two pictures are the same when they
+    // differ by next to nothing.
+    const picture = () =>
+      canvas.evaluate((el) => {
+        const small = document.createElement('canvas')
+        small.width = 48
+        small.height = 48
+        const context = small.getContext('2d')!
+        context.drawImage(el as HTMLCanvasElement, 0, 0, 48, 48)
+        return Array.from(context.getImageData(0, 0, 48, 48).data)
+      })
+    const difference = (a: number[], b: number[]) => a.reduce((sum, value, i) => sum + Math.abs(value - b[i]), 0) / a.length
+    const settled = async () => {
+      let last = await picture()
+      for (let i = 0; i < 30; i++) {
+        await page.waitForTimeout(200)
+        const now = await picture()
+        if (difference(now, last) < 0.05) return now
+        last = now
+      }
+      return last
+    }
+    const start = await settled()
+
+    // Zoom, turn, then align and slide the depth and the lines.
+    for (let i = 0; i < 3; i++) await page.getByRole('button', { name: '拡大', exact: true }).click()
+    const box = (await canvas.boundingBox())!
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.45, { steps: 8 })
+    await page.mouse.up()
+    await measureLesion(page)
+    await page.getByTitle('整列して断面を表示').click()
+    const slider = page.getByLabel('奥行き')
+    await expect(slider).toBeVisible()
+    await slider.fill('40')
+    expect(difference(await settled(), start)).toBeGreaterThan(3)
+
+    await page.getByTitle('リセットして選択をやり直す').click()
+
+    // The scissors is off, nothing is aligned, the values are empty, the view is as it began.
+    await expect(slider).toHaveCount(0)
+    await expect(page.getByTitle('整列して断面を表示')).toHaveAttribute('aria-pressed', 'false')
+    await expect(field(page, '病変近位径')).toHaveValue('')
+    await expect(async () => {
+      expect(difference(await settled(), start)).toBeLessThan(1)
+    }).toPass({ timeout: 20_000 })
+  })
+})
+
 test.describe('the user menu (Aki 11/24)', () => {
   test('opens over the page: no part of it is covered by the 3D view or its cards', async ({ page }) => {
     await useFakeAppwrite(page)

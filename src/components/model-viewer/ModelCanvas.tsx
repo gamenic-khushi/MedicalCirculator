@@ -130,6 +130,9 @@ export interface ModelCanvasHandle {
   getPixelsPerUnit: () => number | null
   projectWorldPoint: (point: [number, number, number]) => { x: number; y: number } | null
   getCameraState: () => CameraState | null
+  // Takes the view back to where it was when the model first showed: turn, position,
+  // zoom and depth. False when that is not known yet.
+  resetView: () => boolean
 }
 
 interface ModelCanvasProps {
@@ -281,6 +284,43 @@ function ModelSizeReporter({
   return null
 }
 
+// Where the view stood once the model was fitted into it (or, for a restored capture,
+// where it was restored to): what リセット takes the view back to. It waits a few frames
+// after the model has geometry, so the fit has been done.
+interface HomeView {
+  position: THREE.Vector3
+  target: THREE.Vector3
+  up: THREE.Vector3
+}
+
+function HomeViewRecorder({
+  groupRef,
+  controlsRef,
+  homeRef,
+}: {
+  groupRef: MutableRefObject<THREE.Group | null>
+  controlsRef: MutableRefObject<OrbitControlsImpl | null>
+  homeRef: MutableRefObject<HomeView | null>
+}) {
+  const frames = useRef(0)
+  const recorded = useRef(false)
+  useFrame(({ camera }) => {
+    if (recorded.current) return
+    const group = groupRef.current
+    const controls = controlsRef.current
+    if (!group || !controls || new THREE.Box3().setFromObject(group).isEmpty()) return
+    frames.current += 1
+    if (frames.current < 4) return
+    recorded.current = true
+    homeRef.current = {
+      position: camera.position.clone(),
+      target: controls.target.clone(),
+      up: camera.up.clone(),
+    }
+  })
+  return null
+}
+
 function CameraTargetRestorer({
   target,
   controlsRef,
@@ -333,6 +373,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   const [sliceFocusPoint, setSliceFocusPoint] = useState<[number, number, number] | null>(null)
   const sliceFrameRef = useRef<number | null>(null)
   const alignFrameRef = useRef<number | null>(null)
+  const homeViewRef = useRef<HomeView | null>(null)
   // How far the depth slider has moved the model away from where it was put.
   const depthOffsetRef = useRef(0)
   const sliceModeRef = useRef(sliceMode)
@@ -1196,7 +1237,32 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return '中間'
   }
 
+  function resetView(): boolean {
+    const controls = controlsRef.current
+    const home = homeViewRef.current
+    if (!controls || !home) return false
+    const camera = controls.object
+    cancelAlign()
+    zoomGlideRef.current?.stop()
+    zoomGlideRef.current = null
+    depthOffsetRef.current = 0
+    // Spin left over from a drag (damping) must not carry the view on after the reset.
+    const damping = controls.enableDamping
+    controls.enableDamping = false
+    camera.up.copy(home.up)
+    camera.position.copy(home.position)
+    controls.target.copy(home.target)
+    syncControlsUp(controls)
+    controls.update()
+    controls.enableDamping = damping
+    onCameraMove?.()
+    emitCameraChange()
+    if (sliceModeRef.current) updateSlice()
+    return true
+  }
+
   useImperativeHandle(ref, () => ({
+    resetView,
     zoomIn: () => zoomBy(0.85),
     zoomOut: () => zoomBy(1.15),
     setTool: (tool) => {
@@ -1550,6 +1616,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
             </group>
           </Bounds>
           <CameraTargetRestorer target={initialCamera?.target} controlsRef={controlsRef} />
+          <HomeViewRecorder key={url} groupRef={modelGroupRef} controlsRef={controlsRef} homeRef={homeViewRef} />
         </Suspense>
         {sliceMode && (
           <SliceCapMeshes
