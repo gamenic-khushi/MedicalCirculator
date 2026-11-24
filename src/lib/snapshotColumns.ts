@@ -7,7 +7,7 @@ export function ffrOf(snapshot: SavedSnapshot): string {
   return pd >= 0 && pa > 0 ? (pd / pa).toFixed(2) : '—'
 }
 
-// The columns of a saved capture after its picture, in this order: the 保存一覧 shows
+// The columns of a saved capture after its picture, in this order: the 解析結果一覧 shows
 // them so, and the PDF report lists each capture's values in the same order.
 export const SNAPSHOT_COLUMNS: { label: string; value: (snapshot: SavedSnapshot) => string }[] = [
   { label: '病変近位径', value: (s) => s.upstreamSize },

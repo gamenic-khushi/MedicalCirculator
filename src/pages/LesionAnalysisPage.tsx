@@ -1580,7 +1580,7 @@ function LesionAnalysisPageContent() {
     return {
       heading: fileName,
       image,
-      // The same order as the 保存一覧.
+      // The same order as the 解析結果一覧.
       rows: [
         ['ファイル名', fileName],
         ['病変近位径', withUnit(selectedLesion.lesionProximalDiameter, 'mm')],
@@ -1600,7 +1600,7 @@ function LesionAnalysisPageContent() {
   }
 
   // PDFダウンロード: every capture saved in the folder, all at once in one report (newest
-  // first, as the 保存一覧 shows them), each with its picture and values. A folder with
+  // first, as the 解析結果一覧 shows them), each with its picture and values. A folder with
   // nothing saved yet gives the report of what is on screen instead.
   async function handleDownloadPdf() {
     if (!validModel && !viewFrame) return
@@ -2129,9 +2129,9 @@ function LesionAnalysisPageContent() {
           </div>
         </div>
 
-        {/* 選択病変 形状 */}
+        {/* 計測値・形状 */}
         <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <SideLabel>選択病変 形状</SideLabel>
+          <SideLabel>計測値・形状</SideLabel>
           <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row lg:flex-col">
           <div className="flex-1 lg:flex-none">
             <p className="text-base font-semibold text-gray-900">計測値</p>
@@ -2255,7 +2255,7 @@ function LesionAnalysisPageContent() {
             disabled={!measurement || isSavingHistory}
             title={
               measurement
-                ? 'この計測結果をこのフォルダに保存します（保存一覧に追加され、フォルダを「+」で開き直しても表示されます）'
+                ? 'この計測結果をこのフォルダに保存します（解析結果一覧に追加され、フォルダを「+」で開き直しても表示されます）'
                 : '先にFFRを計算してください'
             }
             className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"

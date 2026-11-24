@@ -465,7 +465,7 @@ test.describe('lesion analysis page', () => {
     expect(top.y).toBeLessThan(16)
 
     // The four blocks are named by labels written vertically at their left edge.
-    for (const name of ['3Dビュアー', '選択病変 形状', '測定', '保存一覧']) {
+    for (const name of ['3Dビュアー', '計測値・形状', '測定', '解析結果一覧']) {
       const label = page.getByText(name, { exact: true })
       await expect(label).toBeVisible()
       expect(await label.evaluate((el) => getComputedStyle(el.parentElement!).writingMode)).toBe(
@@ -476,7 +476,7 @@ test.describe('lesion analysis page', () => {
 
     // They are index tabs (Aki 11/24): each hangs from the top of its block's left edge and is
     // only as tall as its name, not a strip down the whole edge.
-    for (const name of ['3Dビュアー', '選択病変 形状']) {
+    for (const name of ['3Dビュアー', '計測値・形状']) {
       const tab = (await page.getByText(name, { exact: true }).locator('xpath=..').boundingBox())!
       const block = (await page
         .getByText(name, { exact: true })
@@ -486,14 +486,14 @@ test.describe('lesion analysis page', () => {
       expect(tab.height).toBeLessThan(block.height / 2)
     }
 
-    // The 3D viewer block takes 2/3 of the width, the 選択病変 形状 block 1/3.
+    // The 3D viewer block takes 2/3 of the width, the 計測値・形状 block 1/3.
     const widthOf = async (name: string) =>
       (await page
         .getByText(name, { exact: true })
         .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
         .boundingBox())!.width
     const viewerWidth = await widthOf('3Dビュアー')
-    const valuesWidth = await widthOf('選択病変 形状')
+    const valuesWidth = await widthOf('計測値・形状')
     expect(viewerWidth / (viewerWidth + valuesWidth)).toBeCloseTo(2 / 3, 1)
 
     // The name 血圧 and its value are side by side.
@@ -747,10 +747,10 @@ test.describe('documents page (資料)', () => {
   })
 })
 
-test.describe('the saved list (保存一覧)', () => {
+test.describe('the saved list (解析結果一覧)', () => {
   test('a saved row shows the columns in the agreed order', async ({ page }) => {
     const fake = await useFakeAppwrite(page)
-    await uploadModel(page, '保存一覧の学習')
+    await uploadModel(page, '解析結果一覧の学習')
     await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
     const box = (await page.locator('canvas').first().boundingBox())!
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
@@ -760,7 +760,7 @@ test.describe('the saved list (保存一覧)', () => {
     await page.locator('input[type=number]').first().fill('100')
     await page.getByRole('button', { name: 'FFRを計算' }).click()
 
-    // The button and the list are called 保存 / 保存一覧 (no longer 仮保存).
+    // The button and the list are called 保存 / 解析結果一覧 (no longer 仮保存).
     await expect(page.getByText('仮保存')).toHaveCount(0)
     await page.getByRole('button', { name: '保存', exact: true }).click()
     await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 20_000 })
@@ -1065,7 +1065,7 @@ test.describe('a fixed layout', () => {
     await expect(page.getByText('横断面', { exact: true })).toBeVisible()
 
     // The block that holds the values and both previews, and the whole page.
-    const block = page.locator('xpath=//*[normalize-space(text())="選択病変 形状"]/ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const block = page.locator('xpath=//*[normalize-space(text())="計測値・形状"]/ancestor::div[contains(@class,"rounded-2xl")][1]')
     const sizes = async () => {
       // Let every fade finish first.
       await page.waitForTimeout(900)
@@ -1216,7 +1216,7 @@ test.describe('the depth slider notice', () => {
   })
 })
 
-test.describe('font sizes in 選択病変 形状 (Aki 11/18)', () => {
+test.describe('font sizes in 計測値・形状 (Aki 11/18)', () => {
   test('two headings, two sub-headings and the words in the pictures at the size of the values', async ({ page }) => {
     await useFakeAppwrite(page)
     await uploadModel(page, '文字の大きさの学習')

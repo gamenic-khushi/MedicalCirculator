@@ -44,7 +44,7 @@ export function SavedSnapshotsPanel({
     </div>
   )
 
-  // The name 保存一覧 is the vertical label at the left; the buttons sit on the right.
+  // The name 解析結果一覧 is the vertical label at the left; the buttons sit on the right.
   const actionsRow = onDownloadPdf && (
     <div className="flex justify-end border-b border-gray-100 p-4">{headerActions}</div>
   )
@@ -52,7 +52,7 @@ export function SavedSnapshotsPanel({
   if (savedSnapshots.length === 0 && isLoading) {
     return (
       <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <SideLabel>保存一覧</SideLabel>
+        <SideLabel>解析結果一覧</SideLabel>
         <div className="min-w-0 flex-1">
           {actionsRow}
           <LoadingState />
@@ -64,7 +64,7 @@ export function SavedSnapshotsPanel({
   if (savedSnapshots.length === 0) {
     return (
       <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <SideLabel>保存一覧</SideLabel>
+        <SideLabel>解析結果一覧</SideLabel>
         <div className="min-w-0 flex-1">
           {actionsRow}
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
@@ -78,7 +78,7 @@ export function SavedSnapshotsPanel({
 
   return (
     <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <SideLabel>保存一覧</SideLabel>
+      <SideLabel>解析結果一覧</SideLabel>
       <div className="min-w-0 flex-1">
         {actionsRow}
         <div className="pill-scrollbar overflow-x-auto">

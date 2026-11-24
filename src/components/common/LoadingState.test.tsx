@@ -11,7 +11,7 @@ describe('loading states', () => {
     expect(markup).toContain('データを読み込んでいます')
   })
 
-  it('the 保存一覧 says it is loading, not that there is no data, while its rows are on the way', () => {
+  it('the 解析結果一覧 says it is loading, not that there is no data, while its rows are on the way', () => {
     const loading = renderToStaticMarkup(<SavedSnapshotsPanel savedSnapshots={[]} isLoading onDelete={() => {}} />)
     expect(loading).toContain('データを読み込んでいます')
     expect(loading).not.toContain('利用可能なデータがありません')

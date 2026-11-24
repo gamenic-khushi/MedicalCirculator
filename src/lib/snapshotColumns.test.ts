@@ -21,7 +21,7 @@ const snapshot: SavedSnapshot = {
 }
 
 describe('snapshotRows', () => {
-  it('lists the values in the order of the 保存一覧 columns', () => {
+  it('lists the values in the order of the 解析結果一覧 columns', () => {
     expect(snapshotRows(snapshot).map(([label]) => label)).toEqual([
       '病変近位径',
       '病変遠位径',
