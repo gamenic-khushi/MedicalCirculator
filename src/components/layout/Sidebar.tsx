@@ -48,7 +48,9 @@ export function Sidebar() {
     }`
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-24 shrink-0 flex-col bg-gradient-to-b from-blue-600 to-indigo-600 px-2 py-4 lg:flex">
+    // z-30: the user menu opens over the page, so nothing on the page (the 3D view's
+    // cards, hints) may be drawn over it; dialogs and toasts (z-50) are still above.
+    <aside className="sticky top-0 z-30 hidden h-screen w-24 shrink-0 flex-col bg-gradient-to-b from-blue-600 to-indigo-600 px-2 py-4 lg:flex">
       <div className="flex justify-center">
         <Logo />
       </div>

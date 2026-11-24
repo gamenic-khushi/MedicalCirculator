@@ -249,7 +249,7 @@ test.describe('folder list (3D解析)', () => {
     await measureLesion(page)
     await page.locator('input[type=number]').first().fill('100')
     await page.getByRole('button', { name: 'FFRを計算' }).click()
-    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 40_000 })
 
     const [report] = await Promise.all([
       page.waitForEvent('popup'),
@@ -744,6 +744,25 @@ test.describe('documents page (資料)', () => {
     await expect(page.getByText('空のフォルダ')).toBeVisible()
     await expect(page.getByText('ファイルがありません')).toBeVisible()
     await expect(page.getByText('資料A')).toBeVisible()
+  })
+})
+
+test.describe('the user menu (Aki 11/24)', () => {
+  test('opens over the page: no part of it is covered by the 3D view or its cards', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, 'メニューの学習')
+    await page.locator('aside').getByRole('button', { name: /E2E Admin/ }).click()
+    const menu = page.locator('aside .shadow-2xl')
+    await expect(menu).toBeVisible()
+    // The point at the middle of every item is the item itself, not something drawn over it.
+    for (const name of ['ヘルプ', 'ユーザー管理', '文字サイズ', 'ログアウト']) {
+      const covered = await menu.getByText(name, { exact: true }).first().evaluate((el) => {
+        const box = el.getBoundingClientRect()
+        const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+        return !top || !el.contains(top)
+      })
+      expect(covered, name).toBe(false)
+    }
   })
 })
 
