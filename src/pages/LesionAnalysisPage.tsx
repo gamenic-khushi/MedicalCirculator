@@ -1808,7 +1808,8 @@ function LesionAnalysisPageContent() {
       : undefined
 
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-6 lg:py-8" data-testid="lesion-page">
+    // Little room above the title: the space at the very top was unnecessary (Aki, 11/24).
+    <div className="px-4 pb-6 pt-2 sm:px-6 lg:px-6 lg:pb-8 lg:pt-2" data-testid="lesion-page">
       <div className="flex items-center gap-2">
           {validModel && isEditingTitle ? (
             <input

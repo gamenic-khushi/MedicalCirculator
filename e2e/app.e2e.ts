@@ -460,6 +460,10 @@ test.describe('lesion analysis page', () => {
     expect(sidebar.height).toBeGreaterThan(sidebar.width * 4)
     await expect(page.locator('header')).toBeHidden()
 
+    // No unnecessary space above the title at the very top (Aki 11/24).
+    const top = (await page.getByTestId('lesion-page').locator('xpath=./*[1]').boundingBox())!
+    expect(top.y).toBeLessThan(16)
+
     // The four blocks are named by labels written vertically at their left edge.
     for (const name of ['3Dビュアー', '選択病変 形状', '測定', '保存一覧']) {
       const label = page.getByText(name, { exact: true })
