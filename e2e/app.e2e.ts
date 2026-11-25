@@ -718,11 +718,11 @@ test.describe('font size (文字サイズ)', () => {
 
     await page.getByRole('button', { name: 'E2E Admin' }).click()
     await page.getByRole('radio', { name: '大' }).click()
-    expect(await rootSize(page)).toBe('18px')
+    expect(await rootSize(page)).toBe('26px')
     await expect(page.getByRole('radio', { name: '大' })).toHaveAttribute('aria-checked', 'true')
 
     await page.reload()
-    expect(await rootSize(page)).toBe('18px')
+    expect(await rootSize(page)).toBe('26px')
 
     await page.getByRole('button', { name: 'E2E Admin' }).click()
     await page.getByRole('radio', { name: '小' }).click()
@@ -744,6 +744,35 @@ test.describe('documents page (資料)', () => {
     await expect(page.getByText('空のフォルダ')).toBeVisible()
     await expect(page.getByText('ファイルがありません')).toBeVisible()
     await expect(page.getByText('資料A')).toBeVisible()
+  })
+})
+
+test.describe('the side menu (Aki 11/25)', () => {
+  test('text only when expanded, icons only when collapsed, and it is remembered', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await page.goto('/data')
+    const aside = page.locator('aside')
+    await expect(aside.getByText('3D解析', { exact: true })).toBeVisible()
+    const open = (await aside.boundingBox())!.width
+    // Expanded: the words only, no icons in the items.
+    await expect(aside.locator('nav a svg')).toHaveCount(0)
+
+    await aside.getByRole('button', { name: 'メニューを折りたたむ' }).click()
+    // Collapsed: icons only, narrower; the item keeps its name for screen readers and as a tooltip.
+    await expect(aside.getByText('3D解析', { exact: true })).toHaveCount(0)
+    await expect(aside.locator('nav a svg')).toHaveCount(1)
+    await expect(aside.getByRole('link', { name: '3D解析' })).toHaveAttribute('title', '3D解析')
+    await expect.poll(async () => (await aside.boundingBox())!.width).toBeLessThan(open - 20)
+
+    // Remembered after a reload, and 情報 still opens its two items (as icons).
+    await page.reload()
+    await expect(aside.getByRole('button', { name: 'メニューを開く' })).toBeVisible()
+    await aside.getByRole('button', { name: '情報' }).click()
+    await expect(aside.getByRole('link', { name: '学会' })).toBeVisible()
+    await expect(aside.getByRole('link', { name: '資料' })).toBeVisible()
+
+    await aside.getByRole('button', { name: 'メニューを開く' }).click()
+    await expect(aside.getByText('3D解析', { exact: true })).toBeVisible()
   })
 })
 
@@ -1108,7 +1137,7 @@ test.describe('the global menu', () => {
     await page.goto('/documents')
     await expect(page.locator('aside')).toBeHidden()
     await expect(page.locator('header')).toBeVisible()
-    await page.getByTitle('メニュー').click()
+    await page.getByTitle('メニュー', { exact: true }).click()
     for (const name of ['3D解析', '学会', '資料', 'ヘルプ', 'ログアウト']) {
       await expect(page.locator('header').getByText(name, { exact: true })).toBeVisible()
     }

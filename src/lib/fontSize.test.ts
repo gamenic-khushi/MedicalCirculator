@@ -17,7 +17,7 @@ describe('font size setting', () => {
 
   it('scales the page text for 大 and 小 and remembers the choice', () => {
     setFontSize('large')
-    expect(document.documentElement.style.fontSize).toBe('18px')
+    expect(document.documentElement.style.fontSize).toBe('26px')
     expect(getFontSize()).toBe('large')
     expect(readFontSize()).toBe('large')
 

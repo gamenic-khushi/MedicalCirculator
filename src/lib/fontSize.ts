@@ -9,7 +9,7 @@ export const DEFAULT_FONT_SIZE: FontSize = 'medium'
 
 // 中 is the browser's normal 16px, i.e. the app as it looked before the setting.
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string; px: number }[] = [
-  { value: 'large', label: '大', px: 18 },
+  { value: 'large', label: '大', px: 26 },
   { value: 'medium', label: '中', px: 16 },
   { value: 'small', label: '小', px: 14 },
 ]

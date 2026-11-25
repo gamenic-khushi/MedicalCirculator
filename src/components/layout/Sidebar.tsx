@@ -1,12 +1,13 @@
-import { ChevronDown, User } from 'lucide-react'
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, User } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { FontSizeSelector } from './FontSizeSelector'
 import { Logo } from './Logo'
-import { INFO_MENU_ITEMS, NAV_ITEMS, SETTINGS_MENU_ITEMS } from './navigation'
+import { INFO_ICON, INFO_MENU_ITEMS, NAV_ITEMS, SETTINGS_MENU_ITEMS } from './navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed'
 import { useModel3D } from '@/hooks/useModel3D'
 import { dropdown, expand } from '@/lib/motion'
 import { isAdminCategory } from '@/types/user'
@@ -17,6 +18,7 @@ import { isAdminCategory } from '@/types/user'
 export function Sidebar() {
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { collapsed, toggle } = useSidebarCollapsed()
   const { user, logout } = useAuth()
   const { setModel } = useModel3D()
   const navigate = useNavigate()
@@ -43,22 +45,32 @@ export function Sidebar() {
   }, [isMenuOpen])
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `block rounded-xl px-2 py-2 text-center text-sm font-medium transition ${
+    `flex items-center justify-center rounded-xl px-2 py-2 text-center text-sm font-medium transition ${
       isActive ? 'bg-white/15 text-white' : 'text-white/90 hover:bg-white/10 hover:text-white'
     }`
 
   return (
     // z-30: the user menu opens over the page, so nothing on the page (the 3D view's
     // cards, hints) may be drawn over it; dialogs and toasts (z-50) are still above.
-    <aside className="sticky top-0 z-30 hidden h-screen w-24 shrink-0 flex-col bg-gradient-to-b from-blue-600 to-indigo-600 px-2 py-4 lg:flex">
+    <aside
+      className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-gradient-to-b from-blue-600 to-indigo-600 px-2 py-4 transition-[width] lg:flex ${
+        collapsed ? 'w-16' : 'w-24'
+      }`}
+    >
       <div className="flex justify-center">
         <Logo />
       </div>
 
       <nav className="mt-6 flex flex-col gap-1">
         {visibleNavItems.map((item) => (
-          <NavLink key={item.to} to={item.to} className={linkClass}>
-            {item.label}
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={linkClass}
+            title={collapsed ? item.label : undefined}
+            aria-label={collapsed ? item.label : undefined}
+          >
+            {collapsed ? <item.icon className="h-5 w-5" /> : item.label}
           </NavLink>
         ))}
 
@@ -68,20 +80,30 @@ export function Sidebar() {
               type="button"
               onClick={() => setIsInfoOpen((value) => !value)}
               aria-expanded={isInfoOpen}
+              title={collapsed ? '情報' : undefined}
+              aria-label={collapsed ? '情報' : undefined}
               className="flex items-center justify-center gap-1 rounded-xl px-2 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white"
             >
-              情報
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${isInfoOpen ? 'rotate-180' : ''}`}
-              />
+              {collapsed ? <INFO_ICON className="h-5 w-5" /> : '情報'}
+              {!collapsed && (
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${isInfoOpen ? 'rotate-180' : ''}`}
+                />
+              )}
             </button>
 
             <AnimatePresence initial={false}>
               {isInfoOpen && (
                 <motion.div {...expand} className="flex flex-col gap-1 overflow-hidden">
                   {INFO_MENU_ITEMS.map((item) => (
-                    <NavLink key={item.to} to={item.to} className={linkClass}>
-                      {item.label}
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={linkClass}
+                      title={collapsed ? item.label : undefined}
+                      aria-label={collapsed ? item.label : undefined}
+                    >
+                      {collapsed ? <item.icon className="h-5 w-5" /> : item.label}
                     </NavLink>
                   ))}
                 </motion.div>
@@ -91,19 +113,35 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div ref={menuRef} className="relative mt-auto">
+      {/* Collapse to the icons, or open to the text again. */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+        title={collapsed ? 'メニューを開く' : 'メニューを折りたたむ'}
+        aria-label={collapsed ? 'メニューを開く' : 'メニューを折りたたむ'}
+        className="mt-auto flex items-center justify-center rounded-xl px-2 py-2 text-white/80 transition hover:bg-white/10 hover:text-white"
+      >
+        {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+      </button>
+
+      <div ref={menuRef} className="relative mt-1">
         <button
           type="button"
           onClick={() => setIsMenuOpen((value) => !value)}
           aria-expanded={isMenuOpen}
+          aria-label={collapsed ? (user?.name ?? 'ユーザー') : undefined}
+          title={collapsed ? (user?.name ?? 'ユーザー') : undefined}
           className="flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-white transition hover:bg-white/10"
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-blue-600">
             <User className="h-4 w-4" />
           </span>
-          <span className="w-full truncate text-center text-xs font-medium">
-            {user?.name ?? 'ユーザー'}
-          </span>
+          {!collapsed && (
+            <span className="w-full truncate text-center text-xs font-medium">
+              {user?.name ?? 'ユーザー'}
+            </span>
+          )}
         </button>
 
         <AnimatePresence>
