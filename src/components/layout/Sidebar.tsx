@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { FontSizeSelector } from './FontSizeSelector'
+import { LanguageSelector } from './LanguageSelector'
 import { Logo } from './Logo'
 import { INFO_ICON, INFO_MENU_ITEMS, NAV_ITEMS, SETTINGS_MENU_ITEMS } from './navigation'
 import { useAuth } from '@/hooks/useAuth'
@@ -174,6 +175,7 @@ export function Sidebar() {
                 </>
               )}
               <FontSizeSelector tone="light" />
+              <LanguageSelector tone="light" />
               <button
                 type="button"
                 onClick={() => void handleLogout()}

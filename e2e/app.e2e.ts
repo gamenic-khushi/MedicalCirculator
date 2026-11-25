@@ -747,6 +747,48 @@ test.describe('documents page (資料)', () => {
   })
 })
 
+test.describe('language (言語), Aki 11/25', () => {
+  test('English in the 3D analysis screens, remembered, and back to Japanese', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await page.goto('/data')
+    await expect(page.getByRole('heading', { name: '3D解析' })).toBeVisible()
+
+    // The setting is in the user menu, next to 文字サイズ.
+    await page.getByRole('button', { name: 'E2E Admin' }).click()
+    await page.getByRole('radio', { name: 'English' }).click()
+    await expect(page.getByRole('radio', { name: 'English' })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByRole('heading', { name: '3D Analysis' })).toBeVisible()
+    await expect(page.getByPlaceholder('Search')).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    // The folders' own names are the user's data: not translated.
+    await expect(page.getByText('テスト用の学習 A')).toBeVisible()
+
+    // The lesion screen too, including its hints and the new tab names.
+    await page.goto('/data/3d-analysis')
+    await page.getByLabel('Learning Name').fill('English study')
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'vessel.stl',
+      mimeType: 'application/octet-stream',
+      buffer: makeStenosisStl(1, 3),
+    })
+    await page.waitForURL('**/data/lesion-measurement/analysis')
+    await expect(page.getByText('3D stenosis shape preview')).toBeVisible()
+    await expect(page.getByText('Please click to specify the two lesion positions.')).toBeVisible()
+    await expect(page.getByText('Measurements and Shape', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Update Measurement Range' })).toBeVisible()
+    await expect(page.getByText('3D Viewer', { exact: true })).toBeVisible()
+
+    // Remembered after a reload; back to 日本語 puts every text back.
+    await page.goto('/data')
+    await expect(page.getByRole('heading', { name: '3D Analysis' })).toBeVisible()
+    await page.getByRole('button', { name: 'E2E Admin' }).click()
+    await page.getByRole('radio', { name: '日本語' }).click()
+    await expect(page.getByRole('heading', { name: '3D解析' })).toBeVisible()
+    await expect(page.getByPlaceholder('検索')).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ja')
+  })
+})
+
 test.describe('the side menu (Aki 11/25)', () => {
   test('text only when expanded, icons only when collapsed, and it is remembered', async ({ page }) => {
     await useFakeAppwrite(page)
@@ -1115,7 +1157,7 @@ test.describe('the global menu', () => {
     for (const name of ['ヘルプ', 'ユーザー管理', 'ログアウト']) {
       await expect(page.getByText(name, { exact: true })).toBeVisible()
     }
-    await expect(page.getByRole('radio')).toHaveCount(3)
+    await expect(page.getByRole('radio')).toHaveCount(5)
   })
 
   test('a general user has no 3D解析, 情報 or ユーザー管理', async ({ page }) => {
@@ -1128,7 +1170,7 @@ test.describe('the global menu', () => {
     await sidebar.getByRole('button', { name: 'E2E Admin' }).click()
     await expect(page.getByRole('link', { name: 'ヘルプ' })).toBeVisible()
     await expect(page.getByText('ユーザー管理')).toHaveCount(0)
-    await expect(page.getByRole('radio')).toHaveCount(3)
+    await expect(page.getByRole('radio')).toHaveCount(5)
   })
 
   test('on a narrow window the top bar and its menu button are used', async ({ page }) => {
@@ -1141,7 +1183,7 @@ test.describe('the global menu', () => {
     for (const name of ['3D解析', '学会', '資料', 'ヘルプ', 'ログアウト']) {
       await expect(page.locator('header').getByText(name, { exact: true })).toBeVisible()
     }
-    await expect(page.locator('header').getByRole('radio')).toHaveCount(3)
+    await expect(page.locator('header').getByRole('radio')).toHaveCount(5)
   })
 })
 

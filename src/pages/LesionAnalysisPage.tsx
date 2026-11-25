@@ -43,8 +43,10 @@ import { LesionViewerControls, type GuideStep } from '@/components/model-viewer/
 import { useFfrCardPlacement } from '@/hooks/useFfrCardPlacement'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useHighlightOnChange } from '@/hooks/useHighlightOnChange'
+import { useLanguage } from '@/hooks/useLanguage'
 import { useModel3D } from '@/hooks/useModel3D'
 import { useToast } from '@/hooks/useToast'
+import { toEnglish } from '@/lib/translations'
 import {
   computeFfrCubic,
   describeFfrRangeError,
@@ -258,6 +260,9 @@ const EMPTY_SELECTED_LESION: SelectedLesionFormData = {
   stenosisLength: '',
   lesionPosition: '',
 }
+
+// The small 病変位置 box fits a short word.
+const POSITION_SHORT_EN: Record<string, string> = { 近位: 'Prox.', 中間: 'Mid', 遠位: 'Dist.' }
 
 const SELECTED_LESION_FIELDS: {
   key: keyof SelectedLesionFormData
@@ -497,6 +502,7 @@ function LesionAnalysisPageContent() {
   const [isOpeningSaved, setIsOpeningSaved] = useState(false)
   const [pendingFfrRestore, setPendingFfrRestore] = useState(Boolean(navigationState?.restoreFfr))
   const { toast, showToast, dismissToast } = useToast()
+  const { language } = useLanguage()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
   const [isInfoOpen, setIsInfoOpen] = useState(false)
@@ -2182,7 +2188,12 @@ function LesionAnalysisPageContent() {
                           // After a measurement, top to bottom, one after another.
                           delayMs={index * 50}
                           type="text"
-                          value={selectedLesion[key]}
+                          // 病変位置 is a word (近位 / 中間 / 遠位) the measurement fills in: shown in English with the 言語 setting.
+                          value={
+                            key === 'lesionPosition' && language === 'en'
+                              ? (POSITION_SHORT_EN[selectedLesion[key]] ?? toEnglish(selectedLesion[key]) ?? selectedLesion[key])
+                              : selectedLesion[key]
+                          }
                           readOnly={readOnly}
                           title={readOnly ? '自動計算される値です（直接編集はできません）' : undefined}
                           onChange={
@@ -2210,12 +2221,12 @@ function LesionAnalysisPageContent() {
                             title="FFRの推定式の学習範囲です。範囲外の値ではFFRを計算できません"
                             className={`text-[0.6875rem] ${isOutOfRange ? 'text-red-500' : 'text-gray-400'}`}
                           >
-                            学習範囲 {formatRangeBound(range[0], 'min')}〜{formatRangeBound(range[1], 'max')}
+                            {`学習範囲 ${formatRangeBound(range[0], 'min')}〜${formatRangeBound(range[1], 'max')}`}
                           </span>
                         )}
                         {key === 'stenosisLength' && lengthAdjustment && (
                           <span title={lengthAdjustment.message} className="text-[0.6875rem] text-amber-600">
-                            FFRの計算には {lengthAdjustment.used} mm を使用
+                            {`FFRの計算には ${lengthAdjustment.used} mm を使用`}
                           </span>
                         )}
                       </div>
