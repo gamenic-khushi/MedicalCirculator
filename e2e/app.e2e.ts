@@ -196,7 +196,9 @@ test.describe('folder list (3D解析)', () => {
     await expect(unnamed).toHaveValue(expected)
   })
 
-  test("編集 in the folder's list opens the capture with its file name at the top left", async ({ page }) => {
+  test("編集 in the folder's list opens the editable analysis with its file name at the top left", async ({
+    page,
+  }) => {
     const image = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
     await useFakeAppwrite(page, {
       tables: {
@@ -230,11 +232,62 @@ test.describe('folder list (3D解析)', () => {
       )
       window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
     })
+    // Aki 11/25: 編集 opens the same analysis as a new one, not a picture. This folder has no
+    // stored 3D model, so the file is asked for once; the row's blood pressure comes in and
+    // ① ② are to be chosen again.
+    const chooser = page.waitForEvent('filechooser')
     await page.locator('tbody').getByTitle('編集').click()
-    await expect(page.getByRole('heading', { name: '術前の撮影' })).toBeVisible()
-    // The list came without the picture; opening the capture fetched it.
-    await expect(page.getByAltText('保存されたキャプチャ')).toHaveAttribute('src', /^data:image/)
+    await (await chooser).setFiles({
+      name: 'vessel.stl',
+      mimeType: 'application/octet-stream',
+      buffer: makeStenosisStl(1, 3),
+    })
+    await page.waitForURL('**/data/lesion-measurement/analysis')
+    await expect(page.getByTitle('編集中の保存データのファイル名')).toHaveText('術前の撮影')
+    await expect(page.getByText(/①②の位置が残っていない/)).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator('input[type=number]').first()).toHaveValue('80')
+    await expect(page.getByRole('button', { name: /^① 近位径/ })).toBeEnabled()
     await expect(page.getByText('保存済みキャプチャ', { exact: true })).toHaveCount(0)
+  })
+
+  test("編集 in the folder's list brings back ① ② when the row kept them, and needs no file", async ({
+    page,
+  }) => {
+    test.setTimeout(150_000)
+    const fake = await useFakeAppwrite(page)
+    // The fake does not keep uploaded bytes: the folder's stored model is the test vessel again.
+    await page.route('**/files/*/view*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/octet-stream', body: Buffer.from(makeStenosisStl(1, 3)) }),
+    )
+    await uploadModel(page, '一覧から編集する学習')
+    // The canvas is at its size and the model has faded in before the clicks.
+    await expect
+      .poll(async () => (await page.locator('canvas').first().boundingBox())?.width ?? 0)
+      .toBeGreaterThan(500)
+    await page.waitForTimeout(3000)
+    await measureLesion(page)
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 20_000 })
+    const measured = await field(page, '病変近位径').inputValue()
+    const folderId = String(fake.rows('learning_content_frames')[0].dataRecordId)
+
+    await page.evaluate((id) => {
+      window.history.pushState(
+        { usr: { dataRecordId: id }, key: 'folder-b', idx: (window.history.state?.idx ?? 0) + 1 },
+        '',
+        '/data/learning-content',
+      )
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    }, folderId)
+    // The folder's details have come in (its model is known) before 編集 is clicked.
+    await expect(page.getByText(/vessel.stl/)).toBeVisible()
+    await page.locator('tbody').getByTitle('編集').click()
+    // The folder's stored model comes back (no file chooser), with the row's selection and FFR.
+    await expect(field(page, '病変近位径')).toHaveValue(measured, { timeout: 60_000 })
+    await expect(page.getByText('保存済みキャプチャ', { exact: true })).toHaveCount(0)
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
   })
 
   test('PDFダウンロード makes a report with the values on screen', async ({ page }) => {
@@ -383,8 +436,15 @@ test.describe('folder list (3D解析)', () => {
       )
       window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
     })
-    // Open one of the captures: the report is still of all of them, not of this one.
+    // Open one of the captures (the folder has no stored model, so its file is asked for):
+    // the report is still of all of them, not of this one.
+    const chooser = page.waitForEvent('filechooser')
     await page.locator('tbody').getByTitle('編集').first().click()
+    await (await chooser).setFiles({
+      name: 'vessel.stl',
+      mimeType: 'application/octet-stream',
+      buffer: makeStenosisStl(1, 3),
+    })
     await expect(page.getByRole('button', { name: 'PDFダウンロード' })).toBeVisible()
     await expect(page.locator('tbody tr')).toHaveCount(3, { timeout: 20_000 })
 
@@ -582,10 +642,10 @@ test.describe('lesion analysis page', () => {
       expect(box.y + box.height).toBeLessThan(view.y + 90)
       expect(box.x + box.width).toBeLessThanOrEqual(view.x + view.width)
     }
-    // Text buttons carry no icon (Aki 11/26): リセット is only its word.
+    // Text buttons carry no icon (Aki 11/25): リセット is only its word.
     await expect(page.getByRole('button', { name: 'リセット', exact: true }).locator('svg')).toHaveCount(0)
     // The old names are gone from the top row, and the single turn / move button is gone
-    // from the right column (Aki 11/26: 回転 / 移動 are under ①, see the next test).
+    // from the right column (Aki 11/25: 回転 / 移動 are under ①, see the next test).
     await expect(page.getByRole('button', { name: /病変指定|整列|測定範囲を更新/ })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /ドラッグでモデルを.*切り替え/ })).toHaveCount(0)
 
@@ -614,7 +674,7 @@ test.describe('lesion analysis page', () => {
     expect(slider.y).toBeGreaterThan(swap.y + swap.height - 1)
   })
 
-  test('回転 and 移動 are under ① while ① or ② is to be chosen (Aki 11/26)', async ({ page }) => {
+  test('回転 and 移動 are under ① while ① or ② is to be chosen (Aki 11/25)', async ({ page }) => {
     await useFakeAppwrite(page)
     await uploadModel(page, '回転移動の学習')
     await expect
@@ -1120,7 +1180,7 @@ test.describe('the saved list (解析結果一覧)', () => {
     const widths = await page.locator('thead th').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
     const image = (await page.locator('tbody img, tbody [role=img]').first().boundingBox()) ?? null
     if (image) expect(widths[0]).toBeLessThan(image.width + 24)
-    // Aki 11/26: 編集 and 削除 are as wide as the other columns, and the table fills the
+    // Aki 11/25: 編集 and 削除 are as wide as the other columns, and the table fills the
     // whole width, with no empty space on the right.
     const valueWidths = widths.slice(1)
     expect(valueWidths).toHaveLength(12)
@@ -1178,6 +1238,45 @@ test.describe('the saved list (解析結果一覧)', () => {
     await expect(page.locator('input[type=number]').first()).toHaveValue('100')
     await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
     await expect(page.getByRole('button', { name: /^④/ })).toBeVisible()
+  })
+
+  test('編集 on a row without saved ① ② opens the editable analysis, like a new one (Aki 11/25)', async ({
+    page,
+  }) => {
+    const fake = await useFakeAppwrite(page)
+    await uploadModel(page, '位置のない行の学習')
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await page.getByRole('button', { name: /^④/ }).click()
+    await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 20_000 })
+
+    // An older row (or one saved by a database without the viewState column) has no ① ②.
+    delete fake.rows('learning_content_frames')[0].viewState
+
+    await page.getByTitle('リセットして選択をやり直す').click()
+    await page.locator('tbody').getByTitle('保存済みキャプチャを開く').click()
+    // Not a read-only saved capture: the same steps as a new analysis, the blood pressure of
+    // the row is in, and a notice says that ① ② are to be chosen again.
+    await expect(page.getByText(/①②の位置が残っていない/)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('保存済みキャプチャ', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^① 近位径/ })).toBeEnabled()
+    await expect(page.locator('input[type=number]').first()).toHaveValue('100')
+    await expect(field(page, '病変近位径')).toHaveValue('')
+    // And it can be edited on: the notice does not block the model, so ① can be chosen again.
+    await expect
+      .poll(async () => (await page.locator('canvas').first().boundingBox())?.width ?? 0)
+      .toBeGreaterThan(500)
+    await page.waitForTimeout(2500)
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
+    const again = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(again.x + again.width * 0.37, again.y + again.height * 0.575)
+    await expect(page.getByRole('button', { name: /^② 遠位径/ })).toBeEnabled()
   })
 
   test('a folder shows every row saved in it, not only the first 25', async ({ page }) => {

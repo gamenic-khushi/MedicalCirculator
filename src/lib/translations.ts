@@ -260,6 +260,8 @@ const FROM_MESSAGES: Record<string, string> = {
   '計測中...': 'Measuring...',
   '病変を計測しています...': 'Measuring the lesion...',
   '保存した状態を読み込んでいます...': 'Loading the saved state...',
+  'この保存データには①②の位置が残っていないため、「① 近位径」「② 遠位径」を選び直してください':
+    'The positions of ① and ② were not kept in this saved data. Please choose ① 近位径 and ② 遠位径 again.',
   'PDFを作成しています...': 'Creating the PDF...',
   'FFRを計算しています...': 'Calculating FFR...',
   先に気になる箇所を丸で囲んでください: 'Please circle the area of concern first.',

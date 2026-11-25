@@ -60,6 +60,7 @@ import {
 import { captureViewAsShown } from '@/lib/captureViewAsShown'
 import { computeFfrLabelPosition } from '@/lib/ffrLabelPosition'
 import { captureNameOf, defaultCaptureName } from '@/lib/defaultCaptureName'
+import { editStateForRow, stripUnit, type SavedViewState } from '@/lib/savedViewState'
 import { formatSnapshotDate } from '@/lib/formatSnapshotDate'
 import { showReportLoading, writeReport, type ReportCapture } from '@/lib/captureReport'
 import { getFramePicture, loadWithoutPictures } from '@/lib/frameImages'
@@ -70,6 +71,7 @@ import {
   LOAD_FAILED,
   LOADING_REPORT,
   MODEL_LOOKS_LIKE_METRES,
+  POINTS_NOT_SAVED,
   SAVE_FAILED,
   VESSEL_WIDTH_MEASURE_FAILED,
   ZOOM_IN_FOR_ACCURACY,
@@ -103,37 +105,6 @@ function pointPairKey(id1: string, id2: string): string {
   return [id1, id2].sort().join('|')
 }
 
-// What the view looked like when 保存 was clicked, kept with the saved row so 編集
-// can continue from there: ① ② (with their anchors on the 3D model), the camera and
-// the blood pressure.
-interface SavedViewState {
-  annotations: Annotation[]
-  cameraState: CameraState | null
-  bloodPressure: string
-}
-
-function parseViewState(raw: string | undefined): SavedViewState | null {
-  if (!raw) return null
-  try {
-    const value = JSON.parse(raw) as Partial<SavedViewState>
-    const annotations = value.annotations
-    if (
-      Array.isArray(annotations) &&
-      annotations.length === 2 &&
-      annotations.every((annotation) => Array.isArray(annotation.worldPoint))
-    ) {
-      return {
-        annotations,
-        cameraState: value.cameraState ?? null,
-        bloodPressure: String(value.bloodPressure ?? ''),
-      }
-    }
-  } catch {
-    // Not readable: the row is opened as a saved capture instead.
-  }
-  return null
-}
-
 function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
   return {
     id: row.$id,
@@ -158,11 +129,6 @@ function toSavedSnapshot(row: LearningContentFrameRow): SavedSnapshot {
 // Saved captures store numbers with their unit baked in (e.g. "58.86 mm"),
 // while the live editing state holds bare numbers with the unit shown
 // separately — strip it back off when reloading a capture for viewing.
-function stripUnit(value: string | undefined): string {
-  if (!value || value === '—') return ''
-  return value.split(' ')[0]
-}
-
 // Most uploaded models are authored in mm, where a fixed 1-2 decimal places
 // reads fine. Some source files (e.g. CAD-derived test models) are authored
 // in meters instead, where the same measurement is ~1000x smaller — a fixed
@@ -396,6 +362,8 @@ function LesionAnalysisPageContent() {
     restoreFfr?: boolean
     // The name of the saved row that 編集 opened, shown at the top left.
     capturedName?: string
+    // The row opened with 編集 has no saved ① ②: they are chosen again.
+    pointsNotSaved?: boolean
   } | null
   const dataRecordId = navigationState?.dataRecordId
   // The folder's saved rows are on their way (shown as such, not as an empty list).
@@ -502,6 +470,13 @@ function LesionAnalysisPageContent() {
   const [pendingFfrRestore, setPendingFfrRestore] = useState(Boolean(navigationState?.restoreFfr))
   const { toast, showToast, dismissToast } = useToast()
   const { language } = useLanguage()
+  // A row without saved ① ② was opened with 編集: say so, once, and where to go on.
+  useEffect(() => {
+    if (navigationState?.pointsNotSaved) {
+      showToast(POINTS_NOT_SAVED, 'info', { durationMs: 7000 })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(validModel?.studyName ?? '')
   const [isInfoOpen, setIsInfoOpen] = useState(false)
@@ -622,9 +597,17 @@ function LesionAnalysisPageContent() {
       })
     }
 
+    // The model is on the screen once a ray through a point's spot hits it: measuring
+    // before that (a model just fetched for a 編集 from the folder's list) finds no vessel.
+    function modelReady(points: ({ x: number; y: number } | null)[]) {
+      return points.every(
+        (point) => point !== null && canvasRef.current?.getWorldPoint(point.x, point.y) != null,
+      )
+    }
+
     function tryProject() {
       const projected = projectAll()
-      if (projected.every((point) => point !== null) && cameraSettled()) {
+      if (projected.every((point) => point !== null) && cameraSettled() && modelReady(projected)) {
         const updated = projected as Annotation[]
         setAnnotations(updated)
         measureLesion(updated[0], updated[1])
@@ -1038,7 +1021,7 @@ function LesionAnalysisPageContent() {
     canvasRef.current?.setTool(tool)
   }
 
-  // 回転 / 移動 under ① (Aki 11/26): stop choosing a point, and turn or move the model by
+  // 回転 / 移動 under ① (Aki 11/25): stop choosing a point, and turn or move the model by
   // dragging; ① / ② go back to choosing.
   function handleViewTool(tool: 'rotate' | 'pan') {
     setIsAnnotating(false)
@@ -1061,7 +1044,10 @@ function LesionAnalysisPageContent() {
 
   // 編集 on a row of the list: the 3D model comes back as it was when 保存 was
   // clicked (① ②, camera, blood pressure) to continue from there. A row saved
-  // without that state is opened as a saved capture (保存済みキャプチャ) instead.
+  // without that state (an older row, or a database without the viewState column) is
+  // edited the same way as a new one (Aki 11/25): the folder's model is loaded with the
+  // blood pressure of the row, and ① ② are chosen again. Only a folder that has no stored
+  // model leaves the row to be opened as a saved capture (保存済みキャプチャ).
   async function handleOpenSnapshot(snapshot: SavedSnapshot) {
     setIsOpeningSaved(true)
     try {
@@ -1069,8 +1055,7 @@ function LesionAnalysisPageContent() {
         'learning_content_frames',
         snapshot.id,
       )
-      const saved = parseViewState(row.viewState)
-      if (saved && dataRecordId) {
+      if (dataRecordId) {
         // The model already on this page is the folder's; from a saved capture the
         // folder's stored file is loaded again.
         let ready = Boolean(validModel)
@@ -1089,16 +1074,7 @@ function LesionAnalysisPageContent() {
           }
         }
         if (ready) {
-          navigate(location.pathname, {
-            state: {
-              dataRecordId,
-              bloodPressure: saved.bloodPressure,
-              annotations: saved.annotations,
-              cameraState: saved.cameraState,
-              restoreFfr: true,
-              capturedName: captureNameOf({ fileName: row.fileName, createdAt: row.$createdAt }),
-            },
-          })
+          navigate(location.pathname, { state: editStateForRow(row, dataRecordId) })
           return
         }
       }
@@ -2066,7 +2042,7 @@ function LesionAnalysisPageContent() {
                 <LesionViewerControls
                   activeTool={activeTool}
                   isPanning={activeTool === 'pan' || (activeTool === 'slice' && slicePan)}
-                  // 回転 / 移動 show while ① or ② is still to be chosen (Aki 11/26); not
+                  // 回転 / 移動 show while ① or ② is still to be chosen (Aki 11/25); not
                   // together with the hint over ①, which they would sit under.
                   showViewTools={
                     !viewFrame &&

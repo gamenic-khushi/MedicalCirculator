@@ -82,7 +82,7 @@ export function SavedSnapshotsPanel({
       <div className="min-w-0 flex-1">
         <div className="pill-scrollbar overflow-x-auto">
           {/* Aki 11/24: the picture column is as wide as the picture and the value columns are all
-              the same width; Aki 11/26: the table fills the whole width (no empty space on the
+              the same width; Aki 11/25: the table fills the whole width (no empty space on the
               right) and 編集 / 削除 are as wide as the other columns. A list that is too wide for the
               space scrolls sideways. */}
           <table

@@ -25,7 +25,10 @@ export function Toast({ message, variant = 'success', onDismiss }: ToastProps) {
     >
       <motion.div
         {...pop}
-        className="pointer-events-auto flex max-w-[90vw] items-center gap-2 rounded-xl bg-white px-5 py-3 shadow-lg"
+        className={`flex max-w-[90vw] items-center gap-2 rounded-xl bg-white px-5 py-3 shadow-lg ${
+          // A hint (info) lets clicks through too: the user keeps working on the model under it.
+          variant === 'info' ? 'pointer-events-none' : 'pointer-events-auto'
+        }`}
       >
         {variant === 'error' ? (
           <XCircle className="h-5 w-5 shrink-0 text-red-500" />

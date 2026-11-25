@@ -199,7 +199,7 @@ export function LesionViewerControls({
               onClick={() => onStep(1)}
             />
             {pointerHint}
-            {/* 回転 / 移動 under ① (Aki 11/26): while ① or ② is still to be chosen, the user
+            {/* 回転 / 移動 under ① (Aki 11/25): while ① or ② is still to be chosen, the user
                 can turn or move the model between the two clicks; ① / ② go back to choosing. */}
             {showViewTools && (
               <div className="absolute left-0 right-0 top-full z-10 mt-1.5 flex flex-col gap-1">

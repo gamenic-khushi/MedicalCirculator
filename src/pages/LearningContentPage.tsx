@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/useToast'
 import { getFramePicture, loadWithoutPictures } from '@/lib/frameImages'
 import { LOAD_FAILED, LOADING_DATA, LOADING_MODEL, SAVE_FAILED } from '@/lib/messages'
 import { fetchFolderModelFile } from '@/lib/fetchFolderModel'
+import { editStateForRow } from '@/lib/savedViewState'
 import { appwriteConfig } from '@/services/appwrite/config'
 import { databaseService } from '@/services/appwrite/database'
 import { storageService } from '@/services/appwrite/storage'
@@ -76,6 +77,9 @@ export function LearningContentPage() {
   const [busyMessage, setBusyMessage] = useState<string | null>(null)
   const { toast, showToast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
+  // The row whose 編集 is waiting for the folder's model to be chosen (a folder that has none
+  // stored): the file picked next opens that row for editing.
+  const pendingEditRef = useRef<LearningContentFrameRow | null>(null)
   const { isDismissed: isReuseHintDismissed, dismiss: dismissReuseHint } = useGuidanceDismissed(
     'learning-content-reuse-hint',
   )
@@ -109,7 +113,7 @@ export function LearningContentPage() {
       .finally(() => setIsLoadingRecord(false))
   }, [dataRecordId])
 
-  function loadFile(file: File) {
+  function loadFile(file: File, state: object = { dataRecordId }) {
     // The record's own name (it may have been renamed on the lesion page).
     setModel(
       createModel3DFile(file, {
@@ -117,14 +121,14 @@ export function LearningContentPage() {
         studyName: record?.category || DEFAULT_STUDY_NAME,
       }),
     )
-    navigate('/data/lesion-measurement/analysis', { state: { dataRecordId } })
+    navigate('/data/lesion-measurement/analysis', { state })
   }
 
   // A folder created before model files were persisted to Storage has no
   // modelFileId to reuse. Rather than leaving the user stuck, let them pick
   // a file this one time and register it as the folder's model — every "+"
   // after that reuses it like normal, same as a folder created going forward.
-  async function registerAndLoadFile(file: File) {
+  async function registerAndLoadFile(file: File, editRow?: LearningContentFrameRow) {
     setBusyMessage(LOADING_MODEL)
     try {
       if (dataRecordId) {
@@ -134,7 +138,7 @@ export function LearningContentPage() {
         })
         setRecord((prev) => (prev ? { ...prev, modelFileId: uploadedFile.$id } : prev))
       }
-      loadFile(file)
+      loadFile(file, editRow ? editStateForRow(editRow, dataRecordId) : undefined)
     } catch (error) {
       console.error(error)
       showToast(SAVE_FAILED, 'error')
@@ -146,6 +150,7 @@ export function LearningContentPage() {
   async function handleAddNew() {
     if (isLoadingRecord) return
     if (!record?.modelFileId) {
+      pendingEditRef.current = null
       inputRef.current?.click()
       return
     }
@@ -168,8 +173,10 @@ export function LearningContentPage() {
   }
 
   function handleFileSelected(files: FileList | null) {
+    const pending = pendingEditRef.current
+    pendingEditRef.current = null
     if (!files?.length) return
-    void registerAndLoadFile(files[0])
+    void registerAndLoadFile(files[0], pending ?? undefined)
   }
 
   async function handleEdit(id: string, data: Omit<LearningContentFrame, 'id' | 'image'>) {
@@ -182,8 +189,38 @@ export function LearningContentPage() {
     setFrames((prev) => prev.filter((frame) => frame.id !== id))
   }
 
-  // The saved capture opens with its picture; the list may not have brought it yet.
+  // 編集 on a row (Aki 11/25: every saved row can be edited the same way as a new one): the
+  // analysis opens with the folder's 3D model, the row's ① ② and blood pressure when it kept
+  // them, otherwise with its blood pressure and ① ② to be chosen again. A folder with no
+  // stored model asks for the file once. Without a folder (the list opened directly) the
+  // row opens as a saved capture, with its picture; the list may not have brought it yet.
   async function handleOpenAnalysis(frame: LearningContentFrame) {
+    if (dataRecordId) {
+      if (isLoadingRecord) return
+      setBusyMessage('保存した状態を読み込んでいます...')
+      try {
+        const row = await databaseService.get<LearningContentFrameRow>(
+          'learning_content_frames',
+          frame.id,
+        )
+        if (record?.modelFileId) {
+          const file = await fetchFolderModelFile({
+            file: record.file,
+            modelFileId: record.modelFileId,
+          })
+          loadFile(file, editStateForRow(row, dataRecordId))
+        } else {
+          pendingEditRef.current = row
+          inputRef.current?.click()
+        }
+      } catch (error) {
+        console.error(error)
+        showToast(LOAD_FAILED, 'error')
+      } finally {
+        setBusyMessage(null)
+      }
+      return
+    }
     let viewFrame = frame
     if (!frame.image) {
       setBusyMessage(LOADING_DATA)
