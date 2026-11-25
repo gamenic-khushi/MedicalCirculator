@@ -838,6 +838,74 @@ test.describe('language (言語), Aki 11/25', () => {
   })
 })
 
+test.describe('the blood flow effect (Aki 11/25)', () => {
+  test('light-blue flow runs along the measured vessel, and is not in the saved pictures', async ({ page }) => {
+    const fake = await useFakeAppwrite(page)
+    await uploadModel(page, '水流の学習')
+    const canvas = page.locator('canvas').first()
+    // The picture of the 3D canvas as a small copy, and how much two of them differ.
+    const picture = () =>
+      canvas.evaluate((el) => {
+        const small = document.createElement('canvas')
+        small.width = 96
+        small.height = 96
+        const context = small.getContext('2d')!
+        context.drawImage(el as HTMLCanvasElement, 0, 0, 96, 96)
+        return Array.from(context.getImageData(0, 0, 96, 96).data)
+      })
+    const difference = (x: number[], y: number[]) => x.reduce((sum, value, i) => sum + Math.abs(value - y[i]), 0) / x.length
+
+    // Before the lesion is measured, once the model has faded in, the picture stands still.
+    await page.waitForTimeout(3000)
+    const still = await picture()
+    await page.waitForTimeout(400)
+    expect(difference(await picture(), still)).toBeLessThan(0.05)
+
+    await measureLesion(page)
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
+    await page.waitForTimeout(1500)
+
+    // Once the stretch is painted, the bands move: the picture is not the same a moment later.
+    let moved = 0
+    for (let i = 0; i < 4; i += 1) {
+      const before = await picture()
+      await page.waitForTimeout(300)
+      moved = Math.max(moved, difference(await picture(), before))
+    }
+    expect(moved).toBeGreaterThan(0.2)
+
+    // A saved picture is taken without the bands: the light-blue of the flow is on the live
+    // view, and nowhere in the picture that is saved.
+    const lightBlue = (dataUrl: string) =>
+      page.evaluate(async (url) => {
+        const image = new Image()
+        image.src = url
+        await image.decode()
+        const c = document.createElement('canvas')
+        c.width = image.width
+        c.height = image.height
+        const x = c.getContext('2d')!
+        x.drawImage(image, 0, 0)
+        const d = x.getImageData(0, 0, c.width, c.height).data
+        let n = 0
+        for (let k = 0; k < d.length; k += 4) {
+          if (d[k + 2] > 180 && d[k + 1] > 150 && d[k] < 130 && d[k + 2] > d[k + 1]) n += 1
+        }
+        return n
+      }, dataUrl)
+    const live = await canvas.evaluate((el) => (el as HTMLCanvasElement).toDataURL('image/png'))
+    const liveBlue = await lightBlue(live)
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 20_000 })
+    const saved = String(fake.rows('learning_content_frames')[0].image)
+    const savedBlue = await lightBlue(saved)
+    expect(liveBlue).toBeGreaterThan(500)
+    expect(savedBlue).toBeLessThan(100)
+  })
+})
+
 test.describe('the side menu (Aki 11/25)', () => {
   test('text only when expanded, icons only when collapsed, and it is remembered', async ({ page }) => {
     await useFakeAppwrite(page)

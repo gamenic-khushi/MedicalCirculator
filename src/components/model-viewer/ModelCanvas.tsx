@@ -27,6 +27,7 @@ import { centreLineFractionAtPlane, measureVesselSweep } from '@/lib/vesselSweep
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
+import { flowParams, flowUniforms } from './flowEffect'
 import { SliceCapMeshes } from './SliceCapMeshes'
 import { ViewerEnvironment } from './ViewerEnvironment'
 
@@ -133,6 +134,14 @@ export interface ModelCanvasHandle {
   // Takes the view back to where it was when the model first showed: turn, position,
   // zoom and depth. False when that is not known yet.
   resetView: () => boolean
+  // The blood flow effect (Aki 11/25): light-blue bands along the vessel from the world
+  // point `a` (①) to `b` (②), as strong and as fast as the FFR allows (null: not calculated
+  // yet); null switches it off. It is never in a captured picture.
+  setFlow: (flow: { a: [number, number, number]; b: [number, number, number]; ffr: number | null } | null) => void
+  // Stops the flow effect and draws the frame without it, for a picture that is about to be
+  // taken of the page (the DOM is drawn from the canvas as it is); the function it returns
+  // puts the effect back.
+  pauseFlow: () => () => void
 }
 
 interface ModelCanvasProps {
@@ -317,6 +326,14 @@ function HomeViewRecorder({
       target: controls.target.clone(),
       up: camera.up.clone(),
     }
+  })
+  return null
+}
+
+// The clock of the flow effect: the bands move with the time.
+function FlowClock() {
+  useFrame(({ clock }) => {
+    flowUniforms.flowTime.value = clock.elapsedTime
   })
   return null
 }
@@ -1237,6 +1254,22 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return '中間'
   }
 
+  // Runs `take` with the flow effect off, the frame drawn again without it, then puts it back:
+  // the saved pictures and the PDF never show the moving bands.
+  function withoutFlow<T>(take: () => T): T {
+    const strength = flowUniforms.flowStrength.value
+    const three = threeStateRef.current
+    if (strength > 0 && three) {
+      flowUniforms.flowStrength.value = 0
+      three.gl.render(three.scene, three.camera)
+    }
+    try {
+      return take()
+    } finally {
+      flowUniforms.flowStrength.value = strength
+    }
+  }
+
   function resetView(): boolean {
     const controls = controlsRef.current
     const home = homeViewRef.current
@@ -1263,6 +1296,28 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
 
   useImperativeHandle(ref, () => ({
     resetView,
+    pauseFlow: () => {
+      const strength = flowUniforms.flowStrength.value
+      const three = threeStateRef.current
+      if (strength > 0 && three) {
+        flowUniforms.flowStrength.value = 0
+        three.gl.render(three.scene, three.camera)
+      }
+      return () => {
+        if (strength > 0) flowUniforms.flowStrength.value = strength
+      }
+    },
+    setFlow: (flow) => {
+      if (!flow) {
+        flowUniforms.flowStrength.value = 0
+        return
+      }
+      const params = flowParams(flow.ffr)
+      flowUniforms.flowA.value.set(...flow.a)
+      flowUniforms.flowB.value.set(...flow.b)
+      flowUniforms.flowStrength.value = params.strength
+      flowUniforms.flowSpeed.value = params.speed
+    },
     zoomIn: () => zoomBy(0.85),
     zoomOut: () => zoomBy(1.15),
     setTool: (tool) => {
@@ -1270,7 +1325,8 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       if (!controls) return
       controls.mouseButtons.LEFT = tool === 'pan' ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE
     },
-    capture: (options) => {
+    capture: (options) =>
+      withoutFlow(() => {
       const canvasElement = containerRef.current?.querySelector('canvas')
       if (!canvasElement) return null
       // The canvas draws the space and the floor itself.
@@ -1314,7 +1370,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         three.gl.render(three.scene, three.camera)
       }
       return outputCanvas.toDataURL('image/png')
-    },
+      }),
     measureVesselWidth: (xPercent, yPercent) => computeVesselWidth(xPercent, yPercent),
     measureAdaptiveReferenceWidth: (xPercent, yPercent, direction) => {
       const baseline = computeVesselWidth(xPercent, yPercent)
@@ -1601,6 +1657,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         gl={{ alpha: true, preserveDrawingBuffer: true, localClippingEnabled: true }}
       >
         <SceneAccessor stateRef={threeStateRef} />
+        <FlowClock />
         {onModelSize && <ModelSizeReporter groupRef={modelGroupRef} onSize={onModelSize} />}
         <ambientLight intensity={0.7} />
         <directionalLight position={[5, 8, 5]} intensity={1.1} />

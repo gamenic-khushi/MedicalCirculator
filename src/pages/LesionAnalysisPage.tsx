@@ -507,6 +507,14 @@ function LesionAnalysisPageContent() {
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const { isDismissed: isLesionHintDismissed, dismiss: dismissLesionHint } =
     useGuidanceDismissed('lesion-selection-hint')
+  // The blood flow effect (Aki 11/25): light-blue bands run along the measured stretch from ①
+  // to ②, following the FFR once it is calculated. Not on a saved capture, which is a picture.
+  useEffect(() => {
+    const a = annotations[0]?.worldPoint
+    const b = annotations[1]?.worldPoint
+    const on = !viewFrame && annotations.length === 2 && a && b && selectedLesion.stenosisRate !== ''
+    canvasRef.current?.setFlow(on ? { a, b, ffr: measurement?.ffrValue ?? null } : null)
+  }, [annotations, selectedLesion.stenosisRate, measurement, viewFrame])
   // The hint over ③ goes for good once ③ has been used; the one inside ③ once it is closed.
   const { isDismissed: isSliceHintDismissed, dismiss: dismissSliceHint } =
     useGuidanceDismissed('slice-mode-hint')
@@ -1639,6 +1647,17 @@ function LesionAnalysisPageContent() {
     }
   }
 
+  // The view as shown (captureViewAsShown), without the blood flow effect: it is only on the
+  // screen, never in a saved picture or the PDF.
+  async function captureShownWithoutFlow(view: HTMLElement) {
+    const resume = canvasRef.current?.pauseFlow()
+    try {
+      return await captureViewAsShown(view)
+    } finally {
+      resume?.()
+    }
+  }
+
   // The values and the picture of what is on screen now (or of the saved capture that is
   // open), the picture as 保存 takes it.
   async function currentCapture(): Promise<ReportCapture> {
@@ -1646,7 +1665,7 @@ function LesionAnalysisPageContent() {
     const image =
       viewFrame || !canvasAreaRef.current
         ? plain()
-        : await captureViewAsShown(canvasAreaRef.current).catch((error) => {
+        : await captureShownWithoutFlow(canvasAreaRef.current).catch((error) => {
             console.error(error)
             return plain()
           })
@@ -1767,7 +1786,7 @@ function LesionAnalysisPageContent() {
       // close-up if that can't be drawn, rather than no image.
       const plain = () => snapshotImage ?? canvasRef.current?.capture() ?? ''
       const image = canvasAreaRef.current
-        ? await captureViewAsShown(canvasAreaRef.current).catch((error) => {
+        ? await captureShownWithoutFlow(canvasAreaRef.current).catch((error) => {
             console.error(error)
             return plain()
           })
