@@ -21,6 +21,11 @@ interface SavedSnapshotsPanelProps {
   onDownloadPdf?: () => void
 }
 
+// The picture column fits the picture (w-28 = 7rem) and its padding; the others are at least
+// this wide, so the headings (nowrap) are never cut.
+const PICTURE_COLUMN = '8rem'
+const MIN_COLUMN = '5rem'
+
 export function SavedSnapshotsPanel({
   savedSnapshots,
   isLoading = false,
@@ -29,6 +34,8 @@ export function SavedSnapshotsPanel({
   onDownloadPdf,
 }: SavedSnapshotsPanelProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  // Every column but the picture shares the width left over equally: the values, 編集, 削除.
+  const valueColumnCount = SNAPSHOT_COLUMNS.length + (onEdit ? 1 : 0) + 1
 
   // The PDF download is an icon under the index tab (Aki, 2026/11/25), in the empty strip at
   // the left edge of the block; the name 解析結果一覧 is the tab itself.
@@ -74,11 +81,23 @@ export function SavedSnapshotsPanel({
       <SideLabel below={downloadIcon}>解析結果一覧</SideLabel>
       <div className="min-w-0 flex-1">
         <div className="pill-scrollbar overflow-x-auto">
-          {/* Aki 11/24: the picture column is as wide as the picture; the value columns are all the same width (that of the widest heading), with no spare room at the sides; a wide list scrolls sideways. */}
-          <table className="w-max text-left text-xs">
+          {/* Aki 11/24: the picture column is as wide as the picture and the value columns are all
+              the same width; Aki 11/26: the table fills the whole width (no empty space on the
+              right) and 編集 / 削除 are as wide as the other columns. A list that is too wide for the
+              space scrolls sideways. */}
+          <table
+            className="w-full table-fixed text-left text-xs"
+            style={{ minWidth: `calc(${PICTURE_COLUMN} + ${valueColumnCount} * ${MIN_COLUMN})` }}
+          >
+            <colgroup>
+              <col style={{ width: PICTURE_COLUMN }} />
+              {Array.from({ length: valueColumnCount }, (_, index) => (
+                <col key={index} />
+              ))}
+            </colgroup>
             <thead>
               <tr className="divide-x divide-gray-200 whitespace-nowrap bg-gray-50 font-medium text-gray-500">
-                <th className="w-px px-2 py-3">画像</th>
+                <th className="px-2 py-3">画像</th>
                 {SNAPSHOT_COLUMNS.map((column) => (
                   <th key={column.label} className="min-w-[5rem] px-1 py-3 text-center">
                     {column.label}
@@ -101,7 +120,7 @@ export function SavedSnapshotsPanel({
                     transition={{ duration: 0.25, ease: EASE_OUT }}
                     className="divide-x divide-gray-100 whitespace-nowrap border-t border-gray-100"
                   >
-                    <td className="w-px px-2 py-3">
+                    <td className="px-2 py-3">
                       <p className="mb-1.5 text-gray-500">{snapshot.date}</p>
                       {/* The whole image, as the viewer showed it; the box matches its edges. */}
                       <FrameImage

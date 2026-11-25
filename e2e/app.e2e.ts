@@ -582,17 +582,13 @@ test.describe('lesion analysis page', () => {
       expect(box.y + box.height).toBeLessThan(view.y + 90)
       expect(box.x + box.width).toBeLessThanOrEqual(view.x + view.width)
     }
-    // The old pair 回転 / 移動 and the old names are gone from the top row.
-    await expect(page.getByRole('button', { name: '回転', exact: true })).toHaveCount(0)
+    // The old names are gone from the top row, and the single turn / move button is gone
+    // from the right column (Aki 11/26: 回転 / 移動 are under ①, see the next test).
     await expect(page.getByRole('button', { name: /病変指定|整列|測定範囲を更新/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /ドラッグでモデルを.*切り替え/ })).toHaveCount(0)
 
-    // Down the right edge, top to bottom: ＋, －, 全画面, then the turn / move button.
-    const column = [
-      await atTitle('拡大'),
-      await atTitle('縮小'),
-      await atTitle('全画面'),
-      await page.getByRole('button', { name: /ドラッグでモデルを/ }).boundingBox().then((box) => box!),
-    ]
+    // Down the right edge, top to bottom: ＋, －, 全画面.
+    const column = [await atTitle('拡大'), await atTitle('縮小'), await atTitle('全画面')]
     for (let index = 1; index < column.length; index += 1) {
       expect(column[index].y).toBeGreaterThan(column[index - 1].y + column[index - 1].height - 1)
       expect(Math.abs(column[index].x - column[0].x)).toBeLessThan(6)
@@ -608,12 +604,58 @@ test.describe('lesion analysis page', () => {
     await page.mouse.click(view.x + view.width * 0.37, view.y + view.height * 0.575)
     await page.mouse.click(view.x + view.width * 0.63, view.y + view.height * 0.445)
     const swap = await atTitle(swapTitle)
-    const turn = column[3]
+    const turn = column[2]
     expect(Math.abs(swap.x - turn.x)).toBeLessThan(6)
     expect(swap.y).toBeGreaterThan(turn.y + turn.height - 1)
     await page.getByTitle('整列して断面を表示').click()
     const slider = (await page.getByLabel('奥行き').boundingBox())!
     expect(slider.y).toBeGreaterThan(swap.y + swap.height - 1)
+  })
+
+  test('回転 and 移動 are under ① while ① or ② is to be chosen (Aki 11/26)', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '回転移動の学習')
+    await expect
+      .poll(async () => (await page.locator('canvas').first().boundingBox())?.width ?? 0)
+      .toBeGreaterThan(500)
+    const view = (await page.locator('canvas').first().boundingBox())!
+    const rotate = page.getByRole('button', { name: '回転', exact: true })
+    const move = page.getByRole('button', { name: '移動', exact: true })
+    const first = page.getByRole('button', { name: /^① 近位径/ })
+    const second = page.getByRole('button', { name: /^② 遠位径/ })
+
+    // Not together with the hint over ① (they would sit under it).
+    await expect(rotate).toHaveCount(0)
+    await first.click()
+    await expect(rotate).toBeVisible()
+    await expect(move).toBeVisible()
+    // Stacked under ①, in its column; picking a point is on, so neither is lit.
+    const firstBox = (await first.boundingBox())!
+    const rotateBox = (await rotate.boundingBox())!
+    const moveBox = (await move.boundingBox())!
+    expect(rotateBox.y).toBeGreaterThan(firstBox.y + firstBox.height - 1)
+    expect(moveBox.y).toBeGreaterThan(rotateBox.y + rotateBox.height - 1)
+    expect(Math.abs(rotateBox.x - firstBox.x)).toBeLessThan(2)
+    await expect(rotate).toHaveAttribute('aria-pressed', 'false')
+    await expect(move).toHaveAttribute('aria-pressed', 'false')
+
+    // 移動 leaves the picking of points: a click on the model places nothing; ① goes back.
+    await move.click()
+    await expect(move).toHaveAttribute('aria-pressed', 'true')
+    await page.mouse.click(view.x + view.width * 0.37, view.y + view.height * 0.575)
+    await expect(second).toBeDisabled()
+    await rotate.click()
+    await expect(rotate).toHaveAttribute('aria-pressed', 'true')
+    await expect(move).toHaveAttribute('aria-pressed', 'false')
+    await first.click()
+    await page.mouse.click(view.x + view.width * 0.37, view.y + view.height * 0.575)
+    await expect(second).toBeEnabled()
+    // Still there while ② is to be chosen; gone once both points are chosen.
+    await expect(rotate).toBeVisible()
+    await second.click()
+    await page.mouse.click(view.x + view.width * 0.63, view.y + view.height * 0.445)
+    await expect(rotate).toHaveCount(0)
+    await expect(move).toHaveCount(0)
   })
 
   test('the next control to touch glows, step by step', async ({ page }) => {
@@ -1074,9 +1116,16 @@ test.describe('the saved list (解析結果一覧)', () => {
     const widths = await page.locator('thead th').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
     const image = (await page.locator('tbody img, tbody [role=img]').first().boundingBox()) ?? null
     if (image) expect(widths[0]).toBeLessThan(image.width + 24)
-    const valueWidths = widths.slice(1, 11)
+    // Aki 11/26: 編集 and 削除 are as wide as the other columns, and the table fills the
+    // whole width, with no empty space on the right.
+    const valueWidths = widths.slice(1)
+    expect(valueWidths).toHaveLength(12)
     expect(Math.max(...valueWidths) - Math.min(...valueWidths)).toBeLessThan(1.5)
-    expect(valueWidths[0]).toBeLessThan(100)
+    const fill = await page.locator('table').last().evaluate((table) => {
+      const scroller = table.parentElement!.getBoundingClientRect()
+      return { gap: scroller.right - table.getBoundingClientRect().right, scrolls: table.parentElement!.scrollWidth > table.parentElement!.clientWidth }
+    })
+    if (!fill.scrolls) expect(Math.abs(fill.gap)).toBeLessThan(1.5)
     // The PDF download is an icon under the index tab (Aki 11/25), not a button above the table.
     const tabBox = (await page.getByText('解析結果一覧', { exact: true }).locator('xpath=..').boundingBox())!
     const iconBox = (await page.getByRole('button', { name: 'PDFダウンロード' }).boundingBox())!

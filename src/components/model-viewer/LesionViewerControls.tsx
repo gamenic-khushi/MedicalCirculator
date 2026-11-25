@@ -27,8 +27,8 @@ interface LesionViewerControlsProps {
   // Whether dragging currently moves the model rather than turning it. Passed
   // in because while slicing, activeTool is 'slice' and can't say which.
   isPanning: boolean
-  // The model is held where ③ put it, so turning and moving are off.
-  locked: boolean
+  // ① or ② is still to be chosen: the 回転 / 移動 buttons show under ①.
+  showViewTools: boolean
   isAnnotating: boolean
   // Both points are chosen: the ① ② swap applies.
   hasTwoPoints: boolean
@@ -43,7 +43,8 @@ interface LesionViewerControlsProps {
   readOnly?: boolean
   // Clicking a step: the one the user is on selects its points, an earlier one goes back.
   onStep: (step: WorkStep) => void
-  onToolChange: (tool: ViewerTool) => void
+  // 回転 / 移動: leaves the choosing of a point and sets what dragging does.
+  onViewTool: (tool: 'rotate' | 'pan') => void
   onSwap: () => void
   onReset: () => void
   onZoomIn: () => void
@@ -67,6 +68,34 @@ function glow(on: boolean) {
 // A small arrow between the steps, as in the wireframe.
 function StepArrow() {
   return <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-white/70" />
+}
+
+interface ViewToolButtonProps {
+  label: string
+  title: string
+  icon: ReactNode
+  pressed: boolean
+  onClick: () => void
+}
+
+// 回転 / 移動: what dragging on the model does; the one that is on is lit.
+function ViewToolButton({ label, title, icon, pressed, onClick }: ViewToolButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={pressed}
+      className={`flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition ${
+        pressed
+          ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+          : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  )
 }
 
 interface StepButtonProps {
@@ -124,7 +153,8 @@ function StepButton({ step, label, caption, title, currentStep, doneUpTo, enable
  */
 export function LesionViewerControls({
   isPanning,
-  locked,
+  showViewTools,
+  isAnnotating,
   hasTwoPoints,
   pointCount,
   currentStep,
@@ -132,7 +162,7 @@ export function LesionViewerControls({
   guideStep,
   readOnly = false,
   onStep,
-  onToolChange,
+  onViewTool,
   onSwap,
   onReset,
   onZoomIn,
@@ -143,7 +173,6 @@ export function LesionViewerControls({
   depthControl,
   activeTool,
 }: LesionViewerControlsProps) {
-  const lockedTitle = 'モデルの位置を固定しています（③ 病変調整をもう一度クリックすると解除されます）'
   const common = { currentStep, doneUpTo }
 
   return (
@@ -176,6 +205,26 @@ export function LesionViewerControls({
               onClick={() => onStep(1)}
             />
             {pointerHint}
+            {/* 回転 / 移動 under ① (Aki 11/26): while ① or ② is still to be chosen, the user
+                can turn or move the model between the two clicks; ① / ② go back to choosing. */}
+            {showViewTools && (
+              <div className="absolute left-0 right-0 top-full z-10 mt-1.5 flex flex-col gap-1">
+                <ViewToolButton
+                  label="回転"
+                  title="ドラッグでモデルを回転"
+                  icon={<Rotate3d className="h-3.5 w-3.5" aria-hidden />}
+                  pressed={!isAnnotating && !isPanning}
+                  onClick={() => onViewTool('rotate')}
+                />
+                <ViewToolButton
+                  label="移動"
+                  title="ドラッグでモデルを移動"
+                  icon={<Move className="h-3.5 w-3.5" aria-hidden />}
+                  pressed={!isAnnotating && isPanning}
+                  onClick={() => onViewTool('pan')}
+                />
+              </div>
+            )}
           </div>
 
           <StepArrow />
@@ -235,23 +284,6 @@ export function LesionViewerControls({
         </div>
         <button type="button" onClick={onToggleFullscreen} className={ROUND} title="全画面">
           <Maximize className="h-4 w-4" />
-        </button>
-        {/* Dragging turns the model or moves it: one button, showing which. */}
-        <button
-          type="button"
-          disabled={locked}
-          onClick={() => onToolChange(isPanning ? 'rotate' : 'pan')}
-          aria-pressed={isPanning}
-          title={
-            locked
-              ? lockedTitle
-              : isPanning
-                ? 'ドラッグでモデルを移動（クリックで回転に切り替え）'
-                : 'ドラッグでモデルを回転（クリックで移動に切り替え）'
-          }
-          className={`${ROUND} disabled:cursor-not-allowed disabled:text-gray-300`}
-        >
-          {isPanning ? <Move className="h-4 w-4" /> : <Rotate3d className="h-4 w-4" />}
         </button>
         {/* Once both points are chosen: the ① ② swap, in this column under the controls. */}
         {hasTwoPoints && (

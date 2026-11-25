@@ -1038,6 +1038,13 @@ function LesionAnalysisPageContent() {
     canvasRef.current?.setTool(tool)
   }
 
+  // 回転 / 移動 under ① (Aki 11/26): stop choosing a point, and turn or move the model by
+  // dragging; ① / ② go back to choosing.
+  function handleViewTool(tool: 'rotate' | 'pan') {
+    setIsAnnotating(false)
+    handleToolChange(tool)
+  }
+
   async function handleDeleteSnapshot(id: string) {
     const target = savedSnapshots.find((snapshot) => snapshot.id === id)
     if (target && !target.isDraft) {
@@ -2059,7 +2066,13 @@ function LesionAnalysisPageContent() {
                 <LesionViewerControls
                   activeTool={activeTool}
                   isPanning={activeTool === 'pan' || (activeTool === 'slice' && slicePan)}
-                  locked={activeTool === 'slice' && sliceAligned}
+                  // 回転 / 移動 show while ① or ② is still to be chosen (Aki 11/26); not
+                  // together with the hint over ①, which they would sit under.
+                  showViewTools={
+                    !viewFrame &&
+                    annotations.length < 2 &&
+                    !(annotations.length === 0 && !isAnnotating && !isLesionHintDismissed)
+                  }
                   isAnnotating={isAnnotating}
                   hasTwoPoints={annotations.length === 2}
                   pointCount={annotations.length}
@@ -2068,7 +2081,7 @@ function LesionAnalysisPageContent() {
                   readOnly={Boolean(viewFrame)}
                   guideStep={guideStep}
                   onStep={handleStep}
-                  onToolChange={handleToolChange}
+                  onViewTool={handleViewTool}
                   onSwap={handleSwapAnnotations}
                   onReset={handleResetAnnotations}
                   onZoomIn={() => canvasRef.current?.zoomIn()}
