@@ -3,9 +3,6 @@ import {
   ArrowRight,
   Check,
   Maximize,
-  Move,
-  RefreshCw,
-  Rotate3d,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
@@ -73,26 +70,24 @@ function StepArrow() {
 interface ViewToolButtonProps {
   label: string
   title: string
-  icon: ReactNode
   pressed: boolean
   onClick: () => void
 }
 
 // 回転 / 移動: what dragging on the model does; the one that is on is lit.
-function ViewToolButton({ label, title, icon, pressed, onClick }: ViewToolButtonProps) {
+function ViewToolButton({ label, title, pressed, onClick }: ViewToolButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
       aria-pressed={pressed}
-      className={`flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition ${
+      className={`flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition ${
         pressed
           ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
           : 'border-gray-100 bg-white text-gray-600 hover:bg-gray-50'
       }`}
     >
-      {icon}
       {label}
     </button>
   )
@@ -186,7 +181,6 @@ export function LesionViewerControls({
             title="リセットして選択をやり直す"
             className="flex items-center gap-1.5 rounded-full border border-gray-100 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm transition hover:bg-gray-50"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
             リセット
           </button>
 
@@ -212,14 +206,12 @@ export function LesionViewerControls({
                 <ViewToolButton
                   label="回転"
                   title="ドラッグでモデルを回転"
-                  icon={<Rotate3d className="h-3.5 w-3.5" aria-hidden />}
                   pressed={!isAnnotating && !isPanning}
                   onClick={() => onViewTool('rotate')}
                 />
                 <ViewToolButton
                   label="移動"
                   title="ドラッグでモデルを移動"
-                  icon={<Move className="h-3.5 w-3.5" aria-hidden />}
                   pressed={!isAnnotating && isPanning}
                   onClick={() => onViewTool('pan')}
                 />

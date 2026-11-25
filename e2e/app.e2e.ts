@@ -582,6 +582,8 @@ test.describe('lesion analysis page', () => {
       expect(box.y + box.height).toBeLessThan(view.y + 90)
       expect(box.x + box.width).toBeLessThanOrEqual(view.x + view.width)
     }
+    // Text buttons carry no icon (Aki 11/26): リセット is only its word.
+    await expect(page.getByRole('button', { name: 'リセット', exact: true }).locator('svg')).toHaveCount(0)
     // The old names are gone from the top row, and the single turn / move button is gone
     // from the right column (Aki 11/26: 回転 / 移動 are under ①, see the next test).
     await expect(page.getByRole('button', { name: /病変指定|整列|測定範囲を更新/ })).toHaveCount(0)
@@ -638,6 +640,8 @@ test.describe('lesion analysis page', () => {
     expect(Math.abs(rotateBox.x - firstBox.x)).toBeLessThan(2)
     await expect(rotate).toHaveAttribute('aria-pressed', 'false')
     await expect(move).toHaveAttribute('aria-pressed', 'false')
+    await expect(rotate.locator('svg')).toHaveCount(0)
+    await expect(move.locator('svg')).toHaveCount(0)
 
     // 移動 leaves the picking of points: a click on the model places nothing; ① goes back.
     await move.click()

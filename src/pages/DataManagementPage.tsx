@@ -1,6 +1,6 @@
 import type { Models } from 'appwrite'
 import { AnimatePresence } from 'motion/react'
-import { Search, Upload } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -125,7 +125,6 @@ export function DataManagementPage() {
             onClick={handleAddNew}
             className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
           >
-            <Upload className="h-4 w-4" />
             新規追加
           </button>
         </div>
