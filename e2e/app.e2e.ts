@@ -24,11 +24,11 @@ async function uploadModel(page: Page, studyName: string, unit = 1, spread = 3) 
 
 // Selects ① and ② on the test vessel and waits for the measurement.
 async function measureLesion(page: Page) {
-  await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+  await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
   const box = (await page.locator('canvas').first().boundingBox())!
   await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
   await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
-  await page.getByRole('button', { name: '測定範囲を更新' }).click()
+  await page.getByRole('button', { name: /^④/ }).click()
   await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
 }
 
@@ -562,50 +562,55 @@ test.describe('lesion analysis page', () => {
       .poll(async () => (await page.locator('canvas').first().boundingBox())?.width ?? 0)
       .toBeGreaterThan(500)
     const view = (await page.locator('canvas').first().boundingBox())!
-    const at = async (name: string) =>
-      (await page.getByRole('button', { name, exact: true }).boundingBox())!
+    const button = async (name: string | RegExp) => (await page.getByRole('button', { name }).first().boundingBox())!
     const atTitle = async (title: string) => (await page.getByTitle(title, { exact: true }).boundingBox())!
 
-    // Along the top, left to right, in the order of the work: 回転 | 移動 → 病変指定 → 整列
-    // → 測定範囲を更新, all in the 3D view and on one line.
-    const row = [await at('回転'), await at('移動'), await at('病変指定'), await at('整列'), await at('測定範囲を更新')]
+    // Along the top, left to right, in the order of the work (Aki's wireframe of 11/25):
+    // リセット → ① 近位径 → ② 遠位径 → ③ 病変調整 → ④ 計測, all in the 3D view and on one line.
+    const row = [
+      await button('リセット'),
+      await button(/^① 近位径/),
+      await button(/^② 遠位径/),
+      await button(/^③ 病変調整/),
+      await button(/^④ 計測/),
+    ]
     for (let index = 1; index < row.length; index += 1) {
       expect(row[index].x).toBeGreaterThan(row[index - 1].x + row[index - 1].width - 1)
     }
     for (const box of row) {
       expect(box.y).toBeGreaterThanOrEqual(view.y)
-      expect(box.y + box.height).toBeLessThan(view.y + 80)
+      expect(box.y + box.height).toBeLessThan(view.y + 90)
       expect(box.x + box.width).toBeLessThanOrEqual(view.x + view.width)
     }
-    // 回転 and 移動 are a pair, side by side with no gap between them.
-    expect(row[1].x - (row[0].x + row[0].width)).toBeLessThan(4)
+    // The old pair 回転 / 移動 and the old names are gone from the top row.
+    await expect(page.getByRole('button', { name: '回転', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /病変指定|整列|測定範囲を更新/ })).toHaveCount(0)
 
-    // Down the right edge, top to bottom: リセット, ＋, －, 全画面, all in one column.
+    // Down the right edge, top to bottom: ＋, －, 全画面, then the turn / move button.
     const column = [
-      await atTitle('リセットして選択をやり直す'),
       await atTitle('拡大'),
       await atTitle('縮小'),
       await atTitle('全画面'),
+      await page.getByRole('button', { name: /ドラッグでモデルを/ }).boundingBox().then((box) => box!),
     ]
     for (let index = 1; index < column.length; index += 1) {
       expect(column[index].y).toBeGreaterThan(column[index - 1].y + column[index - 1].height - 1)
       expect(Math.abs(column[index].x - column[0].x)).toBeLessThan(6)
     }
     expect(column[0].x).toBeGreaterThan(view.x + view.width * 0.9)
-    // The old toolbar at the bottom is gone, and the update button is not at the bottom right.
-    expect(row[4].y).toBeLessThan(view.y + 80)
+    expect(row[4].y).toBeLessThan(view.y + 90)
 
-    // Once both points are chosen, the ① ② swap joins the right column under 全画面
-    // (Aki's markup), and the depth slider that follows 整列 is under the swap.
+    // Once both points are chosen, the ① ② swap joins the right column under the controls
+    // (Aki's markup), and the depth slider that follows ③ is under the swap.
     const swapTitle = '①と②を入れ替える（心臓に近い側を修正）'
     await expect(page.getByTitle(swapTitle)).toHaveCount(0)
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     await page.mouse.click(view.x + view.width * 0.37, view.y + view.height * 0.575)
     await page.mouse.click(view.x + view.width * 0.63, view.y + view.height * 0.445)
     const swap = await atTitle(swapTitle)
-    const fullscreen = await atTitle('全画面')
-    expect(Math.abs(swap.x - fullscreen.x)).toBeLessThan(6)
-    expect(swap.y).toBeGreaterThan(fullscreen.y + fullscreen.height - 1)
+    const turn = column[3]
+    expect(Math.abs(swap.x - turn.x)).toBeLessThan(6)
+    expect(swap.y).toBeGreaterThan(turn.y + turn.height - 1)
     await page.getByTitle('整列して断面を表示').click()
     const slider = (await page.getByLabel('奥行き').boundingBox())!
     expect(slider.y).toBeGreaterThan(swap.y + swap.height - 1)
@@ -621,50 +626,94 @@ test.describe('lesion analysis page', () => {
           .evaluateAll((elements) => elements.map((element) => element.getAttribute('title') ?? element.textContent ?? ''))
       ).sort()
     const named = (...names: string[]) => names.sort()
+    const sliderTitle = 'モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）'
 
-    // 1: 回転, 移動, ＋, －.
-    expect(await glowing()).toEqual(named('ドラッグでモデルを回転', 'ドラッグでモデルを移動', '拡大', '縮小'))
+    // ①: the start of the lesion.
+    expect(await glowing()).toEqual(named('病変の始点（心臓に近い側）を選択'))
 
-    // The view is touched: 2, 病変指定.
-    await page.getByRole('button', { name: '拡大', exact: true }).click()
-    expect(await glowing()).toEqual(named('2点をクリックして選択（①心臓に近い側 → ②遠い側）'))
-
-    // Two points chosen: 3, 整列.
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    // ① is placed: ②, the end.
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     const box = (await page.locator('canvas').first().boundingBox())!
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
-    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
-    expect(await glowing()).toEqual(named('整列して断面を表示'))
+    expect(await glowing()).toEqual(named('病変の終点（遠い側）を選択'))
 
-    // 整列 is on: 4, the depth slider, which is under the fullscreen button.
+    // Both points chosen: ③.
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    expect(await glowing()).toEqual(named('整列して断面を表示（線と奥行きを調整）'))
+
+    // ③ is on: the depth slider, which is under the swap button.
     await page.getByTitle('整列して断面を表示').click()
     const slider = page.getByLabel('奥行き')
     await expect(slider).toBeVisible()
     await expect(page.locator('[data-guided="true"]')).toHaveCount(1, { timeout: 20_000 })
-    expect(await glowing()).toEqual(named('モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）'))
+    expect(await glowing()).toEqual(named(sliderTitle))
     const fullscreen = (await page.getByTitle('全画面', { exact: true }).boundingBox())!
     const sliderBox = (await slider.boundingBox())!
     expect(sliderBox.y).toBeGreaterThan(fullscreen.y + fullscreen.height - 1)
 
-    // The slider is used: 5, 測定範囲を更新.
+    // The slider is used: ④ 計測.
     await slider.fill('10')
     await expect(page.locator('[data-guided="true"]')).toHaveCount(1)
     expect(await glowing()).toEqual(named('選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）'))
 
     // Clicked: the work is done, so the button stops glowing; only the slider glows, as
     // a reminder to check the depth (Aki 11/19), until it is used.
-    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await page.getByRole('button', { name: /^④/ }).click()
     await expect(page.locator('[data-guided="true"]')).toHaveCount(1)
-    expect(await glowing()).toEqual(named('モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）'))
+    expect(await glowing()).toEqual(named(sliderTitle))
     await slider.fill('12')
     await expect(page.locator('[data-guided="true"]')).toHaveCount(0)
+  })
+
+  test('each step can be gone back to (Aki 11/25)', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '戻る学習')
+    const step = (n: 1 | 2 | 3 | 4) =>
+      page.getByRole('button', { name: [/^① 近位径/, /^② 遠位径/, /^③ 病変調整/, /^④ 計測/][n - 1] })
+    // Before the points are chosen only ① can be used; ③ and ④ need both points.
+    await expect(step(1)).toBeEnabled()
+    await expect(step(2)).toBeDisabled()
+    await expect(step(3)).toBeDisabled()
+    await expect(step(4)).toBeDisabled()
+
+    await step(1).click()
+    const box = (await page.locator('canvas').first().boundingBox())!
+    await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+    await expect(step(2)).toBeEnabled()
+    await expect(step(1)).not.toHaveAttribute('aria-current', 'step')
+    await expect(step(2)).toHaveAttribute('aria-current', 'step')
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await expect(step(3)).toBeEnabled()
+    await expect(step(4)).toBeEnabled()
+    await expect(step(3)).toHaveAttribute('aria-current', 'step')
+
+    // ③: the lines and the depth slider appear only now.
+    await expect(page.getByLabel('奥行き')).toHaveCount(0)
+    await step(3).click()
+    await expect(page.getByLabel('奥行き')).toBeVisible()
+
+    // ④ measures; then back to ② takes the second point away and leaves ③ (no slider).
+    await step(4).click()
+    await expect(page.locator('[data-lesion-field] input').first()).not.toHaveValue('', { timeout: 60_000 })
+    await step(2).click()
+    await expect(page.getByLabel('奥行き')).toHaveCount(0)
+    await expect(page.locator('[data-lesion-field] input').first()).toHaveValue('')
+    await expect(step(2)).toHaveAttribute('aria-current', 'step')
+    await expect(step(3)).toBeDisabled()
+
+    // Place the second point again, then back to ① clears both.
+    await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+    await expect(step(3)).toBeEnabled()
+    await step(1).click()
+    await expect(step(2)).toBeDisabled()
+    await expect(step(1)).toHaveAttribute('aria-current', 'step')
   })
 
   test('two points on the vessel are measured', async ({ page }) => {
     await useFakeAppwrite(page)
     await uploadModel(page, 'E2Eの学習')
 
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     const canvas = page.locator('canvas').first()
     await expect(canvas).toBeVisible()
     const box = (await canvas.boundingBox())!
@@ -673,7 +722,7 @@ test.describe('lesion analysis page', () => {
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
     await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
 
-    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await page.getByRole('button', { name: /^④/ }).click()
     await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
     await expect(field(page, '最小断面積')).not.toHaveValue('')
     const length = Number(await field(page, '狭窄長').inputValue())
@@ -689,11 +738,11 @@ test.describe('Pa and Pd boxes', () => {
     // No empty boxes before the measurement.
     await expect(boxes).toHaveCount(0)
 
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     const box = (await page.locator('canvas').first().boundingBox())!
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
     await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
-    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await page.getByRole('button', { name: /^④/ }).click()
     await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
     await page.locator('input[type=number]').first().fill('100')
     // Measured and the blood pressure typed, but FFR not calculated yet: still none.
@@ -775,7 +824,7 @@ test.describe('language (言語), Aki 11/25', () => {
     await expect(page.getByText('3D stenosis shape preview')).toBeVisible()
     await expect(page.getByText('Please click to specify the two lesion positions.')).toBeVisible()
     await expect(page.getByText('Measurements and Shape', { exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Update Measurement Range' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^④/ })).toBeVisible()
     await expect(page.getByText('3D Viewer', { exact: true })).toBeVisible()
 
     // Remembered after a reload; back to 日本語 puts every text back.
@@ -897,11 +946,11 @@ test.describe('the saved list (解析結果一覧)', () => {
   test('a saved row shows the columns in the agreed order', async ({ page }) => {
     const fake = await useFakeAppwrite(page)
     await uploadModel(page, '解析結果一覧の学習')
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     const box = (await page.locator('canvas').first().boundingBox())!
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
     await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
-    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await page.getByRole('button', { name: /^④/ }).click()
     await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
     await page.locator('input[type=number]').first().fill('100')
     await page.getByRole('button', { name: 'FFRを計算' }).click()
@@ -953,6 +1002,12 @@ test.describe('the saved list (解析結果一覧)', () => {
     const valueWidths = widths.slice(1, 11)
     expect(Math.max(...valueWidths) - Math.min(...valueWidths)).toBeLessThan(1.5)
     expect(valueWidths[0]).toBeLessThan(100)
+    // The PDF download is an icon under the index tab (Aki 11/25), not a button above the table.
+    const tabBox = (await page.getByText('解析結果一覧', { exact: true }).locator('xpath=..').boundingBox())!
+    const iconBox = (await page.getByRole('button', { name: 'PDFダウンロード' }).boundingBox())!
+    expect(iconBox.y).toBeGreaterThan(tabBox.y + tabBox.height - 1)
+    expect(Math.abs(iconBox.x + iconBox.width / 2 - (tabBox.x + tabBox.width / 2))).toBeLessThan(6)
+    expect(iconBox.width).toBeLessThan(40)
     // A wide list scrolls sideways.
     const scroller = page.locator('.pill-scrollbar').last()
     expect(await scroller.evaluate((el) => getComputedStyle(el).overflowX)).toBe('auto')
@@ -963,11 +1018,11 @@ test.describe('the saved list (解析結果一覧)', () => {
   }) => {
     const fake = await useFakeAppwrite(page)
     await uploadModel(page, '編集で戻す学習')
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     const box = (await page.locator('canvas').first().boundingBox())!
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
     await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
-    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await page.getByRole('button', { name: /^④/ }).click()
     await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
     const measured = await field(page, '病変近位径').inputValue()
     await page.locator('input[type=number]').first().fill('100')
@@ -994,7 +1049,7 @@ test.describe('the saved list (解析結果一覧)', () => {
     await expect(page.getByTitle('編集中の保存データのファイル名')).toHaveText(String(row.fileName))
     await expect(page.locator('input[type=number]').first()).toHaveValue('100')
     await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByRole('button', { name: '測定範囲を更新' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^④/ })).toBeVisible()
   })
 
   test('a folder shows every row saved in it, not only the first 25', async ({ page }) => {
@@ -1123,11 +1178,11 @@ test.describe('a model exported in metres', () => {
     await useFakeAppwrite(page)
     await uploadModel(page, 'メートルの学習', 1000)
 
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     const box = (await page.locator('canvas').first().boundingBox())!
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
     await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
-    await page.getByRole('button', { name: '測定範囲を更新' }).click()
+    await page.getByRole('button', { name: /^④/ }).click()
     await expect(field(page, '病変近位径')).not.toHaveValue('', { timeout: 40_000 })
 
     // The test vessel is 5 mm wide, so the diameters are about 5, not 0.005.
@@ -1287,12 +1342,12 @@ test.describe('hint texts worded by Aki (11/18)', () => {
     await expect(page.getByText('2点の病変位置をクリックして指定してください')).toBeVisible()
     await expect(page.getByText('病変指定箇所が表示されます')).toBeVisible()
 
-    await page.getByTitle('2点をクリックして選択（①心臓に近い側 → ②遠い側）').click()
+    await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     const box = (await page.locator('canvas').first().boundingBox())!
     await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
     await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
-    await expect(page.getByText('調整が済んだら、「測定範囲を更新」をクリックしてください')).toBeVisible()
-    await expect(page.getByText('「整列」から病変位置の詳細を調整できます')).toBeVisible()
+    await expect(page.getByText('調整が済んだら、「④ 計測」をクリックしてください')).toBeVisible()
+    await expect(page.getByText('「③ 病変調整」から病変位置の詳細を調整できます')).toBeVisible()
 
     // The old wording is gone.
     await expect(page.getByText('はさみで切断すると表示されます')).toHaveCount(0)
@@ -1337,14 +1392,14 @@ test.describe('the depth slider notice', () => {
     await expect(glowing).toHaveCount(0)
 
     // Updating makes the slider glow, but there is no hint while the line is inside.
-    await page.getByRole('button', { name: '測定範囲を更新' }).dispatchEvent('click')
+    await page.getByRole('button', { name: /^④/ }).dispatchEvent('click')
     await expect(glowing).toHaveCount(1)
     await expect(notice).toHaveCount(0)
 
     // Using the slider ends the glow; the next update starts it again.
     await slider.fill('12')
     await expect(glowing).toHaveCount(0)
-    await page.getByRole('button', { name: '測定範囲を更新' }).dispatchEvent('click')
+    await page.getByRole('button', { name: /^④/ }).dispatchEvent('click')
     await expect(glowing).toHaveCount(1)
   })
 
@@ -1364,7 +1419,7 @@ test.describe('the depth slider notice', () => {
 
     // Updating the range asks for the slider again, and it glows.
     // (dispatchEvent: in a small test window a drag handle of the picture can lie over it.)
-    await page.getByRole('button', { name: '測定範囲を更新' }).dispatchEvent('click')
+    await page.getByRole('button', { name: /^④/ }).dispatchEvent('click')
     await expect(notice).toBeVisible({ timeout: 20_000 })
     await expect(page.locator('[data-guided="true"]').filter({ has: slider })).toHaveCount(1)
   })

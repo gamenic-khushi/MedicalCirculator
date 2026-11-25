@@ -12,8 +12,8 @@ describe('toEnglish', () => {
 
   it('uses the wording of the Messages sheet for the messages Aki worded', () => {
     expect(toEnglish('スライダーで奥行きを調整してください')).toBe('Please adjust the depth with the slider.')
-    expect(toEnglish('調整が済んだら、「測定範囲を更新」をクリックしてください')).toBe(
-      'When the adjustment is done, click "Update Measurement Range".',
+    expect(toEnglish('調整が済んだら、「④ 計測」をクリックしてください')).toBe(
+      'When the adjustment is done, click "④ Measure".',
     )
   })
 

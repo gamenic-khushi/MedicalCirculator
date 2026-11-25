@@ -1,4 +1,4 @@
-import { Pencil, Table2, Trash2 } from 'lucide-react'
+import { Download, Pencil, Table2, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 
@@ -30,31 +30,25 @@ export function SavedSnapshotsPanel({
 }: SavedSnapshotsPanelProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
-  const headerActions = (
-    <div className="flex items-center gap-2">
-      {onDownloadPdf && (
-        <button
-          type="button"
-          onClick={onDownloadPdf}
-          className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:from-blue-700 hover:to-indigo-700"
-        >
-          PDFダウンロード
-        </button>
-      )}
-    </div>
-  )
-
-  // The name 解析結果一覧 is the vertical label at the left; the buttons sit on the right.
-  const actionsRow = onDownloadPdf && (
-    <div className="flex justify-end border-b border-gray-100 p-4">{headerActions}</div>
+  // The PDF download is an icon under the index tab (Aki, 2026/11/25), in the empty strip at
+  // the left edge of the block; the name 解析結果一覧 is the tab itself.
+  const downloadIcon = onDownloadPdf && (
+    <button
+      type="button"
+      onClick={onDownloadPdf}
+      title="PDFダウンロード"
+      aria-label="PDFダウンロード"
+      className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700"
+    >
+      <Download className="h-3.5 w-3.5" />
+    </button>
   )
 
   if (savedSnapshots.length === 0 && isLoading) {
     return (
       <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <SideLabel>解析結果一覧</SideLabel>
+        <SideLabel below={downloadIcon}>解析結果一覧</SideLabel>
         <div className="min-w-0 flex-1">
-          {actionsRow}
           <LoadingState />
         </div>
       </div>
@@ -64,9 +58,8 @@ export function SavedSnapshotsPanel({
   if (savedSnapshots.length === 0) {
     return (
       <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <SideLabel>解析結果一覧</SideLabel>
+        <SideLabel below={downloadIcon}>解析結果一覧</SideLabel>
         <div className="min-w-0 flex-1">
-          {actionsRow}
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
             <Table2 className="h-6 w-6 text-gray-300" />
             <p className="text-xs text-gray-400">利用可能なデータがありません</p>
@@ -78,9 +71,8 @@ export function SavedSnapshotsPanel({
 
   return (
     <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <SideLabel>解析結果一覧</SideLabel>
+      <SideLabel below={downloadIcon}>解析結果一覧</SideLabel>
       <div className="min-w-0 flex-1">
-        {actionsRow}
         <div className="pill-scrollbar overflow-x-auto">
           {/* Aki 11/24: the picture column is as wide as the picture; the value columns are all the same width (that of the widest heading), with no spare room at the sides; a wide list scrolls sideways. */}
           <table className="w-max text-left text-xs">

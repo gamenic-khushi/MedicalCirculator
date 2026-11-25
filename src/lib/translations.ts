@@ -284,6 +284,26 @@ const FROM_MESSAGES: Record<string, string> = {
 // Texts the lesion and folder screens show that neither sheet has (hover texts, the
 // values of 病変位置, the new headings).
 const MORE: Record<string, string> = {
+  // The step bar of the 3D view (Aki's wireframe of 2026/11/25).
+  リセット: 'Reset',
+  '① 近位径': '① Proximal diameter',
+  病変始点: 'Lesion start',
+  '② 遠位径': '② Distal diameter',
+  病変終点: 'Lesion end',
+  '③ 病変調整': '③ Lesion adjustment',
+  '④ 計測': '④ Measure',
+  '病変の始点（心臓に近い側）を選択': 'Select the start of the lesion (the side closer to the heart)',
+  '病変の終点（遠い側）を選択': 'Select the end of the lesion (the farther side)',
+  '整列して断面を表示（線と奥行きを調整）': 'Lay the vessel along the lines and show the cross-section (adjust the lines and the depth)',
+  '調整が済んだら、「④ 計測」をクリックしてください': 'When the adjustment is done, click "④ Measure".',
+  '「③ 病変調整」から病変位置の詳細を調整できます':
+    'You can adjust the details of the lesion position from "③ Lesion adjustment".',
+  '線と奥行きスライダーを調整して、「④ 計測」をクリックしてください':
+    'Adjust the lines and the depth slider, then click "④ Measure".',
+  'モデルの位置を固定しています（③ 病変調整をもう一度クリックすると解除されます）':
+    'The model position is locked (click "③ Lesion adjustment" again to unlock).',
+  'ドラッグでモデルを移動（クリックで回転に切り替え）': 'Drag to move the model (click to switch to rotate)',
+  'ドラッグでモデルを回転（クリックで移動に切り替え）': 'Drag to rotate the model (click to switch to move)',
   学習内容: 'Learning Content',
   '最小血管径 | MLD': 'Minimum Vessel Diameter | MLD',
   '最小血管断面積 | MLA': 'Minimum Vessel Cross-Sectional Area | MLA',

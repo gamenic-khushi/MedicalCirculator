@@ -39,7 +39,7 @@ import { fetchFolderModelFile } from '@/lib/fetchFolderModel'
 import { MIN_MODEL_SIZE_UNITS } from '@/lib/modelUnits'
 import { SLICE_DEPTH_LIMIT, type PlaneOutline } from '@/lib/slicePlane'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
-import { LesionViewerControls, type GuideStep } from '@/components/model-viewer/LesionViewerControls'
+import { LesionViewerControls, type GuideStep, type WorkStep } from '@/components/model-viewer/LesionViewerControls'
 import { useFfrCardPlacement } from '@/hooks/useFfrCardPlacement'
 import { useGuidanceDismissed } from '@/hooks/useGuidanceDismissed'
 import { useHighlightOnChange } from '@/hooks/useHighlightOnChange'
@@ -354,7 +354,7 @@ function LesionSnapshotPanel({
           <VesselShapePlaceholder
             message={
               awaitingConfirm
-                ? '調整が済んだら、「測定範囲を更新」をクリックしてください'
+                ? '調整が済んだら、「④ 計測」をクリックしてください'
                 : '2点の病変位置をクリックして指定してください'
             }
           />
@@ -455,9 +455,8 @@ function LesionAnalysisPageContent() {
   )
   const [isAnnotating, setIsAnnotating] = useState(false)
   // How far along the steps of the work the user is, for the control that glows next:
-  // the view has been turned, moved or zoomed (1 done), the depth slider has been used
-  // (4 done), 測定範囲を更新 was clicked once the vessel was aligned (5 done).
-  const [viewTouched, setViewTouched] = useState(false)
+  // the depth slider has been used (4 done), ④ 計測 was clicked once the vessel was aligned
+  // (5 done).
   const [depthTouched, setDepthTouched] = useState(false)
   // The depth at which the notice about the depth slider was closed: it comes back when
   // the slider is moved and the section is still outside the vessel.
@@ -508,6 +507,14 @@ function LesionAnalysisPageContent() {
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const { isDismissed: isLesionHintDismissed, dismiss: dismissLesionHint } =
     useGuidanceDismissed('lesion-selection-hint')
+  // The hint over ③ goes for good once ③ has been used; the one inside ③ once it is closed.
+  const { isDismissed: isSliceHintDismissed, dismiss: dismissSliceHint } =
+    useGuidanceDismissed('slice-mode-hint')
+  const { isDismissed: isAdjustHintDismissed, dismiss: dismissAdjustHint } =
+    useGuidanceDismissed('adjust-mode-hint')
+  useEffect(() => {
+    if (activeTool === 'slice' && !isSliceHintDismissed) dismissSliceHint()
+  }, [activeTool, isSliceHintDismissed, dismissSliceHint])
 
   const canvasRef = useRef<ModelCanvasHandle>(null)
   const canvasAreaRef = useRef<HTMLDivElement>(null)
@@ -921,26 +928,76 @@ function LesionAnalysisPageContent() {
     canvasRef.current?.setDepth(-value / 100)
   }
 
+  // Leaves ③ (the slice mode), keeping the drag mode in use. The model goes back from any
+  // depth it was slid to, and is released.
+  function leaveSlice() {
+    canvasRef.current?.setDepth(0)
+    setDepth(0)
+    setCutX(50)
+    setLineY(50)
+    setCutFraction(null)
+    setNarrowestWorld(null)
+    setSliceAligned(false)
+    setDepthTouched(false)
+    setDepthPrompted(false)
+    setRangeUpdated(false)
+    setLineDiameters({ proximal: null, distal: null })
+    lineMeasuredKeyRef.current = ''
+    const back: ViewerTool = slicePan ? 'pan' : 'rotate'
+    setActiveTool(back)
+    canvasRef.current?.setTool(back)
+  }
+
+  // Back to a step (Aki 11/25: each step can be gone back to): ③ is left, the measured
+  // values go, and the points after the first `keep` are taken away, so the next point is
+  // chosen again. The view (turn, position, zoom) stays where it is.
+  function backToPoints(keep: number) {
+    if (activeTool === 'slice') leaveSlice()
+    setRangeUpdated(false)
+    setDepthTouched(false)
+    setDepthNoticeClosedAt(null)
+    setAnnotations((prev) => prev.slice(0, keep))
+    setMeasurement(null)
+    setParams(EMPTY_PARAMS)
+    setSelectedLesion(EMPTY_SELECTED_LESION)
+    setLesionShape(null)
+    setSnapshotImage(null)
+    canvasRef.current?.clearSelection()
+    setIsAnnotating(true)
+  }
+
+  // A click on a step of the bar (Aki 11/25): ① and ② choose the start and the end of the
+  // lesion, ③ lays the vessel along the lines to adjust it, ④ measures.
+  function handleStep(step: WorkStep) {
+    if (step === 1) {
+      if (annotations.length === 0) setIsAnnotating((value) => !value)
+      else backToPoints(0)
+      return
+    }
+    if (step === 2) {
+      if (annotations.length === 1) setIsAnnotating(true)
+      else if (annotations.length === 2) backToPoints(1)
+      return
+    }
+    if (step === 3) {
+      if (annotations.length !== 2) return
+      if (activeTool !== 'slice') handleToolChange('slice')
+      else setRangeUpdated(false)
+      return
+    }
+    if (annotations.length !== 2) return
+    if (sliceAligned) setRangeUpdated(true)
+    // Aki, 11/19: the slider glows every time this is clicked; the hint only when the
+    // 奥行き line is outside (it is shown again even if it was closed before).
+    setDepthPrompted(true)
+    setDepthNoticeClosedAt(null)
+    handleUpdateSelectedLesion()
+  }
+
   function handleToolChange(tool: ViewerTool) {
     if (activeTool === 'slice') {
       if (tool === 'slice') {
-        // The scissors again leaves slice mode, keeping the drag mode in use.
-        // The model goes back from any depth it was slid to, and is released.
-        canvasRef.current?.setDepth(0)
-        setDepth(0)
-        setCutX(50)
-        setLineY(50)
-        setCutFraction(null)
-        setNarrowestWorld(null)
-        setSliceAligned(false)
-        setDepthTouched(false)
-        setDepthPrompted(false)
-        setRangeUpdated(false)
-        setLineDiameters({ proximal: null, distal: null })
-        lineMeasuredKeyRef.current = ''
-        const back: ViewerTool = slicePan ? 'pan' : 'rotate'
-        setActiveTool(back)
-        canvasRef.current?.setTool(back)
+        leaveSlice()
         return
       }
       // The model is held where the scissors put it; the rotate / move choice
@@ -1060,7 +1117,6 @@ function LesionAnalysisPageContent() {
     setNarrowestWorld(null)
     setLineDiameters({ proximal: null, distal: null })
     lineMeasuredKeyRef.current = ''
-    setViewTouched(false)
     setDepthNoticeClosedAt(null)
     setDepthPrompted(false)
     canvasRef.current?.resetView()
@@ -1779,13 +1835,16 @@ function LesionAnalysisPageContent() {
   }
 
   const hasMeasurement = selectedLesion.stenosisRate !== ''
-  // 1 view → 2 病変指定 → 3 整列 → 4 スライダー → 5 測定範囲更新. The step comes from where
+  // The step bar: the step the user is on, and how many are behind them.
+  const currentStep: WorkStep = annotations.length === 0 ? 1 : annotations.length === 1 ? 2 : rangeUpdated ? 4 : 3
+  const doneUpTo = annotations.length === 0 ? 0 : annotations.length === 1 ? 1 : rangeUpdated ? 3 : 2
+  // 1 ① → 2 ② → 3 ③ 病変調整 → 4 スライダー → 5 ④ 計測. The step comes from where
   // the work stands, so a user who skips ahead is not held back, and the glow is off for a
   // saved capture and once the work is done.
   const guideStep: GuideStep | null = viewFrame
     ? null
     : annotations.length < 2
-      ? !viewTouched && !isAnnotating && annotations.length === 0
+      ? annotations.length === 0
         ? 1
         : 2
       : rangeUpdated
@@ -1898,7 +1957,6 @@ function LesionAnalysisPageContent() {
           <div
             ref={canvasAreaRef}
             onClick={handleViewerClick}
-            onPointerDownCapture={() => setViewTouched(true)}
             // A saved image keeps the plain light background it was taken on; the
             // canvas draws space, and this only shows until it does.
             style={
@@ -1976,19 +2034,14 @@ function LesionAnalysisPageContent() {
                   locked={activeTool === 'slice' && sliceAligned}
                   isAnnotating={isAnnotating}
                   hasTwoPoints={annotations.length === 2}
+                  pointCount={annotations.length}
+                  currentStep={currentStep}
+                  doneUpTo={doneUpTo}
+                  readOnly={Boolean(viewFrame)}
                   guideStep={guideStep}
+                  onStep={handleStep}
                   onToolChange={handleToolChange}
-                  onToggleAnnotating={() => setIsAnnotating((value) => !value)}
                   onSwap={handleSwapAnnotations}
-                  onUpdateRange={() => {
-                    if (sliceAligned) setRangeUpdated(true)
-                    // Aki, 11/19: the slider glows every time this is clicked; the hint
-                    // only when the 奥行き line is outside (it is shown again even if
-                    // it was closed before).
-                    setDepthPrompted(true)
-                    setDepthNoticeClosedAt(null)
-                    handleUpdateSelectedLesion()
-                  }}
                   onReset={handleResetAnnotations}
                   onZoomIn={() => canvasRef.current?.zoomIn()}
                   onZoomOut={() => canvasRef.current?.zoomOut()}
@@ -2001,6 +2054,26 @@ function LesionAnalysisPageContent() {
                           className="left-0 top-full mt-2"
                           message="ここをクリックして、①②の2点で病変部位を選択してください"
                           onDismiss={dismissLesionHint}
+                        />
+                      )}
+                    </AnimatePresence>
+                  }
+                  adjustHint={
+                    <AnimatePresence>
+                      {annotations.length === 2 && activeTool !== 'slice' && !isSliceHintDismissed && (
+                        <GuidanceBubble
+                          anchor="bottom-left"
+                          className="left-1/2 top-full mt-2 -translate-x-1/2"
+                          message="「③ 病変調整」から病変位置の詳細を調整できます"
+                          onDismiss={dismissSliceHint}
+                        />
+                      )}
+                      {activeTool === 'slice' && !rangeUpdated && !isAdjustHintDismissed && (
+                        <GuidanceBubble
+                          anchor="bottom-left"
+                          className="left-1/2 top-full mt-2 -translate-x-1/2"
+                          message="線と奥行きスライダーを調整して、「④ 計測」をクリックしてください"
+                          onDismiss={dismissAdjustHint}
                         />
                       )}
                     </AnimatePresence>

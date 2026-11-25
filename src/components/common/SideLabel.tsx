@@ -7,7 +7,7 @@ import { useLanguage } from '@/hooks/useLanguage'
 // (3Dビュアー, 計測値・形状, 測定, 解析結果一覧), in place of a heading row on top. The rest
 // of the left edge stays plain, like the sheet. Japanese stands upright, one character
 // under the other; English is turned on its side and read from top to bottom.
-export function SideLabel({ children }: { children: ReactNode }) {
+export function SideLabel({ children, below }: { children: ReactNode; below?: ReactNode }) {
   const { language } = useLanguage()
   return (
     <div className="w-8 shrink-0">
@@ -20,6 +20,8 @@ export function SideLabel({ children }: { children: ReactNode }) {
           {children}
         </span>
       </div>
+      {/* The empty strip under the tab: room for an icon button (the PDF download). */}
+      {below && <div className="mt-2 flex justify-center">{below}</div>}
     </div>
   )
 }

@@ -9,7 +9,8 @@ import { floorPlacement } from '@/lib/floorPlacement'
 export const SPACE_COLOR = '#070b18'
 // A grid of thin lines on a dark floor that fades out towards the edge, into
 // space. Far squares look smaller, which is what shows depth; where they get too
-// small to draw cleanly, the lines blend away instead of shimmering.
+// small to draw cleanly, the lines blend away instead of shimmering. The lines are brighter and
+// thicker, and the floor reaches further out, so the grid stands out (Aki, 2026/11/25).
 // One square is 1 cm (models are in mm), so the grid also gives a sense of size.
 function createFloorMaterial(radius: number, tileSize: number) {
   return new THREE.ShaderMaterial({
@@ -20,8 +21,8 @@ function createFloorMaterial(radius: number, tileSize: number) {
     uniforms: {
       radius: { value: radius },
       tileSize: { value: tileSize },
-      floorColor: { value: new THREE.Color('#0d1426') },
-      grout: { value: new THREE.Color('#52627f') },
+      floorColor: { value: new THREE.Color('#111a33') },
+      grout: { value: new THREE.Color('#8aa0c8') },
     },
     vertexShader: /* glsl */ `
       varying vec2 vPosition;
@@ -41,10 +42,10 @@ function createFloorMaterial(radius: number, tileSize: number) {
         vec2 fw = fwidth(t);
         float tooSmall = smoothstep(0.12, 0.4, max(fw.x, fw.y));
         vec2 g = abs(fract(t - 0.5) - 0.5) / fw;
-        float line = (1.0 - min(min(g.x, g.y), 1.0)) * (1.0 - tooSmall);
+        float line = (1.0 - min(min(g.x, g.y), 1.6) / 1.6) * (1.0 - tooSmall);
         vec3 color = mix(floorColor, grout, line);
-        float fade = 1.0 - smoothstep(0.3, 1.0, length(vPosition) / radius);
-        gl_FragColor = vec4(color, 0.95 * fade);
+        float fade = 1.0 - smoothstep(0.45, 1.0, length(vPosition) / radius);
+        gl_FragColor = vec4(color, fade);
         #include <colorspace_fragment>
       }
     `,
