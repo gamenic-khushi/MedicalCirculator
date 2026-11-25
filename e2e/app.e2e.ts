@@ -862,12 +862,18 @@ test.describe('the blood flow effect (Aki 11/25)', () => {
     expect(difference(await picture(), still)).toBeLessThan(0.05)
 
     await measureLesion(page)
+    // Measured, but the FFR is not calculated yet: still no flow (Aki 11/25).
+    await page.waitForTimeout(1500)
+    const beforeFfr = await picture()
+    await page.waitForTimeout(400)
+    expect(difference(await picture(), beforeFfr)).toBeLessThan(0.05)
+
     await page.locator('input[type=number]').first().fill('100')
     await page.getByRole('button', { name: 'FFRを計算' }).click()
     await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
     await page.waitForTimeout(1500)
 
-    // Once the stretch is painted, the bands move: the picture is not the same a moment later.
+    // Once the FFR is measured, the bands move: the picture is not the same a moment later.
     let moved = 0
     for (let i = 0; i < 4; i += 1) {
       const before = await picture()
@@ -913,6 +919,7 @@ test.describe('the side menu (Aki 11/25)', () => {
     const aside = page.locator('aside')
     await expect(aside.getByText('3D解析', { exact: true })).toBeVisible()
     const open = (await aside.boundingBox())!.width
+    expect(open).toBe(96)
     // Expanded: the words only, no icons in the items.
     await expect(aside.locator('nav a svg')).toHaveCount(0)
 
@@ -921,7 +928,7 @@ test.describe('the side menu (Aki 11/25)', () => {
     await expect(aside.getByText('3D解析', { exact: true })).toHaveCount(0)
     await expect(aside.locator('nav a svg')).toHaveCount(1)
     await expect(aside.getByRole('link', { name: '3D解析' })).toHaveAttribute('title', '3D解析')
-    await expect.poll(async () => (await aside.boundingBox())!.width).toBeLessThan(open - 20)
+    await expect.poll(async () => (await aside.boundingBox())!.width).toBe(52)
 
     // Remembered after a reload, and 情報 still opens its two items (as icons).
     await page.reload()

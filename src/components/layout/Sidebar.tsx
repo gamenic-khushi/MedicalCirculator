@@ -55,7 +55,7 @@ export function Sidebar() {
     // cards, hints) may be drawn over it; dialogs and toasts (z-50) are still above.
     <aside
       className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col bg-gradient-to-b from-blue-600 to-indigo-600 px-2 py-4 transition-[width] lg:flex ${
-        collapsed ? 'w-16' : 'w-24'
+        collapsed ? 'w-[52px]' : 'w-24'
       }`}
     >
       <div className="flex justify-center">
@@ -133,7 +133,7 @@ export function Sidebar() {
           aria-expanded={isMenuOpen}
           aria-label={collapsed ? (user?.name ?? 'ユーザー') : undefined}
           title={collapsed ? (user?.name ?? 'ユーザー') : undefined}
-          className="flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-white transition hover:bg-white/10"
+          className="flex w-full flex-col items-center gap-1 rounded-xl px-0 py-2 text-white transition hover:bg-white/10"
         >
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-blue-600">
             <User className="h-4 w-4" />
