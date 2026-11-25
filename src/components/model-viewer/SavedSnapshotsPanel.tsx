@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { FrameImage } from '@/components/common/FrameImage'
 import { LoadingState } from '@/components/common/LoadingState'
-import { SideLabel } from '@/components/common/SideLabel'
+import { TabbedBlock } from '@/components/common/SideLabel'
 import { SPACE_COLOR } from '@/components/model-viewer/ViewerEnvironment'
 import { EASE_OUT } from '@/lib/motion'
 import { SNAPSHOT_COLUMNS } from '@/lib/snapshotColumns'
@@ -45,40 +45,37 @@ export function SavedSnapshotsPanel({
       onClick={onDownloadPdf}
       title="PDFダウンロード"
       aria-label="PDFダウンロード"
-      className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700"
+      className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700"
     >
-      <Download className="h-3.5 w-3.5" />
+      <Download className="h-3 w-3" />
     </button>
   )
 
   if (savedSnapshots.length === 0 && isLoading) {
     return (
-      <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <SideLabel below={downloadIcon}>解析結果一覧</SideLabel>
+      <TabbedBlock label="解析結果一覧" below={downloadIcon}>
         <div className="min-w-0 flex-1">
           <LoadingState />
         </div>
-      </div>
+      </TabbedBlock>
     )
   }
 
   if (savedSnapshots.length === 0) {
     return (
-      <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <SideLabel below={downloadIcon}>解析結果一覧</SideLabel>
+      <TabbedBlock label="解析結果一覧" below={downloadIcon}>
         <div className="min-w-0 flex-1">
           <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
             <Table2 className="h-6 w-6 text-gray-300" />
             <p className="text-xs text-gray-400">利用可能なデータがありません</p>
           </div>
         </div>
-      </div>
+      </TabbedBlock>
     )
   }
 
   return (
-    <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <SideLabel below={downloadIcon}>解析結果一覧</SideLabel>
+    <TabbedBlock label="解析結果一覧" below={downloadIcon}>
       <div className="min-w-0 flex-1">
         <div className="pill-scrollbar overflow-x-auto">
           {/* Aki 11/24: the picture column is as wide as the picture and the value columns are all
@@ -177,6 +174,6 @@ export function SavedSnapshotsPanel({
           )}
         </AnimatePresence>
       </div>
-    </div>
+    </TabbedBlock>
   )
 }

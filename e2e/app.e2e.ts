@@ -534,24 +534,28 @@ test.describe('lesion analysis page', () => {
     }
     await expect(page.getByText('3Dブロック')).toHaveCount(0)
 
-    // They are index tabs (Aki 11/24): each hangs from the top of its block's left edge and is
-    // only as tall as its name, not a strip down the whole edge.
+    // They are index tabs (Aki 11/25): each sticks out of its block's left edge, near the top,
+    // joined to the block, with rounded outer corners; only as tall as its name.
+    const blockOf = (name: string) =>
+      page.getByText(name, { exact: true }).locator('xpath=ancestor::div[@data-block][1]/div[contains(@class,"rounded-2xl")]')
     for (const name of ['3Dビュアー', '計測値・形状']) {
       const tab = (await page.getByText(name, { exact: true }).locator('xpath=..').boundingBox())!
-      const block = (await page
-        .getByText(name, { exact: true })
-        .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
-        .boundingBox())!
-      expect(tab.y - block.y).toBeLessThan(2)
+      const block = (await blockOf(name).boundingBox())!
+      expect(tab.x).toBeLessThan(block.x) // outside the block, at its left
+      expect(tab.x + tab.width).toBeGreaterThan(block.x - 2) // touching it
+      expect(tab.y).toBeGreaterThan(block.y)
+      expect(tab.y - block.y).toBeLessThan(40) // near the top
       expect(tab.height).toBeLessThan(block.height / 2)
+      expect(
+        await page.getByText(name, { exact: true }).locator('xpath=..').evaluate((el) => {
+          const style = getComputedStyle(el)
+          return [style.borderTopLeftRadius, style.borderBottomLeftRadius, style.borderTopRightRadius]
+        }),
+      ).toEqual(['12px', '12px', '0px'])
     }
 
     // The 3D viewer block takes 2/3 of the width, the 計測値・形状 block 1/3.
-    const widthOf = async (name: string) =>
-      (await page
-        .getByText(name, { exact: true })
-        .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
-        .boundingBox())!.width
+    const widthOf = async (name: string) => (await blockOf(name).boundingBox())!.width
     const viewerWidth = await widthOf('3Dビュアー')
     const valuesWidth = await widthOf('計測値・形状')
     expect(viewerWidth / (viewerWidth + valuesWidth)).toBeCloseTo(2 / 3, 1)
@@ -1501,7 +1505,7 @@ test.describe('a fixed layout', () => {
     await expect(page.getByText('横断面', { exact: true })).toBeVisible()
 
     // The block that holds the values and both previews, and the whole page.
-    const block = page.locator('xpath=//*[normalize-space(text())="計測値・形状"]/ancestor::div[contains(@class,"rounded-2xl")][1]')
+    const block = page.locator('xpath=//*[normalize-space(text())="計測値・形状"]/ancestor::div[@data-block][1]/div[contains(@class,"rounded-2xl")]')
     const sizes = async () => {
       // Let every fade finish first.
       await page.waitForTimeout(900)

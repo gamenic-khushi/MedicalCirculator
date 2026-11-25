@@ -172,7 +172,8 @@ export function LesionViewerControls({
 
   return (
     <>
-      <div data-ffr-keep-clear className="absolute left-4 top-4 flex max-w-[calc(100%-5.5rem)] flex-col items-start gap-2">
+      {/* z-10: over the slice lines' drag handles, which run the full height of the view. */}
+      <div data-ffr-keep-clear className="absolute left-4 top-4 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-start gap-2">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
           {/* Back to the start: the points, the lines and the view. */}
           <button
@@ -265,7 +266,7 @@ export function LesionViewerControls({
         </div>
       </div>
 
-      <div data-ffr-keep-clear className="absolute right-4 top-4 flex flex-col items-center gap-2">
+      <div data-ffr-keep-clear className="absolute right-4 top-4 z-10 flex flex-col items-center gap-2">
         <div className="flex flex-col gap-1 rounded-full bg-slate-900/60 p-1">
           <button type="button" onClick={onZoomIn} title="拡大" className={ROUND}>
             <ZoomIn className="h-4 w-4" />

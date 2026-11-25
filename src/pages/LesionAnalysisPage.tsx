@@ -14,7 +14,7 @@ import { Info, Pencil, X } from 'lucide-react'
 
 import { GuidanceBubble } from '@/components/common/GuidanceBubble'
 import { LoadingOverlay } from '@/components/common/LoadingOverlay'
-import { SideLabel } from '@/components/common/SideLabel'
+import { TabbedBlock } from '@/components/common/SideLabel'
 import { Toast } from '@/components/common/Toast'
 import { AnatomyGuideThumbnail } from '@/components/model-viewer/AnatomyGuideThumbnail'
 import { BloodPressureCard } from '@/components/model-viewer/BloodPressureCard'
@@ -1905,7 +1905,7 @@ function LesionAnalysisPageContent() {
 
   return (
     // Little room above the title: the space at the very top was unnecessary (Aki, 11/24).
-    <div className="px-4 pb-6 pt-2 sm:px-6 lg:px-6 lg:pb-8 lg:pt-2" data-testid="lesion-page">
+    <div className="pb-6 pl-6 pr-4 pt-2 sm:pr-6 lg:pb-8 lg:pt-2" data-testid="lesion-page">
       <div className="flex items-center gap-2">
           {validModel && isEditingTitle ? (
             <input
@@ -1960,10 +1960,9 @@ function LesionAnalysisPageContent() {
       </div>
 
       {/* The 3D viewer takes 2/3 of the width and the values 1/3 (Aki, 2026/11/17). */}
-      <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-x-6">
         {/* 3Dビュアー */}
-        <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm lg:col-span-2">
-          <SideLabel>3Dビュアー</SideLabel>
+        <TabbedBlock label="3Dビュアー" className="lg:col-span-2">
           <div className="flex min-w-0 flex-1 flex-col">
           <div
             ref={canvasAreaRef}
@@ -2243,11 +2242,10 @@ function LesionAnalysisPageContent() {
           </div>
 
           </div>
-        </div>
+        </TabbedBlock>
 
         {/* 計測値・形状 */}
-        <div className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <SideLabel>計測値・形状</SideLabel>
+        <TabbedBlock label="計測値・形状">
           <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row lg:flex-col">
           <div className="flex-1 lg:flex-none">
             <p className="text-base font-semibold text-gray-900">計測値</p>
@@ -2342,12 +2340,11 @@ function LesionAnalysisPageContent() {
             awaitingConfirm={annotations.length === 2 && selectedLesion.stenosisRate === ''}
           />
           </div>
-        </div>
+        </TabbedBlock>
       </div>
 
       {/* 測定 */}
-      <div className="mt-4 flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <SideLabel>測定</SideLabel>
+      <TabbedBlock label="測定" className="mt-4">
         <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="sm:max-w-sm sm:flex-1">
             <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />
@@ -2366,7 +2363,7 @@ function LesionAnalysisPageContent() {
             </div>
           )}
         </div>
-      </div>
+      </TabbedBlock>
 
       {!viewFrame && (
         <div className="mt-4 flex justify-center">
