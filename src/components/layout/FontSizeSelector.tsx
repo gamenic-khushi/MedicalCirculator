@@ -26,7 +26,7 @@ export function FontSizeSelector({ tone }: FontSizeSelectorProps) {
               role="radio"
               aria-checked={selected}
               onClick={() => setFontSize(option.value)}
-              className={`flex-1 rounded-full px-3 py-1 text-sm font-medium transition ${
+              className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-1 text-sm font-medium transition ${
                 isDark
                   ? selected
                     ? 'bg-white text-blue-600'

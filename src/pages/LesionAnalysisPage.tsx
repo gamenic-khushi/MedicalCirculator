@@ -2247,9 +2247,12 @@ function LesionAnalysisPageContent() {
         {/* 計測値・形状 */}
         <TabbedBlock label="計測値・形状">
           <div className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row lg:flex-col">
-          <div className="flex-1 lg:flex-none">
+          {/* @container: the values go in pairs (two columns) when the block itself is wide enough
+              (about 288 px), not by the width of the window: in English the names are longer and
+              at the large font size everything is bigger, so the pairs would not fit. */}
+          <div className="@container flex-1 lg:flex-none">
             <p className="text-base font-semibold text-gray-900">計測値</p>
-            <div className="mt-3 grid grid-cols-1 gap-x-2 gap-y-2.5 xl:grid-cols-2 xl:gap-x-3">
+            <div className="mt-3 grid grid-cols-1 gap-x-2 gap-y-2.5 @[18rem]:grid-cols-2 @[18rem]:gap-x-3">
               {SELECTED_LESION_FIELDS.map(({ key, label, unit, readOnly }, index) => {
                 const ffrKey = FFR_INPUT_KEY_BY_FIELD[key]
                 const range = ffrKey ? ffrRangeFor(ffrKey, Number(bloodPressure) || 100) : null
@@ -2266,7 +2269,7 @@ function LesionAnalysisPageContent() {
                   (!Number.isFinite(rangeValue) || rangeValue < range[0] || rangeValue > range[1])
                 return (
                   <div key={key} data-lesion-field={key}
-                    className={`flex flex-col text-xs ${key === 'lesionPosition' ? 'xl:col-span-2' : ''}`}
+                    className={`flex flex-col text-xs ${key === 'lesionPosition' ? '@[18rem]:col-span-2' : ''}`}
                   >
                     {/* The name and its value side by side with no gap; the hints go on a line below. */}
                     <div className="flex items-center gap-2 xl:gap-1 2xl:gap-2">

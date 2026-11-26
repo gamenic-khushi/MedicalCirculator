@@ -1758,3 +1758,59 @@ test.describe('correcting the lesion values', () => {
     await expect(field(page, '狭窄率')).not.toHaveValue(rate)
   })
 })
+
+test.describe('English does not overflow (Aki 11/26)', () => {
+  for (const size of ['medium', 'large']) {
+    test(`the user menu keeps every control inside its box, font size ${size}`, async ({ page }) => {
+      await page.addInitScript(
+        ([fontSize]) => {
+          localStorage.setItem('language', 'en')
+          localStorage.setItem('font-size', fontSize)
+        },
+        [size],
+      )
+      await useFakeAppwrite(page)
+      await page.goto('/data')
+      await page.locator('aside').getByRole('button').last().click()
+      const menu = page.locator('aside .shadow-2xl')
+      await expect(menu.getByText('Medium', { exact: true })).toBeVisible()
+      const outside = await page.evaluate(() => {
+        const box = document.querySelector('aside .shadow-2xl')!.getBoundingClientRect()
+        return Array.from(document.querySelectorAll('aside .shadow-2xl *'))
+          .filter((el) => {
+            const r = el.getBoundingClientRect()
+            return r.right > box.right + 0.5 || r.left < box.left - 0.5
+          })
+          .map((el) => (el.textContent ?? '').trim())
+      })
+      expect(outside).toEqual([])
+    })
+  }
+
+  test('the measured values stay inside their block at the large font size', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('language', 'en')
+      localStorage.setItem('font-size', 'large')
+    })
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await useFakeAppwrite(page)
+    // (The page is in English, so the name field is found by its type, not by its Japanese label.)
+    await page.goto('/data/3d-analysis')
+    await page.locator('input[type=text]').first().fill('overflow')
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'vessel.stl',
+      mimeType: 'application/octet-stream',
+      buffer: makeStenosisStl(1, 3),
+    })
+    await page.waitForURL('**/data/lesion-measurement/analysis')
+    await expect(page.getByText('Measurements', { exact: true })).toBeVisible()
+    const inside = await page.evaluate(() => {
+      const heading = Array.from(document.querySelectorAll('p')).find((p) => p.textContent === 'Measurements')!
+      const block = heading.closest('div.rounded-2xl')!.getBoundingClientRect()
+      return Array.from(heading.parentElement!.querySelectorAll('input'))
+        .map((input) => input.getBoundingClientRect())
+        .every((r) => r.right <= block.right + 0.5 && r.left >= block.left - 0.5)
+    })
+    expect(inside).toBe(true)
+  })
+})

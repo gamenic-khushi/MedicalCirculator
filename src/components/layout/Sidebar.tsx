@@ -150,7 +150,7 @@ export function Sidebar() {
             <motion.div
               {...dropdown}
               style={{ transformOrigin: 'bottom left' }}
-              className="absolute bottom-0 left-full z-20 ml-3 w-48 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10"
+              className="absolute bottom-0 left-full z-20 ml-3 w-60 rounded-2xl border border-white/20 bg-white p-2 shadow-2xl shadow-black/10"
             >
               <NavLink
                 to="/help"
