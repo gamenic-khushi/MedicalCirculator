@@ -185,7 +185,6 @@ const ADDED: Record<string, string> = {
     'You can add a new capture to this folder with "+"',
   'ここをクリックして、①②の2点で病変部位を選択してください':
     'Click here and select the lesion site with two points, ① and ②',
-  '①と②を入れ替える（心臓に近い側を修正）': 'Swap ① and ② (corrects the side closer to the heart)',
   ドラッグでモデルを回転: 'Drag to rotate the model',
   ドラッグでモデルを移動: 'Drag to move the model',
   拡大: 'Zoom in',

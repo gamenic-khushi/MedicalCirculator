@@ -152,6 +152,9 @@ function clampLineY(value: number): number {
 
 // Where the scissors brings ① and ② (percent of the view's width), either side
 // of the fixed cutting plane.
+// Where the depth slider stands until an empty spot of the view has been found.
+const DEPTH_SPOT_FALLBACK = { x: 50, y: 25 }
+
 const PROXIMAL_LINE_START_X = 30
 const DISTAL_LINE_START_X = 70
 
@@ -422,6 +425,8 @@ function LesionAnalysisPageContent() {
     navigationState?.cameraState ?? null,
   )
   const [isAnnotating, setIsAnnotating] = useState(false)
+  // Where the depth slider stands in the 3D view (percent of its width and height).
+  const [depthSpot, setDepthSpot] = useState<{ x: number; y: number } | null>(null)
   // How far along the steps of the work the user is, for the control that glows next:
   // the depth slider has been used (4 done), ④ 計測 was clicked once the vessel was aligned
   // (5 done).
@@ -445,10 +450,6 @@ function LesionAnalysisPageContent() {
   // of points always gets a new generateId()-based key, so this never needs
   // to be reset for a fresh placement.
   const manualSwapPairRef = useRef<string | null>(null)
-  // Key of the pair the user put in order with the swap button themselves:
-  // nothing automatic reorders that pair afterwards, not even the path from
-  // the heart.
-  const swappedByUserPairRef = useRef<string | null>(null)
   const [measurement, setMeasurement] = useState<FfrResult | null>(null)
   const [bloodPressure, setBloodPressure] = useState(
     initialBloodPressure ?? (viewFrame ? stripUnit(viewFrame.pa) : ''),
@@ -482,6 +483,26 @@ function LesionAnalysisPageContent() {
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const { isDismissed: isLesionHintDismissed, dismiss: dismissLesionHint } =
     useGuidanceDismissed('lesion-selection-hint')
+  // The depth slider is put in an empty spot near the middle of the view (Aki 11/26), found again each
+  // time ③ is on, when the points are measured again and when the view is zoomed or resized: after
+  // the model has settled, and not while the slider itself is being used.
+  useEffect(() => {
+    if (activeTool !== 'slice') {
+      setDepthSpot(null)
+      return
+    }
+    const place = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+      const spot = canvasRef.current?.findFreeSpot({ width: 5.5 * rem, height: 15.5 * rem })
+      if (spot) setDepthSpot(spot)
+    }
+    const timer = window.setTimeout(place, 500)
+    window.addEventListener('resize', place)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('resize', place)
+    }
+  }, [activeTool, rangeUpdated, sliceAligned, cameraState])
   // The blood flow (Aki 11/25, 11/26): light-blue streamlines run along the whole vessel the two
   // points are on, only after the FFR has been measured, as bright and fast as it allows. Not on
   // a saved capture, which is a picture.
@@ -1232,10 +1253,9 @@ function LesionAnalysisPageContent() {
   // After a point moves, ① must still be the one nearer the heart. Only the
   // path from the heart reorders here: it is the same for the same points,
   // whereas re-running the screen walk after drags made ① and ② trade places
-  // on their own. A swap the user made themselves stands.
+  // on their own.
   function keepNearerFirst(points: Annotation[]): Annotation[] {
     if (points.length !== 2) return points
-    if (swappedByUserPairRef.current === pointPairKey(points[0].id, points[1].id)) return points
     return orderByHeartPath(points) ?? points
   }
 
@@ -1338,23 +1358,6 @@ function LesionAnalysisPageContent() {
     // the fields always match where the points are, without a reset.
     if (ordered.length === 2 && selectedLesion.stenosisRate !== '') {
       measureLesion(ordered[0], ordered[1])
-    }
-  }
-
-  // Manual override for the automatic ①/② (proximal/distal) guess — near a
-  // bifurcation, a side branch can look wider than the actual trunk right
-  // where it splits off, which fools both the geometric width check and the
-  // AI tiebreak (it only ever sees the same derived width numbers, not the
-  // real shape). Letting the user flip the assignment directly is the only
-  // reliable fix for that case, rather than trusting either heuristic.
-  function handleSwapAnnotations() {
-    if (annotations.length !== 2) return
-    manualSwapPairRef.current = pointPairKey(annotations[0].id, annotations[1].id)
-    swappedByUserPairRef.current = manualSwapPairRef.current
-    const swapped: [Annotation, Annotation] = [annotations[1], annotations[0]]
-    setAnnotations(swapped)
-    if (selectedLesion.stenosisRate !== '') {
-      measureLesion(swapped[0], swapped[1])
     }
   }
 
@@ -2045,7 +2048,6 @@ function LesionAnalysisPageContent() {
                     !(annotations.length === 0 && !isAnnotating && !isLesionHintDismissed)
                   }
                   isAnnotating={isAnnotating}
-                  hasTwoPoints={annotations.length === 2}
                   pointCount={annotations.length}
                   currentStep={currentStep}
                   doneUpTo={doneUpTo}
@@ -2053,7 +2055,6 @@ function LesionAnalysisPageContent() {
                   guideStep={guideStep}
                   onStep={handleStep}
                   onViewTool={handleViewTool}
-                  onSwap={handleSwapAnnotations}
                   onReset={handleResetAnnotations}
                   onZoomIn={() => canvasRef.current?.zoomIn()}
                   onZoomOut={() => canvasRef.current?.zoomOut()}
@@ -2090,50 +2091,57 @@ function LesionAnalysisPageContent() {
                       )}
                     </AnimatePresence>
                   }
-                  depthControl={
-                    <AnimatePresence>
-                      {activeTool === 'slice' && (
-                        // Moves the model away from the viewer (up, 6 mm at most) once the
-                        // scissors has locked it in place; the bottom is where it was put.
-                        <motion.div
-                          key="depth-slider"
-                          {...fade}
-                          title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
-                          data-guided={depthGlow ? 'true' : undefined}
-                          className={`relative flex flex-col items-center gap-1 rounded-full border border-gray-100 bg-white px-1 py-2 shadow-sm ${
-                            depthGlow ? 'guide-glow' : ''
-                          }`}
-                        >
-                          <AnimatePresence>
-                            {depthOutside && depthNoticeClosedAt !== depth && (
-                              <GuidanceBubble
-                                anchor="right"
-                                className="right-full top-1/2 mr-3 -translate-y-1/2"
-                                message="スライダーで奥行きを調整してください"
-                                onDismiss={() => setDepthNoticeClosedAt(depth)}
-                              />
-                            )}
-                          </AnimatePresence>
-                          <span className="text-[0.625rem] font-medium text-gray-500">奥</span>
-                          <div className="relative h-24 w-5">
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              step={1}
-                              value={depth}
-                              aria-label="奥行き"
-                              onChange={(event) => handleDepthChange(Number(event.target.value))}
-                              onDoubleClick={() => handleDepthChange(0)}
-                              className="absolute left-1/2 top-1/2 h-5 w-24 -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-pointer accent-indigo-600"
-                            />
-                          </div>
-                          <span className="text-[0.625rem] font-medium text-gray-500">手前</span>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  }
                 />
+
+                {/* The depth slider (Aki 11/26): in an empty spot near the middle of the view, clearly
+                    visible, found again each time ③ is on or the view changes (it glides there). */}
+                <div
+                  data-ffr-keep-clear
+                  className="absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-[left,top] duration-300"
+                  style={{ left: `${(depthSpot ?? DEPTH_SPOT_FALLBACK).x}%`, top: `${(depthSpot ?? DEPTH_SPOT_FALLBACK).y}%` }}
+                >
+                  <AnimatePresence>
+            {activeTool === 'slice' && (
+              // Moves the model away from the viewer (up, 6 mm at most) once the
+              // scissors has locked it in place; the bottom is where it was put.
+              <motion.div
+                key="depth-slider"
+                {...fade}
+                title="モデルの奥行きを調整（上：奥へ（最大6 mm）、下：元の位置。ダブルクリックで元の位置）"
+                data-guided={depthGlow ? 'true' : undefined}
+                className={`relative flex flex-col items-center gap-1.5 rounded-full border border-gray-100 bg-white px-2 py-3 shadow-md ${
+                  depthGlow ? 'guide-glow' : ''
+                }`}
+              >
+                <AnimatePresence>
+                  {depthOutside && depthNoticeClosedAt !== depth && (
+                    <GuidanceBubble
+                      anchor="right"
+                      className="right-full top-1/2 mr-3 -translate-y-1/2"
+                      message="スライダーで奥行きを調整してください"
+                      onDismiss={() => setDepthNoticeClosedAt(depth)}
+                    />
+                  )}
+                </AnimatePresence>
+                <span className="text-xs font-medium text-gray-500">奥</span>
+                <div className="relative h-40 w-6">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={depth}
+                    aria-label="奥行き"
+                    onChange={(event) => handleDepthChange(Number(event.target.value))}
+                    onDoubleClick={() => handleDepthChange(0)}
+                    className="absolute left-1/2 top-1/2 h-6 w-40 -translate-x-1/2 -translate-y-1/2 -rotate-90 cursor-pointer accent-indigo-600"
+                  />
+                </div>
+                <span className="text-xs font-medium text-gray-500">手前</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+                </div>
 
                 {/* Shown with the FFR result, not before: no empty boxes. */}
                 {measurement && <PressurePointsPanel pa={livePa} pd={livePd} />}

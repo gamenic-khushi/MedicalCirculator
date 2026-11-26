@@ -678,20 +678,44 @@ test.describe('lesion analysis page', () => {
     expect(column[0].x).toBeGreaterThan(view.x + view.width * 0.9)
     expect(row[4].y).toBeLessThan(view.y + 90)
 
-    // Once both points are chosen, the ① ② swap joins the right column under the controls
-    // (Aki's markup), and the depth slider that follows ③ is under the swap.
-    const swapTitle = '①と②を入れ替える（心臓に近い側を修正）'
-    await expect(page.getByTitle(swapTitle)).toHaveCount(0)
+    // The ① ② swap button is gone (Aki 11/26: no longer needed), also once both points are chosen.
     await page.getByTitle('病変の始点（心臓に近い側）を選択').click()
     await page.mouse.click(view.x + view.width * 0.37, view.y + view.height * 0.575)
     await page.mouse.click(view.x + view.width * 0.63, view.y + view.height * 0.445)
-    const swap = await atTitle(swapTitle)
-    const turn = column[2]
-    expect(Math.abs(swap.x - turn.x)).toBeLessThan(6)
-    expect(swap.y).toBeGreaterThan(turn.y + turn.height - 1)
+    await expect(page.getByRole('button', { name: /^④ 計測/ })).toBeEnabled()
+    await expect(page.getByTitle(/入れ替え/)).toHaveCount(0)
+    // The depth slider appears with ③ (Aki 11/26): in a clearly visible central area of the view, in
+    // an empty spot, not over the model, and not in the right column with the other controls.
     await page.getByTitle('整列して断面を表示').click()
+    await expect(page.getByLabel('奥行き')).toBeVisible()
+    await page.waitForTimeout(1500)
     const slider = (await page.getByLabel('奥行き').boundingBox())!
-    expect(slider.y).toBeGreaterThan(swap.y + swap.height - 1)
+    const centreX = (slider.x + slider.width / 2 - view.x) / view.width
+    const centreY = (slider.y + slider.height / 2 - view.y) / view.height
+    expect(centreX).toBeGreaterThan(0.3)
+    expect(centreX).toBeLessThan(0.7)
+    expect(centreY).toBeGreaterThan(0.18)
+    expect(centreY).toBeLessThan(0.85)
+    // Not over the vessel: the picture of the 3D view under the slider is hardly any of the model.
+    const covered = await page.evaluate(
+      ([x, y, w, h]) => {
+        const canvas = document.querySelector('canvas')!
+        const box = canvas.getBoundingClientRect()
+        const probe = document.createElement('canvas')
+        probe.width = Math.round(w)
+        probe.height = Math.round(h)
+        const context = probe.getContext('2d')!
+        context.drawImage(canvas, ((x - box.x) / box.width) * canvas.width, ((y - box.y) / box.height) * canvas.height, (w / box.width) * canvas.width, (h / box.height) * canvas.height, 0, 0, probe.width, probe.height)
+        const data = context.getImageData(0, 0, probe.width, probe.height).data
+        let model = 0
+        for (let k = 0; k < data.length; k += 4) {
+          if ((data[k] + data[k + 1] + data[k + 2]) / 3 > 105 && Math.max(data[k], data[k + 1], data[k + 2]) - Math.min(data[k], data[k + 1], data[k + 2]) < 30) model += 1
+        }
+        return model / (data.length / 4)
+      },
+      [slider.x, slider.y, slider.width, slider.height],
+    )
+    expect(covered).toBeLessThan(0.15)
   })
 
   test('回転 and 移動 are under ① while ① or ② is to be chosen (Aki 11/25)', async ({ page }) => {
@@ -767,15 +791,16 @@ test.describe('lesion analysis page', () => {
     await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
     expect(await glowing()).toEqual(named('整列して断面を表示（線と奥行きを調整）'))
 
-    // ③ is on: the depth slider, which is under the swap button.
+    // ③ is on: the depth slider.
     await page.getByTitle('整列して断面を表示').click()
     const slider = page.getByLabel('奥行き')
     await expect(slider).toBeVisible()
     await expect(page.locator('[data-guided="true"]')).toHaveCount(1, { timeout: 20_000 })
     expect(await glowing()).toEqual(named(sliderTitle))
+    // It is in the central area of the view, not in the right column (Aki 11/26).
     const fullscreen = (await page.getByTitle('全画面', { exact: true }).boundingBox())!
     const sliderBox = (await slider.boundingBox())!
-    expect(sliderBox.y).toBeGreaterThan(fullscreen.y + fullscreen.height - 1)
+    expect(sliderBox.x + sliderBox.width).toBeLessThan(fullscreen.x)
 
     // The slider is used: ④ 計測.
     await slider.fill('10')

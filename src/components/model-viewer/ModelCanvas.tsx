@@ -138,6 +138,10 @@ export interface ModelCanvasHandle {
   // point `a` (①) to `b` (②), as strong and as fast as the FFR allows (null: not calculated
   // yet); null switches it off. It is never in a captured picture.
   setFlow: (flow: { ffr: number | null } | null) => void
+  // Where something of this size (in px) fits in the view without covering the model: the middle of
+  // the emptiest place near the centre, as a percentage of the view's width and height; null when
+  // the view is not drawn yet. Used to put the depth slider where it is clearly visible (Aki 11/26).
+  findFreeSpot: (size: { width: number; height: number }) => { x: number; y: number } | null
   // Stops the flow effect and draws the frame without it, for a picture that is about to be
   // taken of the page (the DOM is drawn from the canvas as it is); the function it returns
   // puts the effect back.
@@ -1315,6 +1319,56 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
     return path
   }
 
+  // Looks at the picture the view shows (the model is the light grey; the background, the floor and
+  // its grid are dark or blue) and picks the emptiest place for a box of `size`, near the middle.
+  function findFreeSpot(size: { width: number; height: number }) {
+    const canvas = containerRef.current?.querySelector('canvas')
+    if (!canvas || canvas.clientWidth === 0 || canvas.clientHeight === 0) return null
+    const cell = 4
+    const cols = Math.max(Math.round(canvas.clientWidth / cell), 1)
+    const rows = Math.max(Math.round(canvas.clientHeight / cell), 1)
+    const probe = document.createElement('canvas')
+    probe.width = cols
+    probe.height = rows
+    const context = probe.getContext('2d', { willReadFrequently: true })
+    if (!context) return null
+    context.drawImage(canvas, 0, 0, cols, rows)
+    const pixels = context.getImageData(0, 0, cols, rows).data
+    // Running totals of the model's pixels, to count them in any rectangle at once.
+    const sums = new Float64Array((cols + 1) * (rows + 1))
+    for (let y = 0; y < rows; y += 1) {
+      let line = 0
+      for (let x = 0; x < cols; x += 1) {
+        const k = (y * cols + x) * 4
+        const r = pixels[k]
+        const g = pixels[k + 1]
+        const b = pixels[k + 2]
+        const grey = (r + g + b) / 3 > 105 && Math.max(r, g, b) - Math.min(r, g, b) < 30 && pixels[k + 3] > 100
+        line += grey ? 1 : 0
+        sums[(y + 1) * (cols + 1) + (x + 1)] = sums[y * (cols + 1) + (x + 1)] + line
+      }
+    }
+    const w = Math.max(Math.ceil(size.width / cell), 1)
+    const h = Math.max(Math.ceil(size.height / cell), 1)
+    let best: { x: number; y: number; cost: number } | null = null
+    // The middle of the view's width (a quarter either side) and most of its height, clear of the
+    // step bar at the top and the cards at the bottom.
+    for (let cy = Math.round(rows * 0.2); cy <= Math.round(rows * 0.8); cy += 2) {
+      for (let cx = Math.round(cols * 0.25); cx <= Math.round(cols * 0.75); cx += 2) {
+        const x0 = Math.max(cx - Math.floor(w / 2), 0)
+        const y0 = Math.max(cy - Math.floor(h / 2), 0)
+        const x1 = Math.min(x0 + w, cols)
+        const y1 = Math.min(y0 + h, rows)
+        const used = sums[y1 * (cols + 1) + x1] - sums[y0 * (cols + 1) + x1] - sums[y1 * (cols + 1) + x0] + sums[y0 * (cols + 1) + x0]
+        const share = used / Math.max((x1 - x0) * (y1 - y0), 1)
+        // Empty first; then near the middle across, and not far from it up and down.
+        const cost = share * 100 + Math.abs(cx / cols - 0.5) * 8 + Math.abs(cy / rows - 0.5) * 2
+        if (!best || cost < best.cost) best = { x: (cx / cols) * 100, y: (cy / rows) * 100, cost }
+      }
+    }
+    return best ? { x: best.x, y: best.y } : null
+  }
+
   function resetView(): boolean {
     const controls = controlsRef.current
     const home = homeViewRef.current
@@ -1353,6 +1407,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
       const whole = sweep ? wholeVesselPath(sweep) : null
       setFlowPath(whole ? { ...whole, ffr: flow.ffr } : null)
     },
+    findFreeSpot: (size) => findFreeSpot(size),
     zoomIn: () => zoomBy(0.85),
     zoomOut: () => zoomBy(1.15),
     setTool: (tool) => {

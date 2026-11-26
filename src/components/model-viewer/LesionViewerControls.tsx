@@ -1,5 +1,4 @@
 import {
-  ArrowLeftRight,
   ArrowRight,
   Check,
   Maximize,
@@ -27,8 +26,6 @@ interface LesionViewerControlsProps {
   // ① or ② is still to be chosen: the 回転 / 移動 buttons show under ①.
   showViewTools: boolean
   isAnnotating: boolean
-  // Both points are chosen: the ① ② swap applies.
-  hasTwoPoints: boolean
   // How many points are placed (0, 1 or 2): ② opens after ①, ③ and ④ after ②.
   pointCount: number
   // The step the user is on, and the last one finished (0 for none).
@@ -42,7 +39,6 @@ interface LesionViewerControlsProps {
   onStep: (step: WorkStep) => void
   // 回転 / 移動: leaves the choosing of a point and sets what dragging does.
   onViewTool: (tool: 'rotate' | 'pan') => void
-  onSwap: () => void
   onReset: () => void
   onZoomIn: () => void
   onZoomOut: () => void
@@ -51,8 +47,6 @@ interface LesionViewerControlsProps {
   pointerHint?: ReactNode
   // The hint over ③ once both points are chosen.
   adjustHint?: ReactNode
-  // The depth slider: it appears under the swap button once ③ is on.
-  depthControl?: ReactNode
 }
 
 // Every control sits on the dark view, so they are white; the one to touch next glows.
@@ -141,16 +135,15 @@ function StepButton({ step, label, caption, title, currentStep, doneUpTo, enable
 /**
  * The controls over the 3D view of the lesion page, laid out as Aki's wireframe of
  * 2026/11/25: along the top リセット and the four steps ① 近位径（病変始点）→ ② 遠位径
- * （病変終点）→ ③ 病変調整 → ④ 計測; down the right ＋ ／ －, 全画面, and under it ① ②
- * の入れ替え and, once ③ is on, the 奥行きスライダー. A step already done can be clicked to go
- * back to it. Everything here is tagged data-ffr-keep-clear: left out of the saved picture,
- * and kept clear of by the FFR card.
+ * （病変終点）→ ③ 病変調整 → ④ 計測; down the right ＋ ／ －, 全画面 (the 奥行きスライダー, once ③ is on, is placed in
+ * an empty spot of the view by the page; the ① ② swap button was taken out on 2026/11/26: Aki, no longer needed). A step
+ * already done can be clicked to go back to it. Everything here is tagged data-ffr-keep-clear: left
+ * out of the saved picture, and kept clear of by the FFR card.
  */
 export function LesionViewerControls({
   isPanning,
   showViewTools,
   isAnnotating,
-  hasTwoPoints,
   pointCount,
   currentStep,
   doneUpTo,
@@ -158,14 +151,12 @@ export function LesionViewerControls({
   readOnly = false,
   onStep,
   onViewTool,
-  onSwap,
   onReset,
   onZoomIn,
   onZoomOut,
   onToggleFullscreen,
   pointerHint,
   adjustHint,
-  depthControl,
   activeTool,
 }: LesionViewerControlsProps) {
   const common = { currentStep, doneUpTo }
@@ -278,14 +269,6 @@ export function LesionViewerControls({
         <button type="button" onClick={onToggleFullscreen} className={ROUND} title="全画面">
           <Maximize className="h-4 w-4" />
         </button>
-        {/* Once both points are chosen: the ① ② swap, in this column under the controls. */}
-        {hasTwoPoints && (
-          <button type="button" onClick={onSwap} className={ROUND} title="①と②を入れ替える（心臓に近い側を修正）">
-            <ArrowLeftRight className="h-4 w-4" />
-          </button>
-        )}
-        {/* The depth slider, after ③. */}
-        {depthControl}
       </div>
     </>
   )
