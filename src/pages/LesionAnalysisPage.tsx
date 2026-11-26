@@ -69,6 +69,7 @@ import { generateId } from '@/lib/id'
 import {
   DELETE_FAILED,
   LOAD_FAILED,
+  BLOOD_PRESSURE_HINT,
   LOADING_REPORT,
   MODEL_LOOKS_LIKE_METRES,
   POINTS_NOT_SAVED,
@@ -425,6 +426,9 @@ function LesionAnalysisPageContent() {
     navigationState?.cameraState ?? null,
   )
   const [isAnnotating, setIsAnnotating] = useState(false)
+  // The hint after 計測 (Aki 11/26): enter the blood pressure and calculate the FFR. Closed for the
+  // measurement it was closed on; a new measurement shows it again.
+  const [closedHintFor, setClosedHintFor] = useState<string | null>(null)
   // Where the depth slider stands in the 3D view (percent of its width and height).
   const [depthSpot, setDepthSpot] = useState<{ x: number; y: number } | null>(null)
   // How far along the steps of the work the user is, for the control that glows next:
@@ -1845,6 +1849,8 @@ function LesionAnalysisPageContent() {
   }
 
   const hasMeasurement = selectedLesion.stenosisRate !== ''
+  // Which measurement the hint is about: the points and the area found between them.
+  const measuredKey = `${annotations.map((a) => a.id).join('+')}|${selectedLesion.minCrossSectionArea}`
   // The step bar: the step the user is on, and how many are behind them.
   const currentStep: WorkStep = annotations.length === 0 ? 1 : annotations.length === 1 ? 2 : rangeUpdated ? 4 : 3
   const doneUpTo = annotations.length === 0 ? 0 : annotations.length === 1 ? 1 : rangeUpdated ? 3 : 2
@@ -2351,7 +2357,22 @@ function LesionAnalysisPageContent() {
       </div>
 
       {/* 測定 */}
-      <TabbedBlock label="測定" className="mt-4">
+      <TabbedBlock
+        label="測定"
+        className="mt-4"
+        overlay={
+          <AnimatePresence>
+            {!viewFrame && selectedLesion.stenosisRate !== '' && !measurement && !pendingFfrRestore && closedHintFor !== measuredKey && (
+              <GuidanceBubble
+                anchor="bottom-left"
+                className="left-6 top-full mt-2"
+                message={BLOOD_PRESSURE_HINT}
+                onDismiss={() => setClosedHintFor(measuredKey)}
+              />
+            )}
+          </AnimatePresence>
+        }
+      >
         <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="sm:max-w-sm sm:flex-1">
             <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />

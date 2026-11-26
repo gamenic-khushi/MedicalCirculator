@@ -258,14 +258,13 @@ export function LesionViewerControls({
       </div>
 
       <div data-ffr-keep-clear className="absolute right-4 top-4 z-10 flex flex-col items-center gap-2">
-        <div className="flex flex-col gap-1 rounded-full bg-slate-900/60 p-1">
-          <button type="button" onClick={onZoomIn} title="拡大" className={ROUND}>
-            <ZoomIn className="h-4 w-4" />
-          </button>
-          <button type="button" onClick={onZoomOut} title="縮小" className={ROUND}>
-            <ZoomOut className="h-4 w-4" />
-          </button>
-        </div>
+        {/* The same space between all the icon buttons (Aki 11/26): they are not grouped any more. */}
+        <button type="button" onClick={onZoomIn} title="拡大" className={ROUND}>
+          <ZoomIn className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={onZoomOut} title="縮小" className={ROUND}>
+          <ZoomOut className="h-4 w-4" />
+        </button>
         <button type="button" onClick={onToggleFullscreen} className={ROUND} title="全画面">
           <Maximize className="h-4 w-4" />
         </button>

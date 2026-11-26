@@ -551,7 +551,7 @@ test.describe('lesion analysis page', () => {
           const style = getComputedStyle(el)
           return [style.borderTopLeftRadius, style.borderBottomLeftRadius, style.borderTopRightRadius]
         }),
-      ).toEqual(['0px', '0px', '0px']) // square corners, as in the drawing
+      ).toEqual(['8px', '8px', '0px']) // the outer corners slightly rounded (Aki 11/26); the side at the block is straight
       // The block's own top-left corner is square too, so the top edge runs straight on from the tab.
       expect(await blockOf(name).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('0px')
     }
@@ -669,12 +669,15 @@ test.describe('lesion analysis page', () => {
     await expect(page.getByRole('button', { name: /病変指定|整列|測定範囲を更新/ })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /ドラッグでモデルを.*切り替え/ })).toHaveCount(0)
 
-    // Down the right edge, top to bottom: ＋, －, 全画面.
+    // Down the right edge, top to bottom: ＋, －, 全画面, the same space between each (Aki 11/26).
     const column = [await atTitle('拡大'), await atTitle('縮小'), await atTitle('全画面')]
     for (let index = 1; index < column.length; index += 1) {
       expect(column[index].y).toBeGreaterThan(column[index - 1].y + column[index - 1].height - 1)
       expect(Math.abs(column[index].x - column[0].x)).toBeLessThan(6)
     }
+    const gaps = [1, 2].map((i) => column[i].y - (column[i - 1].y + column[i - 1].height))
+    expect(Math.abs(gaps[0] - gaps[1])).toBeLessThan(1)
+    expect(gaps[0]).toBeGreaterThan(2)
     expect(column[0].x).toBeGreaterThan(view.x + view.width * 0.9)
     expect(row[4].y).toBeLessThan(view.y + 90)
 
@@ -716,6 +719,32 @@ test.describe('lesion analysis page', () => {
       [slider.x, slider.y, slider.width, slider.height],
     )
     expect(covered).toBeLessThan(0.15)
+  })
+
+  test('after 計測 a hint says to enter the blood pressure and calculate the FFR (Aki 11/26)', async ({ page }) => {
+    await useFakeAppwrite(page)
+    await uploadModel(page, '血圧の案内の学習')
+    const hint = page.getByText('血圧を入力して、「FFRを計算」をクリックしてください')
+    await expect(hint).toHaveCount(0)
+    await measureLesion(page)
+    await expect(hint).toBeVisible()
+    // It points at the blood pressure block, under it.
+    const block = (await page.getByText('血圧', { exact: true }).boundingBox())!
+    const bubble = (await hint.boundingBox())!
+    expect(bubble.y).toBeGreaterThan(block.y)
+    expect(bubble.x).toBeLessThan(block.x + 400)
+    // It can be closed, and stays closed for this measurement.
+    await hint.locator('xpath=ancestor::div[@role="status"][1]').getByRole('button', { name: 'ヒントを閉じる' }).click()
+    await expect(hint).toHaveCount(0)
+    // A new measurement shows it again; calculating the FFR takes it away.
+    await page.getByRole('button', { name: 'リセット' }).click()
+    await expect(hint).toHaveCount(0)
+    await measureLesion(page)
+    await expect(hint).toBeVisible()
+    await page.locator('input[type=number]').first().fill('100')
+    await page.getByRole('button', { name: 'FFRを計算' }).click()
+    await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
+    await expect(hint).toHaveCount(0)
   })
 
   test('回転 and 移動 are under ① while ① or ② is to be chosen (Aki 11/25)', async ({ page }) => {

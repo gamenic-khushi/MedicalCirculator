@@ -259,6 +259,7 @@ const FROM_MESSAGES: Record<string, string> = {
   '計測中...': 'Measuring...',
   '病変を計測しています...': 'Measuring the lesion...',
   '保存した状態を読み込んでいます...': 'Loading the saved state...',
+  '血圧を入力して、「FFRを計算」をクリックしてください': 'Enter the blood pressure, then click "Calculate FFR".',
   'この保存データには①②の位置が残っていないため、「① 近位径」「② 遠位径」を選び直してください':
     'The positions of ① and ② were not kept in this saved data. Please choose ① Proximal diameter and ② Distal diameter again.',
   'PDFを作成しています...': 'Creating the PDF...',
