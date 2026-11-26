@@ -1851,6 +1851,9 @@ function LesionAnalysisPageContent() {
   const hasMeasurement = selectedLesion.stenosisRate !== ''
   // Which measurement the hint is about: the points and the area found between them.
   const measuredKey = `${annotations.map((a) => a.id).join('+')}|${selectedLesion.minCrossSectionArea}`
+  // The hint under ④ (Aki 11/26): the lesion is measured, the FFR is not calculated yet.
+  const showMeasureHint =
+    !viewFrame && hasMeasurement && !measurement && !pendingFfrRestore && closedHintFor !== measuredKey
   // The step bar: the step the user is on, and how many are behind them.
   const currentStep: WorkStep = annotations.length === 0 ? 1 : annotations.length === 1 ? 2 : rangeUpdated ? 4 : 3
   const doneUpTo = annotations.length === 0 ? 0 : annotations.length === 1 ? 1 : rangeUpdated ? 3 : 2
@@ -2077,9 +2080,21 @@ function LesionAnalysisPageContent() {
                       )}
                     </AnimatePresence>
                   }
+                  measureHint={
+                    <AnimatePresence>
+                      {showMeasureHint && (
+                        <GuidanceBubble
+                          anchor="bottom-left"
+                          className="left-1/2 top-full mt-2 -translate-x-1/2"
+                          message={BLOOD_PRESSURE_HINT}
+                          onDismiss={() => setClosedHintFor(measuredKey)}
+                        />
+                      )}
+                    </AnimatePresence>
+                  }
                   adjustHint={
                     <AnimatePresence>
-                      {annotations.length === 2 && activeTool !== 'slice' && !isSliceHintDismissed && (
+                      {annotations.length === 2 && activeTool !== 'slice' && !isSliceHintDismissed && !showMeasureHint && (
                         <GuidanceBubble
                           anchor="bottom-left"
                           className="left-1/2 top-full mt-2 -translate-x-1/2"
@@ -2357,22 +2372,7 @@ function LesionAnalysisPageContent() {
       </div>
 
       {/* 測定 */}
-      <TabbedBlock
-        label="測定"
-        className="mt-4"
-        overlay={
-          <AnimatePresence>
-            {!viewFrame && selectedLesion.stenosisRate !== '' && !measurement && !pendingFfrRestore && closedHintFor !== measuredKey && (
-              <GuidanceBubble
-                anchor="bottom-left"
-                className="left-6 top-full mt-2"
-                message={BLOOD_PRESSURE_HINT}
-                onDismiss={() => setClosedHintFor(measuredKey)}
-              />
-            )}
-          </AnimatePresence>
-        }
-      >
+      <TabbedBlock label="測定" className="mt-4">
         <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="sm:max-w-sm sm:flex-1">
             <BloodPressureCard value={bloodPressure} onChange={handleBloodPressureChange} />

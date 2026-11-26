@@ -21,15 +21,12 @@ export function TabbedBlock({
   label,
   below,
   className = '',
-  overlay,
   children,
 }: {
   label: string
   // Under the tab, outside the block: room for an icon button (the PDF download).
   below?: ReactNode
   className?: string
-  // Over the block, outside its clipped area (a hint bubble under it, for instance).
-  overlay?: ReactNode
   children: ReactNode
 }) {
   const { language } = useLanguage()
@@ -51,7 +48,6 @@ export function TabbedBlock({
       <div className="flex h-full overflow-hidden rounded-2xl rounded-tl-none border border-gray-100 bg-white shadow-sm">
         {children}
       </div>
-      {overlay}
     </div>
   )
 }

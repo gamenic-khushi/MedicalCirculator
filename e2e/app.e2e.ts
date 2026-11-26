@@ -728,11 +728,15 @@ test.describe('lesion analysis page', () => {
     await expect(hint).toHaveCount(0)
     await measureLesion(page)
     await expect(hint).toBeVisible()
-    // It points at the blood pressure block, under it.
-    const block = (await page.getByText('血圧', { exact: true }).boundingBox())!
+    // It stands right under the ④ 計測 button, in the 3D view where the user is looking (not down by the
+    // blood pressure, which can be out of the window), and the hint of ③ gives way to it.
+    const measure = (await page.getByRole('button', { name: /^④ 計測/ }).boundingBox())!
     const bubble = (await hint.boundingBox())!
-    expect(bubble.y).toBeGreaterThan(block.y)
-    expect(bubble.x).toBeLessThan(block.x + 400)
+    expect(bubble.y).toBeGreaterThan(measure.y + measure.height - 1)
+    expect(bubble.y).toBeLessThan(measure.y + measure.height + 30)
+    expect(bubble.x).toBeLessThan(measure.x + measure.width)
+    expect(bubble.x + bubble.width).toBeGreaterThan(measure.x)
+    await expect(page.getByText('「③ 病変調整」から病変位置の詳細を調整できます')).toHaveCount(0)
     // It can be closed, and stays closed for this measurement.
     await hint.locator('xpath=ancestor::div[@role="status"][1]').getByRole('button', { name: 'ヒントを閉じる' }).click()
     await expect(hint).toHaveCount(0)

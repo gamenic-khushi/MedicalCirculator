@@ -47,6 +47,8 @@ interface LesionViewerControlsProps {
   pointerHint?: ReactNode
   // The hint over ③ once both points are chosen.
   adjustHint?: ReactNode
+  // The hint under ④ once the lesion is measured: enter the blood pressure, calculate the FFR.
+  measureHint?: ReactNode
 }
 
 // Every control sits on the dark view, so they are white; the one to touch next glows.
@@ -157,6 +159,7 @@ export function LesionViewerControls({
   onToggleFullscreen,
   pointerHint,
   adjustHint,
+  measureHint,
   activeTool,
 }: LesionViewerControlsProps) {
   const common = { currentStep, doneUpTo }
@@ -245,15 +248,18 @@ export function LesionViewerControls({
           <StepArrow />
 
           {/* ④ measure from where the points and lines are now. */}
-          <StepButton
-            {...common}
-            step={4}
-            label="④ 計測"
-            title="選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）"
-            enabled={!readOnly && pointCount === 2}
-            glowing={guideStep === 5}
-            onClick={() => onStep(4)}
-          />
+          <div className="relative">
+            <StepButton
+              {...common}
+              step={4}
+              label="④ 計測"
+              title="選択した2点から計測し直します（手動で修正した値は自動計測値に戻ります）"
+              enabled={!readOnly && pointCount === 2}
+              glowing={guideStep === 5}
+              onClick={() => onStep(4)}
+            />
+            {measureHint}
+          </div>
         </div>
       </div>
 
