@@ -19,7 +19,6 @@ const LENGTH = 30
 const RINGS = 60
 const SEGMENTS = 24
 const radiusAt = (y: number, spread: number) => 2.5 - 1.7 * Math.exp(-(((y - LENGTH / 2) / spread) ** 2))
-const polygonArea = (r: number) => 0.5 * SEGMENTS * r * r * Math.sin((2 * Math.PI) / SEGMENTS)
 const equivalentDiameter = (area: number) => 2 * Math.sqrt(area / Math.PI)
 
 function buildVessel(spread: number): THREE.Group {
