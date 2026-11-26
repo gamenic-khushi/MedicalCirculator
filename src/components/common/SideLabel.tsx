@@ -6,7 +6,9 @@ import { useLanguage } from '@/hooks/useLanguage'
 // not a working tab, only the look): a tab with rounded outer corners that sticks out of the
 // block's left edge, near the top, and is joined to the block (3Dビュアー, 計測値・形状, 測定,
 // 解析結果一覧), in place of a heading row on top. Japanese stands upright, one character
-// under the other; English is turned on its side and read from top to bottom.
+// under the other; English is turned on its side and read from top to bottom. The padding is on
+// the tab itself, and in vertical text Tailwind's px is the space at the top and bottom of the name
+// (py the space at its sides), so the name never touches the tab's edges.
 
 /**
  * A block with its index tab. The block itself clips its content to its rounded corners, so
@@ -31,11 +33,11 @@ export function TabbedBlock({
       {/* Its right edge covers the block's border by 1 px, so tab and block are one shape. */}
       <div className="absolute right-[calc(100%-1px)] top-5 z-10 flex w-5 flex-col items-center gap-2">
         <div
-          className={`flex w-full items-center justify-center rounded-l-xl border border-r-0 border-blue-300 bg-blue-100 text-xs font-semibold text-blue-900 [writing-mode:vertical-rl] ${
+          className={`flex w-full items-center justify-center rounded-l-xl border border-r-0 border-blue-300 bg-blue-100 px-4 py-0.5 text-xs leading-none font-semibold text-blue-900 [writing-mode:vertical-rl] ${
             language === 'en' ? '[text-orientation:mixed]' : '[text-orientation:upright]'
           }`}
         >
-          <span className={`py-3 ${language === 'en' ? 'whitespace-nowrap tracking-wide' : 'tracking-widest'}`}>
+          <span className={`${language === 'en' ? 'whitespace-nowrap tracking-wide' : 'tracking-widest'}`}>
             {label}
           </span>
         </div>

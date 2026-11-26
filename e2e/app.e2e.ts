@@ -554,6 +554,20 @@ test.describe('lesion analysis page', () => {
       ).toEqual(['12px', '12px', '0px'])
     }
 
+    // Room inside every tab, so the name is not cut off (Aki 11/25): space above and below it.
+    for (const name of ['3Dビュアー', '計測値・形状', '測定', '解析結果一覧']) {
+      const room = await page.getByText(name, { exact: true }).evaluate((text) => {
+        const range = document.createRange()
+        range.selectNodeContents(text)
+        const inner = range.getBoundingClientRect()
+        const tab = text.parentElement!.getBoundingClientRect()
+        return { top: inner.top - tab.top, bottom: tab.bottom - inner.bottom, sides: Math.min(inner.left - tab.left, tab.right - inner.right) }
+      })
+      expect(room.top).toBeGreaterThanOrEqual(10)
+      expect(room.bottom).toBeGreaterThanOrEqual(10)
+      expect(room.sides).toBeGreaterThanOrEqual(1)
+    }
+
     // The 3D viewer block takes 2/3 of the width, the 計測値・形状 block 1/3.
     const widthOf = async (name: string) => (await blockOf(name).boundingBox())!.width
     const viewerWidth = await widthOf('3Dビュアー')
