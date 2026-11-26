@@ -1876,6 +1876,59 @@ test.describe('English does not overflow (Aki 11/26)', () => {
 })
 
 test.describe('long text does not break the layout (Aki 11/26)', () => {
+  for (const language of ['ja', 'en']) {
+    test(`the measured values stay in their own columns when the window is resized (${language}, Aki 11/26)`, async ({ page }) => {
+      test.setTimeout(150_000)
+      await page.addInitScript(([l]) => localStorage.setItem('language', l), [language])
+      await page.setViewportSize({ width: 1600, height: 900 })
+      await useFakeAppwrite(page)
+      await page.goto('/data/3d-analysis')
+      await page.locator('input[type=text]').first().fill('t')
+      await page.locator('input[type=file]').setInputFiles({
+        name: 'vessel.stl',
+        mimeType: 'application/octet-stream',
+        buffer: makeStenosisStl(1, 3),
+      })
+      await page.waitForURL('**/data/lesion-measurement/analysis')
+      await page.waitForTimeout(3500)
+      await page.getByRole('button', { name: /^① / }).click()
+      const box = (await page.locator('canvas').first().boundingBox())!
+      await page.mouse.click(box.x + box.width * 0.37, box.y + box.height * 0.575)
+      await page.mouse.click(box.x + box.width * 0.63, box.y + box.height * 0.445)
+      await page.getByRole('button', { name: /^④ / }).click()
+      await page.locator('[data-lesion-field] input').first().waitFor()
+      await expect(page.locator('[data-lesion-field] input').first()).not.toHaveValue('', { timeout: 60_000 })
+      // The window made narrower and wider, as in Aki's video: no field runs into the next one.
+      for (const width of [1920, 1440, 1280, 1180, 1100, 1024]) {
+        await page.setViewportSize({ width, height: 800 })
+        await page.waitForTimeout(400)
+        const problems = await page.evaluate(() => {
+          const fields = Array.from(document.querySelectorAll<HTMLElement>('[data-lesion-field]'))
+          const found: string[] = []
+          const rects = fields.map((field) => {
+            let right = 0
+            let left = Infinity
+            for (const child of Array.from((field.firstElementChild as HTMLElement).querySelectorAll<HTMLElement>('*'))) {
+              const r = child.getBoundingClientRect()
+              if (r.width === 0) continue
+              right = Math.max(right, r.right)
+              left = Math.min(left, r.left)
+            }
+            return { key: field.dataset.lesionField!, box: field.getBoundingClientRect(), right, left }
+          })
+          for (const r of rects) if (r.right > r.box.right + 0.5) found.push(`${r.key} runs past its column`)
+          for (const a of rects) {
+            for (const b of rects) {
+              if (a !== b && Math.abs(a.box.top - b.box.top) < 6 && a.box.left < b.box.left && a.right > b.left - 1) found.push(`${a.key} touches ${b.key}`)
+            }
+          }
+          return found
+        })
+        expect(problems, `at ${width} px wide`).toEqual([])
+      }
+    })
+  }
+
   test("a folder's list with a very long folder name does not grow wider than the screen", async ({ page }) => {
     const long = 'A_very_long_study_name_without_any_spaces_to_break_on_1234567890_abcdefghijklmnopqrstuvwxyz_and_more_and_more'
     await page.setViewportSize({ width: 1280, height: 800 })

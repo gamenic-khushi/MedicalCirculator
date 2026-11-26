@@ -2296,9 +2296,12 @@ function LesionAnalysisPageContent() {
                   <div key={key} data-lesion-field={key}
                     className={`flex flex-col text-xs ${key === 'lesionPosition' ? '@[18rem]:col-span-2' : ''}`}
                   >
-                    {/* The name and its value side by side with no gap; the hints go on a line below. */}
-                    <div className="flex items-center gap-2 xl:gap-1 2xl:gap-2">
-                      <span className="w-[4.75rem] shrink-0 text-gray-500 xl:w-[3.75rem] 2xl:w-[4.75rem]">{label}</span>
+                    {/* The name and its value side by side with no gap; the hints go on a line below. The
+                        sizes follow the width of the block (not of the window), like the two columns do:
+                        compact in two narrow columns, roomier when there is room, so a column never runs
+                        into the next one when the window is resized (Aki 11/26). */}
+                    <div className="flex items-center gap-2 @[18rem]:gap-1 @[24rem]:gap-2">
+                      <span className="w-[4.75rem] shrink-0 text-gray-500 @[18rem]:w-[3.75rem] @[24rem]:w-[4.75rem]">{label}</span>
                       <div className="flex items-center gap-1">
                         <GlowingInput
                           // After a measurement, top to bottom, one after another.
@@ -2317,7 +2320,7 @@ function LesionAnalysisPageContent() {
                               ? undefined
                               : (event) => handleSelectedLesionFieldChange(key, event.target.value)
                           }
-                          className={`w-16 rounded border px-1.5 py-1 text-right outline-none xl:w-11 xl:px-1 2xl:w-16 2xl:px-1.5 ${
+                          className={`w-16 rounded border px-1.5 py-1 text-right outline-none @[18rem]:w-11 @[18rem]:px-1 @[24rem]:w-16 @[24rem]:px-1.5 ${
                             isOutOfRange
                               ? 'border-red-300 text-red-500'
                               : readOnly
