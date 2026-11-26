@@ -5,10 +5,7 @@ import { DRACOLoader, FBXLoader, GLTFLoader, OBJLoader, STLLoader } from 'three-
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 
 import { looksLikeMetres, METRES_TO_MM } from '@/lib/modelUnits'
-import { injectFlow } from './flowEffect'
 
-// One shader program for the vessel materials, with the flow effect in it.
-const flowProgramKey = () => 'vessel-flow'
 
 // ModelCanvas's lesion-analysis walks (heart-proximity ordering, reference
 // width, bifurcation angle, ...) raycast against these meshes dozens of
@@ -158,8 +155,6 @@ function StlModel({
         side={THREE.DoubleSide}
         vertexColors
         clippingPlanes={clippingPlanes}
-        onBeforeCompile={injectFlow}
-        customProgramCacheKey={flowProgramKey}
       />
     </mesh>
   )
@@ -297,8 +292,6 @@ function applyMaterial(object: THREE.Object3D, color: string) {
         side: THREE.DoubleSide,
         vertexColors: true,
       })
-      child.material.onBeforeCompile = injectFlow
-      child.material.customProgramCacheKey = flowProgramKey
     }
   })
 }

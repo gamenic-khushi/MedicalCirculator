@@ -404,3 +404,60 @@ export function measureVesselSweep(
     centres: profile.map((entry) => entry.centre.clone()),
   }
 }
+
+export interface VesselStation {
+  centre: THREE.Vector3
+  top: number
+  bottom: number
+  /** Distance along the centre line from where the extension started. */
+  arc: number
+}
+
+// Past these, the sweep has left the vessel (a junction, or the vessel's end), not followed it on.
+const EXTENSION_MAX_STEPS = 300
+const EXTENSION_MAX_AREA_JUMP = 2.5
+
+/**
+ * Follows the vessel on from `start` (a centre of it) in the direction `outward`, the way the
+ * sweep between ① and ② does, until the vessel ends or splits: the cut then has no loop, or
+ * its centre jumps, or its area changes abruptly (a junction). Used to show the blood flow along the
+ * whole vessel the two points are on and not only between them (Aki 11/26). Returns the stations
+ * beyond `start`, nearest first, with their distance along the line from `start`.
+ */
+export function extendVesselSweep(
+  modelRoot: THREE.Object3D,
+  start: THREE.Vector3,
+  outward: THREE.Vector3,
+  maxSteps = EXTENSION_MAX_STEPS,
+): VesselStation[] {
+  const meshes = collectMeshes(modelRoot)
+  if (meshes.length === 0 || outward.lengthSq() === 0) return []
+  let direction = outward.clone().normalize()
+  let stats = pickLoop(loopsAt(meshes, start, direction), direction, start, 'centre')
+  if (!stats) return []
+  const stations: VesselStation[] = []
+  let arc = 0
+  let up: THREE.Vector3 | null = null
+  let previousCentre: THREE.Vector3 | null = null
+  for (let i = 0; i < maxSteps; i++) {
+    const diameter = equivalentDiameter(stats.area)
+    const step = Math.max(diameter * STEP_FRACTION_OF_DIAMETER, 1e-9)
+    if (previousCentre) {
+      const motion = new THREE.Vector3().subVectors(stats.centroid, previousCentre)
+      if (motion.lengthSq() > 0) {
+        direction = motion.normalize().multiplyScalar(0.6).addScaledVector(direction, 0.4).normalize()
+      }
+    }
+    previousCentre = stats.centroid.clone()
+    const centre = stats.centroid.clone().addScaledVector(direction, step)
+    const next = pickLoop(loopsAt(meshes, centre, direction), direction, centre, 'centre')
+    if (!next) break
+    if (next.centroid.distanceTo(centre) > diameter * MAX_CENTRE_JUMP_DIAMETERS) break
+    if (next.area > stats.area * EXTENSION_MAX_AREA_JUMP || next.area < stats.area / EXTENSION_MAX_AREA_JUMP) break
+    arc += next.centroid.distanceTo(previousCentre)
+    up = stationUp(direction, undefined, up)
+    stations.push({ centre: next.centroid.clone(), ...wallExtents(next.loop, next.centroid, up), arc })
+    stats = next
+  }
+  return stations
+}

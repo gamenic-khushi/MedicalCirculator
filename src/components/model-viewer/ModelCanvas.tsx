@@ -23,11 +23,11 @@ import {
   type PlaneOutline,
 } from '@/lib/slicePlane'
 import type { LesionProfileSample } from '@/lib/twoPointLesionMeasurement'
-import { centreLineFractionAtPlane, measureVesselSweep } from '@/lib/vesselSweep'
+import { centreLineFractionAtPlane, extendVesselSweep, measureVesselSweep } from '@/lib/vesselSweep'
 import type { CameraState } from '@/types/viewerState'
 
 import { Model3D } from './Model3D'
-import { flowParams, flowUniforms } from './flowEffect'
+import { FlowLines, type FlowPath } from './FlowLines'
 import { SliceCapMeshes } from './SliceCapMeshes'
 import { ViewerEnvironment } from './ViewerEnvironment'
 
@@ -137,7 +137,7 @@ export interface ModelCanvasHandle {
   // The blood flow effect (Aki 11/25): light-blue bands along the vessel from the world
   // point `a` (①) to `b` (②), as strong and as fast as the FFR allows (null: not calculated
   // yet); null switches it off. It is never in a captured picture.
-  setFlow: (flow: { a: [number, number, number]; b: [number, number, number]; ffr: number | null } | null) => void
+  setFlow: (flow: { ffr: number | null } | null) => void
   // Stops the flow effect and draws the frame without it, for a picture that is about to be
   // taken of the page (the DOM is drawn from the canvas as it is); the function it returns
   // puts the effect back.
@@ -330,14 +330,6 @@ function HomeViewRecorder({
   return null
 }
 
-// The clock of the flow effect: the bands move with the time.
-function FlowClock() {
-  useFrame(({ clock }) => {
-    flowUniforms.flowTime.value = clock.elapsedTime
-  })
-  return null
-}
-
 function CameraTargetRestorer({
   target,
   controlsRef,
@@ -421,6 +413,12 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   // The centre line of the lesion measured last (a station every few percent of
   // a diameter, with the length reached at each), to place the cut along it.
   const lastSweepRef = useRef<{ centres: THREE.Vector3[]; profile: LesionProfileSample[] } | null>(null)
+  // The blood flow (see FlowLines): its path, and its group to hide for a capture.
+  const [flowPath, setFlowPath] = useState<FlowPath | null>(null)
+  const flowGroupRef = useRef<THREE.Group>(null)
+  // The vessel's whole centre line (the stretch between ① ② and the vessel on from both ends),
+  // worked out once for each measurement.
+  const wholeVesselRef = useRef<{ sweep: object; path: Omit<FlowPath, 'ffr'> } | null>(null)
 
   useEffect(() => {
     sliceModeRef.current = sliceMode
@@ -1257,17 +1255,64 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
   // Runs `take` with the flow effect off, the frame drawn again without it, then puts it back:
   // the saved pictures and the PDF never show the moving bands.
   function withoutFlow<T>(take: () => T): T {
-    const strength = flowUniforms.flowStrength.value
-    const three = threeStateRef.current
-    if (strength > 0 && three) {
-      flowUniforms.flowStrength.value = 0
-      three.gl.render(three.scene, three.camera)
-    }
+    const restore = hideFlow()
     try {
       return take()
     } finally {
-      flowUniforms.flowStrength.value = strength
+      restore()
     }
+  }
+
+  // Hides the flow and draws the frame again without it; the returned function shows it again.
+  function hideFlow(): () => void {
+    const group = flowGroupRef.current
+    const three = threeStateRef.current
+    if (!group || !group.visible || !three) return () => {}
+    group.visible = false
+    three.gl.render(three.scene, three.camera)
+    return () => {
+      group.visible = true
+    }
+  }
+
+  // The flow along the whole vessel (Aki 11/26), not only between ① and ②: the centre line between
+  // them with the vessel followed on beyond both, until it ends or splits.
+  function wholeVesselPath(sweep: { centres: THREE.Vector3[]; profile: LesionProfileSample[] }) {
+    if (wholeVesselRef.current?.sweep === sweep) return wholeVesselRef.current.path
+    const root = modelGroupRef.current
+    const count = Math.min(sweep.centres.length, sweep.profile.length)
+    if (!root || count < 2) return null
+    root.updateMatrixWorld(true)
+    const span = Math.min(6, count - 1)
+    const before = extendVesselSweep(
+      root,
+      sweep.centres[0],
+      new THREE.Vector3().subVectors(sweep.centres[0], sweep.centres[span]),
+    )
+    const after = extendVesselSweep(
+      root,
+      sweep.centres[count - 1],
+      new THREE.Vector3().subVectors(sweep.centres[count - 1], sweep.centres[count - 1 - span]),
+    )
+    const reach = before.length > 0 ? before[before.length - 1].arc : 0
+    const refLength = sweep.profile[count - 1].arc
+    const centres: THREE.Vector3[] = []
+    const profile: LesionProfileSample[] = []
+    for (let i = before.length - 1; i >= 0; i--) {
+      centres.push(before[i].centre)
+      profile.push({ arc: reach - before[i].arc, top: before[i].top, bottom: before[i].bottom })
+    }
+    for (let i = 0; i < count; i++) {
+      centres.push(sweep.centres[i])
+      profile.push({ arc: reach + sweep.profile[i].arc, top: sweep.profile[i].top, bottom: sweep.profile[i].bottom })
+    }
+    for (const station of after) {
+      centres.push(station.centre)
+      profile.push({ arc: reach + refLength + station.arc, top: station.top, bottom: station.bottom })
+    }
+    const path = { centres, profile, refLength }
+    wholeVesselRef.current = { sweep, path }
+    return path
   }
 
   function resetView(): boolean {
@@ -1296,27 +1341,17 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
 
   useImperativeHandle(ref, () => ({
     resetView,
-    pauseFlow: () => {
-      const strength = flowUniforms.flowStrength.value
-      const three = threeStateRef.current
-      if (strength > 0 && three) {
-        flowUniforms.flowStrength.value = 0
-        three.gl.render(three.scene, three.camera)
-      }
-      return () => {
-        if (strength > 0) flowUniforms.flowStrength.value = strength
-      }
-    },
+    pauseFlow: () => hideFlow(),
     setFlow: (flow) => {
       if (!flow) {
-        flowUniforms.flowStrength.value = 0
+        setFlowPath(null)
         return
       }
-      const params = flowParams(flow.ffr)
-      flowUniforms.flowA.value.set(...flow.a)
-      flowUniforms.flowB.value.set(...flow.b)
-      flowUniforms.flowStrength.value = params.strength
-      flowUniforms.flowSpeed.value = params.speed
+      // The flow runs along the whole vessel: the centre line between ① and ② and the vessel on from
+      // both of them, worked out once for each measurement.
+      const sweep = lastSweepRef.current
+      const whole = sweep ? wholeVesselPath(sweep) : null
+      setFlowPath(whole ? { ...whole, ffr: flow.ffr } : null)
     },
     zoomIn: () => zoomBy(0.85),
     zoomOut: () => zoomBy(1.15),
@@ -1657,7 +1692,7 @@ export const ModelCanvas = forwardRef<ModelCanvasHandle, ModelCanvasProps>(funct
         gl={{ alpha: true, preserveDrawingBuffer: true, localClippingEnabled: true }}
       >
         <SceneAccessor stateRef={threeStateRef} />
-        <FlowClock />
+        {flowPath && <FlowLines path={flowPath} groupRef={flowGroupRef} />}
         {onModelSize && <ModelSizeReporter groupRef={modelGroupRef} onSize={onModelSize} />}
         <ambientLight intensity={0.7} />
         <directionalLight position={[5, 8, 5]} intensity={1.1} />

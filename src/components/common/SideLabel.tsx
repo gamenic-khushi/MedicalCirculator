@@ -3,8 +3,9 @@ import type { ReactNode } from 'react'
 import { useLanguage } from '@/hooks/useLanguage'
 
 // The block name as an index tab (Aki: the shape of an index tab, turned vertical, 2026/11/25;
-// not a working tab, only the look): a tab with rounded outer corners that sticks out of the
-// block's left edge, near the top, and is joined to the block (3Dビュアー, 計測値・形状, 測定,
+// not a working tab, only the look; her drawing of 11/26: a square tab, flush with the top of the
+// block, not a rounded bubble below it): a square tab that sticks out of the block's left edge at
+// its top, so that the top edge runs on straight across tab and block, and is joined to the block (3Dビュアー, 計測値・形状, 測定,
 // 解析結果一覧), in place of a heading row on top. Japanese stands upright, one character
 // under the other; English is turned on its side and read from top to bottom. The padding is on
 // the tab itself, and in vertical text Tailwind's px is the space at the top and bottom of the name
@@ -31,9 +32,9 @@ export function TabbedBlock({
   return (
     <div data-block className={`relative ${className}`}>
       {/* Its right edge covers the block's border by 1 px, so tab and block are one shape. */}
-      <div className="absolute right-[calc(100%-1px)] top-5 z-10 flex w-5 flex-col items-center gap-2">
+      <div className="absolute right-[calc(100%-1px)] top-0 z-10 flex w-5 flex-col items-center gap-2">
         <div
-          className={`flex w-full items-center justify-center rounded-l-xl border border-r-0 border-blue-300 bg-blue-100 px-4 py-0.5 text-xs leading-none font-semibold text-blue-900 [writing-mode:vertical-rl] ${
+          className={`flex w-full items-center justify-center border border-r-0 border-blue-300 bg-blue-100 px-4 py-0.5 text-xs leading-none font-semibold text-blue-900 [writing-mode:vertical-rl] ${
             language === 'en' ? '[text-orientation:mixed]' : '[text-orientation:upright]'
           }`}
         >
@@ -43,7 +44,7 @@ export function TabbedBlock({
         </div>
         {below}
       </div>
-      <div className="flex h-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="flex h-full overflow-hidden rounded-2xl rounded-tl-none border border-gray-100 bg-white shadow-sm">
         {children}
       </div>
     </div>

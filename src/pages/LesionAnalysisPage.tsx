@@ -482,22 +482,18 @@ function LesionAnalysisPageContent() {
   const [isInfoOpen, setIsInfoOpen] = useState(false)
   const { isDismissed: isLesionHintDismissed, dismiss: dismissLesionHint } =
     useGuidanceDismissed('lesion-selection-hint')
-  // The blood flow effect (Aki 11/25): light-blue bands run along the measured stretch from ①
-  // to ②, only after the FFR has been measured (Aki 11/25), as strong and fast as it allows.
-  // Not on a saved capture, which is a picture.
+  // The blood flow (Aki 11/25, 11/26): light-blue streamlines run along the whole vessel the two
+  // points are on, only after the FFR has been measured, as bright and fast as it allows. Not on
+  // a saved capture, which is a picture.
   useEffect(() => {
-    const a = annotations[0]?.worldPoint
-    const b = annotations[1]?.worldPoint
     const ffr = measurement?.ffrValue
     const on =
       !viewFrame &&
       annotations.length === 2 &&
-      a &&
-      b &&
       selectedLesion.stenosisRate !== '' &&
       typeof ffr === 'number' &&
       Number.isFinite(ffr)
-    canvasRef.current?.setFlow(on ? { a, b, ffr } : null)
+    canvasRef.current?.setFlow(on ? { ffr } : null)
   }, [annotations, selectedLesion.stenosisRate, measurement, viewFrame])
   // The hint over ③ goes for good once ③ has been used; the one inside ③ once it is closed.
   const { isDismissed: isSliceHintDismissed, dismiss: dismissSliceHint } =

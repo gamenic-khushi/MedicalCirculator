@@ -534,8 +534,9 @@ test.describe('lesion analysis page', () => {
     }
     await expect(page.getByText('3Dブロック')).toHaveCount(0)
 
-    // They are index tabs (Aki 11/25): each sticks out of its block's left edge, near the top,
-    // joined to the block, with rounded outer corners; only as tall as its name.
+    // They are index tabs (Aki 11/25, her drawing of 11/26): each is a square tab that sticks out
+    // of its block's left edge, flush with the block's top, joined to the block; only as tall as
+    // its name.
     const blockOf = (name: string) =>
       page.getByText(name, { exact: true }).locator('xpath=ancestor::div[@data-block][1]/div[contains(@class,"rounded-2xl")]')
     for (const name of ['3Dビュアー', '計測値・形状']) {
@@ -543,15 +544,16 @@ test.describe('lesion analysis page', () => {
       const block = (await blockOf(name).boundingBox())!
       expect(tab.x).toBeLessThan(block.x) // outside the block, at its left
       expect(tab.x + tab.width).toBeGreaterThan(block.x - 2) // touching it
-      expect(tab.y).toBeGreaterThan(block.y)
-      expect(tab.y - block.y).toBeLessThan(40) // near the top
+      expect(Math.abs(tab.y - block.y)).toBeLessThan(2) // flush with the top
       expect(tab.height).toBeLessThan(block.height / 2)
       expect(
         await page.getByText(name, { exact: true }).locator('xpath=..').evaluate((el) => {
           const style = getComputedStyle(el)
           return [style.borderTopLeftRadius, style.borderBottomLeftRadius, style.borderTopRightRadius]
         }),
-      ).toEqual(['12px', '12px', '0px'])
+      ).toEqual(['0px', '0px', '0px']) // square corners, as in the drawing
+      // The block's own top-left corner is square too, so the top edge runs straight on from the tab.
+      expect(await blockOf(name).evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe('0px')
     }
 
     // Room inside every tab, so the name is not cut off (Aki 11/25): space above and below it.
@@ -997,7 +999,7 @@ test.describe('the blood flow effect (Aki 11/25)', () => {
     await expect(page.getByText(/FFR-\s*0\.\d+/)).toBeVisible({ timeout: 20_000 })
     await page.waitForTimeout(1500)
 
-    // Once the FFR is measured, the bands move: the picture is not the same a moment later.
+    // Once the FFR is measured, the flow moves: the picture is not the same a moment later.
     let moved = 0
     for (let i = 0; i < 4; i += 1) {
       const before = await picture()
@@ -1006,7 +1008,7 @@ test.describe('the blood flow effect (Aki 11/25)', () => {
     }
     expect(moved).toBeGreaterThan(0.2)
 
-    // A saved picture is taken without the bands: the light-blue of the flow is on the live
+    // A saved picture is taken without the flow: the light-blue of the flow is on the live
     // view, and nowhere in the picture that is saved.
     const lightBlue = (dataUrl: string) =>
       page.evaluate(async (url) => {
@@ -1021,7 +1023,7 @@ test.describe('the blood flow effect (Aki 11/25)', () => {
         const d = x.getImageData(0, 0, c.width, c.height).data
         let n = 0
         for (let k = 0; k < d.length; k += 4) {
-          if (d[k + 2] > 180 && d[k + 1] > 150 && d[k] < 130 && d[k + 2] > d[k + 1]) n += 1
+          if (d[k + 1] > 195 && d[k + 2] > 235 && d[k] < 215 && d[k + 2] > d[k] + 25) n += 1
         }
         return n
       }, dataUrl)
@@ -1031,7 +1033,7 @@ test.describe('the blood flow effect (Aki 11/25)', () => {
     await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 20_000 })
     const saved = String(fake.rows('learning_content_frames')[0].image)
     const savedBlue = await lightBlue(saved)
-    expect(liveBlue).toBeGreaterThan(500)
+    expect(liveBlue).toBeGreaterThan(300)
     expect(savedBlue).toBeLessThan(100)
   })
 })
