@@ -22,9 +22,10 @@ interface SavedSnapshotsPanelProps {
 }
 
 // The picture column fits the picture (w-28 = 7rem) and its padding; the others are at least
-// this wide, so the headings (nowrap) are never cut.
+// this wide. The headings wrap (the English ones are long: Aki 11/26), so they never run into each
+// other.
 const PICTURE_COLUMN = '8rem'
-const MIN_COLUMN = '5rem'
+const MIN_COLUMN = '5.5rem'
 
 export function SavedSnapshotsPanel({
   savedSnapshots,
@@ -93,10 +94,10 @@ export function SavedSnapshotsPanel({
               ))}
             </colgroup>
             <thead>
-              <tr className="divide-x divide-gray-200 whitespace-nowrap bg-gray-50 font-medium text-gray-500">
+              <tr className="divide-x divide-gray-200 bg-gray-50 align-middle font-medium text-gray-500">
                 <th className="px-2 py-3">画像</th>
                 {SNAPSHOT_COLUMNS.map((column) => (
-                  <th key={column.label} className="min-w-[5rem] px-1 py-3 text-center">
+                  <th key={column.label} className="min-w-[5rem] break-words px-1 py-3 text-center">
                     {column.label}
                   </th>
                 ))}

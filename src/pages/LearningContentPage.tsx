@@ -239,8 +239,10 @@ export function LearningContentPage() {
 
   return (
     <div className="px-4 py-6 sm:px-8 lg:px-14 lg:py-8">
+      {/* A long folder name wraps (also one without spaces) and the + stays at its end: the page never
+          grows wider than the screen (Aki 11/26: long text must not break the layout). */}
       <div className="mt-3 flex items-center gap-2">
-        <span className="text-2xl font-bold text-gray-900">
+        <span className="min-w-0 text-2xl font-bold text-gray-900 [overflow-wrap:anywhere]">
           {record?.category ?? DEFAULT_STUDY_NAME}
         </span>
         <div className="relative inline-block">
@@ -256,8 +258,8 @@ export function LearningContentPage() {
           <AnimatePresence>
             {record?.modelFileId && !isReuseHintDismissed && (
               <GuidanceBubble
-                anchor="top-left"
-                className="left-10 top-0"
+                anchor="bottom-right"
+                className="right-0 top-full mt-3"
                 message="「+」でこのフォルダに新しいキャプチャを追加できます"
                 onDismiss={dismissReuseHint}
               />
@@ -277,7 +279,7 @@ export function LearningContentPage() {
         />
       </div>
       {record && (
-        <p className="mt-1 text-sm text-gray-400">
+        <p className="mt-1 text-sm text-gray-400 [overflow-wrap:anywhere]">
           {record.file} ・ {record.date} ・ {record.owner}
         </p>
       )}

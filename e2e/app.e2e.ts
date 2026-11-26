@@ -1841,3 +1841,99 @@ test.describe('English does not overflow (Aki 11/26)', () => {
     expect(inside).toBe(true)
   })
 })
+
+test.describe('long text does not break the layout (Aki 11/26)', () => {
+  test("a folder's list with a very long folder name does not grow wider than the screen", async ({ page }) => {
+    const long = 'A_very_long_study_name_without_any_spaces_to_break_on_1234567890_abcdefghijklmnopqrstuvwxyz_and_more_and_more'
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await useFakeAppwrite(page, {
+      tables: {
+        data_records: [{ $id: 'record-long', date: '2026/11/01', category: long, file: long + '.stl', owner: 'Owner', modelFileId: 'm1' }],
+      },
+    })
+    await page.goto('/help')
+    await page.waitForTimeout(800)
+    await page.evaluate(() => {
+      window.history.pushState({ usr: { dataRecordId: 'record-long' }, key: 'f', idx: (window.history.state?.idx ?? 0) + 1 }, '', '/data/learning-content')
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    })
+    await expect(page.getByRole('button', { name: '新規追加' })).toBeVisible()
+    await page.waitForTimeout(500)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    // The + and its hint stay on the screen.
+    const plus = (await page.getByRole('button', { name: '新規追加' }).boundingBox())!
+    expect(plus.x + plus.width).toBeLessThanOrEqual(1280)
+  })
+
+  for (const size of ['medium', 'large']) {
+    test(`the results table in English: the headings do not run into each other, font size ${size}`, async ({ page }) => {
+      await page.addInitScript(
+        ([fontSize]) => {
+          localStorage.setItem('language', 'en')
+          localStorage.setItem('font-size', fontSize)
+        },
+        [size],
+      )
+      await page.setViewportSize({ width: 1440, height: 900 })
+      const frame = (id: string) => ({
+        $id: id,
+        dataRecordId: 'record-a',
+        image: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+        upstreamSize: '4.27 mm',
+        downstreamSize: '4.43 mm',
+        pa: '90 mmHg',
+        pd: '71.8 mmHg',
+        parameter: '18.2 mmHg',
+        mld: '1.56 mm',
+        mla: '1.91 mm²',
+        stenosisRate: '64 %',
+        segmentLength: '2.09 mm',
+        lesionPosition: '中間',
+      })
+      await useFakeAppwrite(page, { tables: { learning_content_frames: [frame('a'), frame('b')] } })
+      await page.goto('/help')
+      await page.waitForTimeout(800)
+      await page.evaluate(() => {
+        window.history.pushState(
+          {
+            usr: {
+              dataRecordId: 'record-a',
+              viewFrame: {
+                id: 'a',
+                dataRecordId: 'record-a',
+                image: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+                upstreamSize: '1 mm',
+                downstreamSize: '1 mm',
+                pa: '1 mmHg',
+                pd: '1 mmHg',
+                parameter: '0 mmHg',
+              },
+            },
+            key: 'a',
+            idx: 5,
+          },
+          '',
+          '/data/lesion-measurement/analysis',
+        )
+        window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+      })
+      await expect(page.locator('tbody tr')).toHaveCount(2, { timeout: 20_000 })
+      // Every heading's words are inside its own cell, and no heading touches the next one.
+      const problems = await page.evaluate(() => {
+        const cells = Array.from(document.querySelectorAll('thead th'))
+        const boxes = cells.map((th) => {
+          const range = document.createRange()
+          range.selectNodeContents(th)
+          return { text: (th.textContent ?? '').trim(), text_rect: range.getBoundingClientRect(), cell: th.getBoundingClientRect() }
+        })
+        const found: string[] = []
+        for (const [i, b] of boxes.entries()) {
+          if (b.text_rect.left < b.cell.left - 0.5 || b.text_rect.right > b.cell.right + 0.5) found.push('outside: ' + b.text)
+          if (i > 0 && b.text_rect.left < boxes[i - 1].text_rect.right - 0.5 && b.text !== '') found.push('overlap: ' + boxes[i - 1].text + ' / ' + b.text)
+        }
+        return found
+      })
+      expect(problems).toEqual([])
+    })
+  }
+})

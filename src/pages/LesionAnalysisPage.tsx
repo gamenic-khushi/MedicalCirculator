@@ -2306,7 +2306,7 @@ function LesionAnalysisPageContent() {
                                 : 'border-gray-200 text-gray-900 focus:border-indigo-400'
                           }`}
                         />
-                        <span className="w-6 shrink-0 text-gray-400 xl:w-4 2xl:w-6">{unit}</span>
+                        <span className="min-w-6 shrink-0 text-gray-400">{unit}</span>
                       </div>
                     </div>
                     {(range || (key === 'stenosisLength' && lengthAdjustment)) && (
