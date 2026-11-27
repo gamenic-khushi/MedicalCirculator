@@ -1949,6 +1949,32 @@ test.describe('long text does not break the layout (Aki 11/26)', () => {
     // The + and its hint stay on the screen.
     const plus = (await page.getByRole('button', { name: '新規追加' }).boundingBox())!
     expect(plus.x + plus.width).toBeLessThanOrEqual(1280)
+    const hint = (await page.getByText('「+」でこのフォルダに新しいキャプチャを追加できます').boundingBox())!
+    expect(hint.x + hint.width).toBeLessThanOrEqual(1280)
+    expect(hint.x).toBeGreaterThanOrEqual((await page.locator('aside').boundingBox())!.width)
+  })
+
+  test("the hint of a folder's + is all on the screen, not under the menu, with a short folder name (Aki 11/26)", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await useFakeAppwrite(page, {
+      tables: {
+        data_records: [{ $id: 'record-short', date: '2026/11/18', category: 'test1118', file: 'NC6_V1P2_KyosakuTest1_mm.stl', owner: 'Hospital admin', modelFileId: 'm1' }],
+      },
+    })
+    await page.goto('/help')
+    await page.waitForTimeout(800)
+    await page.evaluate(() => {
+      window.history.pushState({ usr: { dataRecordId: 'record-short' }, key: 'f', idx: (window.history.state?.idx ?? 0) + 1 }, '', '/data/learning-content')
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }))
+    })
+    const text = page.getByText('「+」でこのフォルダに新しいキャプチャを追加できます')
+    await expect(text).toBeVisible()
+    await page.waitForTimeout(500)
+    const hint = (await text.boundingBox())!
+    const menu = (await page.locator('aside').boundingBox())!
+    // The whole text is to the right of the menu and inside the window.
+    expect(hint.x).toBeGreaterThanOrEqual(menu.x + menu.width)
+    expect(hint.x + hint.width).toBeLessThanOrEqual(1280)
   })
 
   for (const size of ['medium', 'large']) {

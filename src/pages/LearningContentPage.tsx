@@ -77,6 +77,11 @@ export function LearningContentPage() {
   const [busyMessage, setBusyMessage] = useState<string | null>(null)
   const { toast, showToast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
+  // The hint under the + button opens to the right of it when it fits there, and to the left of it
+  // when the + is far right (after a long folder name); it must never end up under the menu or
+  // beyond the screen.
+  const plusRef = useRef<HTMLDivElement>(null)
+  const [hintOnRight, setHintOnRight] = useState(false)
   // The row whose 編集 is waiting for the folder's model to be chosen (a folder that has none
   // stored): the file picked next opens that row for editing.
   const pendingEditRef = useRef<LearningContentFrameRow | null>(null)
@@ -112,6 +117,22 @@ export function LearningContentPage() {
       .catch((error) => console.error(error))
       .finally(() => setIsLoadingRecord(false))
   }, [dataRecordId])
+
+  useEffect(() => {
+    const place = () => {
+      const box = plusRef.current?.getBoundingClientRect()
+      if (!box) return
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+      const width = 14 * rem // the hint is w-56
+      const pageLeft = plusRef.current?.closest('main')?.getBoundingClientRect().left ?? 0
+      const fitsToTheRight = box.left + width <= window.innerWidth - 8
+      const fitsToTheLeft = box.right - width >= pageLeft + 8
+      setHintOnRight(!fitsToTheRight && fitsToTheLeft)
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [record?.category])
 
   function loadFile(file: File, state: object = { dataRecordId }) {
     // The record's own name (it may have been renamed on the lesion page).
@@ -245,7 +266,7 @@ export function LearningContentPage() {
         <span className="min-w-0 text-2xl font-bold text-gray-900 [overflow-wrap:anywhere]">
           {record?.category ?? DEFAULT_STUDY_NAME}
         </span>
-        <div className="relative inline-block">
+        <div ref={plusRef} className="relative inline-block">
           <button
             type="button"
             onClick={handleAddNew}
@@ -258,8 +279,8 @@ export function LearningContentPage() {
           <AnimatePresence>
             {record?.modelFileId && !isReuseHintDismissed && (
               <GuidanceBubble
-                anchor="bottom-right"
-                className="right-0 top-full mt-3"
+                anchor={hintOnRight ? 'bottom-right' : 'bottom-left'}
+                className={hintOnRight ? 'right-0 top-full mt-3' : 'left-0 top-full mt-3'}
                 message="「+」でこのフォルダに新しいキャプチャを追加できます"
                 onDismiss={dismissReuseHint}
               />
