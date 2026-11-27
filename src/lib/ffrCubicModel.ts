@@ -48,8 +48,21 @@ export const FFR_INPUT_RANGES: Record<FfrCubicInputKey, [number, number]> = {
 const FFR_AREA_MIN_AWAY_FROM_P100 = 0.50265472
 const P100_EPSILON = 0.01
 
+// The smallest area the model was trained on at this pressure.
 function minTrainedArea(p: number): number {
   return Math.abs(p - 100) <= P100_EPSILON ? FFR_INPUT_RANGES.a[0] : FFR_AREA_MIN_AWAY_FROM_P100
+}
+
+// Below 1 mm² the app shows and keeps the area rounded to 4 decimals, so a lesion whose area is
+// exactly the trained minimum (0.28274328) is held as 0.2827, which is under it by 4.3e-5. Half a unit
+// of the 4th decimal is therefore allowed below the minimum; without it the edge of the trained range
+// itself was refused as out of range (the check of 2026/10/27, finding 3). It is an allowance for
+// the rounding only: 0.2826 (or 0.5026 away from 100 mmHg) is still out of range.
+const AREA_ROUNDING_ALLOWANCE = 5e-5
+
+// The smallest area accepted at this pressure.
+function minAcceptedArea(p: number): number {
+  return minTrainedArea(p) - AREA_ROUNDING_ALLOWANCE
 }
 
 export const FFR_INPUT_LABELS: Record<FfrCubicInputKey, string> = {
@@ -71,7 +84,7 @@ export const FFR_INPUT_UNITS: Record<FfrCubicInputKey, string> = {
 /** Trained [min, max] for one input; area's min depends on the paired pressure. */
 export function ffrRangeFor(key: FfrCubicInputKey, p: number): [number, number] {
   const [min, max] = FFR_INPUT_RANGES[key]
-  return [key === 'a' ? minTrainedArea(p) : min, max]
+  return [key === 'a' ? minAcceptedArea(p) : min, max]
 }
 
 /**
@@ -107,7 +120,7 @@ export function findOutOfRangeFfrInputs(rawInputs: FfrCubicInputs): FfrCubicInpu
   const inputs = { ...rawInputs, l: ffrStenosisLength(rawInputs.l) }
   return (Object.keys(FFR_INPUT_RANGES) as FfrCubicInputKey[]).filter((key) => {
     const [, max] = FFR_INPUT_RANGES[key]
-    const min = key === 'a' ? minTrainedArea(inputs.p) : FFR_INPUT_RANGES[key][0]
+    const min = key === 'a' ? minAcceptedArea(inputs.p) : FFR_INPUT_RANGES[key][0]
     const value = inputs[key]
     return !Number.isFinite(value) || value < min || value > max
   })

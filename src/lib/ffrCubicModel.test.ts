@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   computeFfrCubic,
+  ffrRangeFor,
   findOutOfRangeFfrInputs,
   ffrStenosisLength,
 } from '@/lib/ffrCubicModel'
@@ -48,6 +49,19 @@ describe('the trained ranges', () => {
     expect(findOutOfRangeFfrInputs({ dp: 4, dd: 2.9, a: 1, l: 4, p: 100 })).toEqual(['dd'])
     expect(findOutOfRangeFfrInputs({ dp: 4, dd: 4, a: 2.6, l: 4, p: 100 })).toEqual(['a'])
     expect(findOutOfRangeFfrInputs({ dp: 4, dd: 4, a: 1, l: 4, p: 130 })).toEqual(['p'])
+  })
+
+  it('accepts the smallest trained area as the app holds it (rounded to 4 decimals), but not less', () => {
+    // 0.28274328 is shown and kept as 0.2827 (the finding of 2026/10/27): it is in range.
+    expect(findOutOfRangeFfrInputs({ dp: 3.5, dd: 4, a: 0.2827, l: 2, p: 100 })).toEqual([])
+    expect(findOutOfRangeFfrInputs({ dp: 3.5, dd: 4, a: 0.28274328, l: 2, p: 100 })).toEqual([])
+    // Under the rounding allowance it is out of range, at 100 mmHg and at the other pressures.
+    expect(findOutOfRangeFfrInputs({ dp: 3.5, dd: 4, a: 0.2826, l: 2, p: 100 })).toEqual(['a'])
+    expect(findOutOfRangeFfrInputs({ dp: 3.5, dd: 4, a: 0.5027, l: 2, p: 90 })).toEqual([])
+    expect(findOutOfRangeFfrInputs({ dp: 3.5, dd: 4, a: 0.5026, l: 2, p: 90 })).toEqual(['a'])
+    // And the range shown for the field follows the same rule.
+    expect(ffrRangeFor('a', 100)[0]).toBeLessThan(0.2827)
+    expect(ffrRangeFor('a', 100)[0]).toBeGreaterThan(0.2826)
   })
 
   it('does not accept the smallest trained area at a pressure it was never trained with', () => {
